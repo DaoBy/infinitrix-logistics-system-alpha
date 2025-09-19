@@ -177,9 +177,9 @@
                     <td colspan="4" class="px-6 py-4 text-right text-sm font-medium text-gray-500 dark:text-gray-300">
                       Subtotal:
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {{ formatCurrency(deliveryRequest.total_price - (priceMatrix?.base_fee || 0)) }}
-                    </td>
+                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {{ formatCurrency(priceMatrix?.base_fee || 0) }} <!-- FIXED: Only one ) -->
+                  </td>
                   </tr>
                   <tr>
                     <td colspan="4" class="px-6 py-4 text-right text-sm font-medium text-gray-500 dark:text-gray-300">
