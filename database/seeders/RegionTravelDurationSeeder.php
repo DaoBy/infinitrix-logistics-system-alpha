@@ -5,127 +5,99 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\Region;
 use App\Models\RegionTravelDuration;
-use App\Services\OSRMService;
-use Illuminate\Support\Facades\Log;
 
 class RegionTravelDurationSeeder extends Seeder
 {
-    // Minimum realistic travel time between branches (minutes)
-    const MIN_TRAVEL_TIME = 30;
-    
-    // Maximum direct route distance (degrees)
-    const MAX_DIRECT_DISTANCE = 5;
-    
-    // Traffic factors (urban vs rural)
-    const TRAFFIC_FACTOR_URBAN = 1.3;  // 30% longer in cities
-    const TRAFFIC_FACTOR_RURAL = 1.15; // 15% longer in rural areas
-    
-    // Additional urban minutes for city traffic
-    const URBAN_PENALTY = 20;
+    // Predefined travel times between regions (in minutes)
+    private $travelTimes = [
+        // Malabon (1) to others
+        [1, 2, 240], // Malabon to Labo: 4 hours
+        [1, 3, 180], // Malabon to Daet: 3 hours
+        [1, 4, 210], // Malabon to Milaor: 3.5 hours
+        [1, 5, 240], // Malabon to Naga: 4 hours
+        [1, 6, 270], // Malabon to Iriga: 4.5 hours
+        [1, 7, 300], // Malabon to Tabaco: 5 hours
+        [1, 8, 330], // Malabon to Legazpi: 5.5 hours
+        [1, 9, 360], // Malabon to Sorsogon: 6 hours
+
+        // Labo (2) to others
+        [2, 3, 60],  // Labo to Daet: 1 hour
+        [2, 4, 90],  // Labo to Milaor: 1.5 hours
+        [2, 5, 120], // Labo to Naga: 2 hours
+        [2, 6, 150], // Labo to Iriga: 2.5 hours
+        [2, 7, 180], // Labo to Tabaco: 3 hours
+        [2, 8, 210], // Labo to Legazpi: 3.5 hours
+        [2, 9, 240], // Labo to Sorsogon: 4 hours
+
+        // Daet (3) to others
+        [3, 4, 60],  // Daet to Milaor: 1 hour
+        [3, 5, 90],  // Daet to Naga: 1.5 hours
+        [3, 6, 120], // Daet to Iriga: 2 hours
+        [3, 7, 150], // Daet to Tabaco: 2.5 hours
+        [3, 8, 180], // Daet to Legazpi: 3 hours
+        [3, 9, 210], // Daet to Sorsogon: 3.5 hours
+
+        // Milaor (4) to others
+        [4, 5, 30],  // Milaor to Naga: 30 minutes
+        [4, 6, 60],  // Milaor to Iriga: 1 hour
+        [4, 7, 90],  // Milaor to Tabaco: 1.5 hours
+        [4, 8, 120], // Milaor to Legazpi: 2 hours
+        [4, 9, 150], // Milaor to Sorsogon: 2.5 hours
+
+        // Naga (5) to others
+        [5, 6, 30],  // Naga to Iriga: 30 minutes
+        [5, 7, 60],  // Naga to Tabaco: 1 hour
+        [5, 8, 90],  // Naga to Legazpi: 1.5 hours
+        [5, 9, 120], // Naga to Sorsogon: 2 hours
+
+        // Iriga (6) to others
+        [6, 7, 60],  // Iriga to Tabaco: 1 hour
+        [6, 8, 90],  // Iriga to Legazpi: 1.5 hours
+        [6, 9, 120], // Iriga to Sorsogon: 2 hours
+
+        // Tabaco (7) to others
+        [7, 8, 30],  // Tabaco to Legazpi: 30 minutes
+        [7, 9, 60],  // Tabaco to Sorsogon: 1 hour
+
+        // Legazpi (8) to others
+        [8, 9, 30],  // Legazpi to Sorsogon: 30 minutes
+    ];
 
     public function run()
     {
         RegionTravelDuration::truncate();
-        $osrm = new OSRMService();
-        $regions = Region::all();
         $createdPairs = [];
 
-        foreach ($regions as $from) {
-            foreach ($regions as $to) {
-                if ($from->id === $to->id) continue;
+        foreach ($this->travelTimes as $route) {
+            $fromId = $route[0];
+            $toId = $route[1];
+            $minutes = $route[2];
 
-                $pairKey = $this->getPairKey($from->id, $to->id);
-                if (in_array($pairKey, $createdPairs)) continue;
-
-                if ($this->getDirectDistance($from, $to) > self::MAX_DIRECT_DISTANCE) {
-                    continue;
-                }
-
-                $minutes = $this->getRealisticTravelTime($osrm, $from, $to);
-                $this->createBidirectionalRoute($from->id, $to->id, $minutes);
-                $createdPairs[] = $pairKey;
+            $pairKey = $this->getPairKey($fromId, $toId);
+            if (in_array($pairKey, $createdPairs)) {
+                continue;
             }
+
+            // Create bidirectional routes
+            RegionTravelDuration::create([
+                'from_region_id' => $fromId,
+                'to_region_id' => $toId,
+                'estimated_minutes' => $minutes,
+                'source' => 'manual'
+            ]);
+
+            RegionTravelDuration::create([
+                'from_region_id' => $toId,
+                'to_region_id' => $fromId,
+                'estimated_minutes' => $minutes,
+                'source' => 'manual'
+            ]);
+
+            $createdPairs[] = $pairKey;
         }
 
-        Log::info('Region travel durations seeded', [
-            'total_routes' => RegionTravelDuration::count(),
-            'average_time' => round(RegionTravelDuration::avg('estimated_minutes')),
-            'min_time' => RegionTravelDuration::min('estimated_minutes'),
-            'max_time' => RegionTravelDuration::max('estimated_minutes')
-        ]);
-    }
-
-    private function getRealisticTravelTime(OSRMService $osrm, Region $from, Region $to): int
-    {
-        // Get base time from OSRM or fallback calculation
-        $baseMinutes = $osrm->getRouteTime($from->id, $to->id) 
-                     ?? $this->calculateFallbackTime($from, $to);
-        
-        // Apply traffic adjustments
-        return $this->applyTrafficAdjustments($baseMinutes, $from, $to);
-    }
-
-    private function applyTrafficAdjustments(int $baseMinutes, Region $from, Region $to): int
-    {
-        $isUrban = $this->isUrbanArea($from) || $this->isUrbanArea($to);
-        
-        // Apply traffic factor
-        $adjusted = $isUrban 
-            ? $baseMinutes * self::TRAFFIC_FACTOR_URBAN
-            : $baseMinutes * self::TRAFFIC_FACTOR_RURAL;
-        
-        // Add urban penalty if applicable
-        if ($isUrban) {
-            $adjusted += self::URBAN_PENALTY;
-        }
-        
-        return (int) max(self::MIN_TRAVEL_TIME, round($adjusted));
-    }
-
-    private function isUrbanArea(Region $region): bool
-    {
-        // Define your urban region IDs here
-        $urbanRegionIds = [1, 3, 5]; // Example IDs for Manila, Cebu, Davao
-        return in_array($region->id, $urbanRegionIds);
-    }
-
-    private function calculateFallbackTime(Region $from, Region $to): int
-    {
-        $distance = $this->getDirectDistance($from, $to);
-        
-        // Conservative estimate: 40 km/h average including stops
-        // 1 degree ≈ 111 km → hours = distance * 111 / 40
-        $hours = $distance * 2.775; // 111/40 = 2.775
-        
-        return (int) max(
-            self::MIN_TRAVEL_TIME,
-            round($hours * 60)
-        );
-    }
-
-    private function getDirectDistance(Region $from, Region $to): float
-    {
-        return sqrt(
-            pow($from->latitude - $to->latitude, 2) +
-            pow($from->longitude - $to->longitude, 2)
-        );
-    }
-
-    private function createBidirectionalRoute(int $fromId, int $toId, int $minutes): void
-    {
-        RegionTravelDuration::create([
-            'from_region_id' => $fromId,
-            'to_region_id' => $toId,
-            'estimated_minutes' => $minutes,
-            'source' => 'osrm+traffic_adj'
-        ]);
-
-        RegionTravelDuration::create([
-            'from_region_id' => $toId,
-            'to_region_id' => $fromId,
-            'estimated_minutes' => $minutes,
-            'source' => 'osrm+traffic_adj'
-        ]);
+        $this->command->info('Region travel durations seeded successfully!');
+        $this->command->info('Total routes: ' . RegionTravelDuration::count());
     }
 
     private function getPairKey(int $fromId, int $toId): string
