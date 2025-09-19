@@ -30,9 +30,6 @@ class RegisteredUserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        // First, let's debug what's coming in
-        \Log::info('Registration attempt:', $request->all());
-        
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:users,email',
@@ -51,23 +48,21 @@ class RegisteredUserController extends Controller
         // Create minimal customer profile
         $user->customer()->create([
             'email' => $validatedData['email'],
-            // Mobile will be filled later during profile completion
         ]);
 
-        // EASIEST FIX: Replace random_int with mt_rand
-        $code = mt_rand(100000, 999999); // Changed from random_int to mt_rand
-        
+        // Generate and save code
+        $code = mt_rand(100000, 999999);
         $user->email_verification_code = $code;
         $user->email_verification_code_expires_at = now()->addMinutes(10);
         $user->save();
 
-        // Send code via email
-        Mail::to($user->email)->send(new \App\Mail\EmailVerificationCode($code));
+        // TEMPORARY: Comment out email sending to test if this is the issue
+        // Mail::to($user->email)->send(new \App\Mail\EmailVerificationCode($code));
 
         Auth::login($user);
         event(new Registered($user));
 
         return redirect()->route('verification.notice')
-               ->with('status', __('A verification code has been sent to your email address.'));
+               ->with('status', __('Registration successful! Please check your email for verification code.'));
     }
 }
