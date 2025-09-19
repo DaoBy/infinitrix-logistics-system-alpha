@@ -56,13 +56,13 @@ class RegisteredUserController extends Controller
         $user->email_verification_code_expires_at = now()->addMinutes(10);
         $user->save();
 
-        // TEMPORARY: Comment out email sending to test if this is the issue
-        // Mail::to($user->email)->send(new \App\Mail\EmailVerificationCode($code));
+        // ✅ UNCOMMENT THIS LINE - Email sending is now fixed!
+        Mail::to($user->email)->send(new \App\Mail\EmailVerificationCode($code));
 
         Auth::login($user);
         event(new Registered($user));
 
         return redirect()->route('verification.notice')
-               ->with('status', __('Registration successful! Please check your email for verification code.'));
+               ->with('status', __('A verification code has been sent to your email address.'));
     }
 }
