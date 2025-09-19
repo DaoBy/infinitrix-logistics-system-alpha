@@ -5,11 +5,13 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\Region;
 use App\Models\RegionTravelDuration;
+use App\Services\OSRMService;
+use Illuminate\Support\Facades\Log;
 
 class RegionTravelDurationSeeder extends Seeder
 {
-    // Predefined travel times between regions (in minutes)
-    private $travelTimes = [
+    // Predefined travel times between regions (in minutes) as fallback
+    private $fallbackTravelTimes = [
         // Malabon (1) to others
         [1, 2, 240], // Malabon to Labo: 4 hours
         [1, 3, 180], // Malabon to Daet: 3 hours
@@ -67,37 +69,102 @@ class RegionTravelDurationSeeder extends Seeder
     {
         RegionTravelDuration::truncate();
         $createdPairs = [];
+        $osrmService = new OSRMService();
 
-        foreach ($this->travelTimes as $route) {
-            $fromId = $route[0];
-            $toId = $route[1];
-            $minutes = $route[2];
+        // Check if OSRM service is available
+        $useOSRM = $osrmService->isAvailable();
+        $this->command->info($useOSRM ? 
+            '✅ OSRM service is available - using real route data' :
+            '⚠️ OSRM service unavailable - using fallback travel times'
+        );
 
-            $pairKey = $this->getPairKey($fromId, $toId);
-            if (in_array($pairKey, $createdPairs)) {
-                continue;
+        $regions = Region::all();
+        $totalRegions = $regions->count();
+
+        if ($useOSRM) {
+            // Use OSRM for real route data
+            foreach ($regions as $from) {
+                foreach ($regions as $to) {
+                    if ($from->id === $to->id) continue;
+
+                    $pairKey = $this->getPairKey($from->id, $to->id);
+                    if (in_array($pairKey, $createdPairs)) continue;
+
+                    $minutes = $osrmService->getRouteTime($from->id, $to->id);
+
+                    if ($minutes === null) {
+                        // If OSRM fails, use fallback
+                        $minutes = $this->getFallbackTime($from->id, $to->id);
+                    }
+
+                    $this->createBidirectionalRoute($from->id, $to->id, $minutes);
+                    $createdPairs[] = $pairKey;
+                }
             }
+        } else {
+            // Use fallback data
+            foreach ($this->fallbackTravelTimes as $route) {
+                $fromId = $route[0];
+                $toId = $route[1];
+                $minutes = $route[2];
 
-            // Create bidirectional routes
-            RegionTravelDuration::create([
-                'from_region_id' => $fromId,
-                'to_region_id' => $toId,
-                'estimated_minutes' => $minutes,
-                'source' => 'manual'
-            ]);
+                $pairKey = $this->getPairKey($fromId, $toId);
+                if (in_array($pairKey, $createdPairs)) {
+                    continue;
+                }
 
-            RegionTravelDuration::create([
-                'from_region_id' => $toId,
-                'to_region_id' => $fromId,
-                'estimated_minutes' => $minutes,
-                'source' => 'manual'
-            ]);
-
-            $createdPairs[] = $pairKey;
+                $this->createBidirectionalRoute($fromId, $toId, $minutes);
+                $createdPairs[] = $pairKey;
+            }
         }
 
-        $this->command->info('Region travel durations seeded successfully!');
-        $this->command->info('Total routes: ' . RegionTravelDuration::count());
+        $totalRoutes = RegionTravelDuration::count();
+        $this->command->info("✅ Region travel durations seeded successfully!");
+        $this->command->info("   Total routes: {$totalRoutes}");
+        $this->command->info("   Method: " . ($useOSRM ? 'OSRM API' : 'Fallback data'));
+    }
+
+    private function getFallbackTime(int $fromId, int $toId): int
+    {
+        foreach ($this->fallbackTravelTimes as $route) {
+            if (($route[0] === $fromId && $route[1] === $toId) || 
+                ($route[0] === $toId && $route[1] === $fromId)) {
+                return $route[2];
+            }
+        }
+
+        // If no specific fallback found, calculate approximate time
+        $from = Region::find($fromId);
+        $to = Region::find($toId);
+        
+        if (!$from || !$to) {
+            return 60; // Default 1 hour
+        }
+
+        // Simple distance-based calculation
+        $distance = sqrt(
+            pow($from->latitude - $to->latitude, 2) +
+            pow($from->longitude - $to->longitude, 2)
+        );
+
+        return (int) max(30, $distance * 100); // Approximate conversion
+    }
+
+    private function createBidirectionalRoute(int $fromId, int $toId, int $minutes): void
+    {
+        RegionTravelDuration::create([
+            'from_region_id' => $fromId,
+            'to_region_id' => $toId,
+            'estimated_minutes' => $minutes,
+            'source' => 'osrm+manual'
+        ]);
+
+        RegionTravelDuration::create([
+            'from_region_id' => $toId,
+            'to_region_id' => $fromId,
+            'estimated_minutes' => $minutes,
+            'source' => 'osrm+manual'
+        ]);
     }
 
     private function getPairKey(int $fromId, int $toId): string
