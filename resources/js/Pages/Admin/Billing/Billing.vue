@@ -172,32 +172,32 @@
                     </td>
                   </tr>
                 </tbody>
-                <tfoot class="bg-gray-50 dark:bg-gray-700">
-                  <tr>
-                    <td colspan="4" class="px-6 py-4 text-right text-sm font-medium text-gray-500 dark:text-gray-300">
-                      Subtotal:
-                    </td>
-                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                    {{ formatCurrency(priceMatrix?.base_fee || 0) }} <!-- FIXED: Only one ) -->
-                  </td>
-                  </tr>
-                  <tr>
-                    <td colspan="4" class="px-6 py-4 text-right text-sm font-medium text-gray-500 dark:text-gray-300">
-                      Base Fee:
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {{ formatCurrency(priceMatrix?.base_fee || 0)) }}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td colspan="4" class="px-6 py-4 text-right text-sm font-medium text-gray-500 dark:text-gray-300">
-                      Total:
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-gray-100">
-                      {{ formatCurrency(deliveryRequest.total_price) }}
-                    </td>
-                  </tr>
-                </tfoot>
+              <tfoot class="bg-gray-50 dark:bg-gray-700">
+  <tr>
+    <td colspan="4" class="px-6 py-4 text-right text-sm font-medium text-gray-500 dark:text-gray-300">
+      Subtotal:
+    </td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+      {{ formatCurrency(deliveryRequest.total_price - (priceMatrix?.base_fee || 0)) }} <!-- FIXED: Removed extra ) -->
+    </td>
+  </tr>
+  <tr>
+    <td colspan="4" class="px-6 py-4 text-right text-sm font-medium text-gray-500 dark:text-gray-300">
+      Base Fee:
+    </td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+      {{ formatCurrency(priceMatrix?.base_fee || 0) }} <!-- This line is already correct -->
+    </td>
+  </tr>
+  <tr>
+    <td colspan="4" class="px-6 py-4 text-right text-sm font-medium text-gray-500 dark:text-gray-300">
+      Total:
+    </td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-gray-100">
+      {{ formatCurrency(deliveryRequest.total_price) }}
+    </td>
+  </tr>
+</tfoot>
               </table>
             </div>
           </div>
