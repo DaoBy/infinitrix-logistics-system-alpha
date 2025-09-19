@@ -11,14 +11,22 @@ const { props } = usePage();
 const status = computed(() => props.value?.status || null);
 
 const form = useForm({
+    name: '',
     email: '',
     password: '',
     password_confirmation: '',
 });
 
 const submit = () => {
+    console.log('Submitting form:', form.data());
     form.post(route('customer.register'), {
-        onSuccess: () => form.reset('password', 'password_confirmation'),
+        onSuccess: () => {
+            console.log('Registration successful');
+            form.reset('password', 'password_confirmation');
+        },
+        onError: (errors) => {
+            console.log('Registration errors:', errors);
+        },
     });
 };
 </script>
@@ -40,6 +48,20 @@ const submit = () => {
 
             <form @submit.prevent="submit" class="space-y-4">
                 <div>
+                    <InputLabel for="name" value="Username" />
+                    <TextInput
+                        id="name"
+                        type="text"
+                        class="mt-1 block w-full"
+                        v-model="form.name"
+                        required
+                        autofocus
+                        autocomplete="username"
+                    />
+                    <InputError class="mt-1" :message="form.errors.name" />
+                </div>
+
+                <div>
                     <InputLabel for="email" value="Email" />
                     <TextInput
                         id="email"
@@ -47,7 +69,6 @@ const submit = () => {
                         class="mt-1 block w-full"
                         v-model="form.email"
                         required
-                        autofocus
                         autocomplete="email"
                     />
                     <InputError class="mt-1" :message="form.errors.email" />

@@ -30,25 +30,25 @@ class RegisteredUserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        // First, let's debug what's coming in
+        \Log::info('Registration attempt:', $request->all());
+        
         $validatedData = $request->validate([
+            'name' => 'required|string|max:255', // Keep name if your original had it
             'email' => 'required|string|lowercase|email|max:255|unique:users,email',
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
-        // Generate a temporary username
-        $username = str_replace(['@', '.'], '', $validatedData['email']);
-        $username = substr($username, 0, 20);
-
         // Create the user with customer role
         $user = User::create([
-            'name' => $username, 
+            'name' => $validatedData['name'], 
             'email' => $validatedData['email'],
             'password' => Hash::make($validatedData['password']),
             'role' => 'customer',
             'is_active' => true,
         ]);
 
-        // Create minimal customer profile (no mobile required yet)
+        // Create minimal customer profile
         $user->customer()->create([
             'email' => $validatedData['email'],
             // Mobile will be filled later during profile completion
