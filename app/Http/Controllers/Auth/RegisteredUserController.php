@@ -34,7 +34,7 @@ class RegisteredUserController extends Controller
         \Log::info('Registration attempt:', $request->all());
         
         $validatedData = $request->validate([
-            'name' => 'required|string|max:255', // Keep name if your original had it
+            'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:users,email',
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
@@ -54,8 +54,9 @@ class RegisteredUserController extends Controller
             // Mobile will be filled later during profile completion
         ]);
 
-        // Generate and save code
-        $code = random_int(100000, 999999);
+        // EASIEST FIX: Replace random_int with mt_rand
+        $code = mt_rand(100000, 999999); // Changed from random_int to mt_rand
+        
         $user->email_verification_code = $code;
         $user->email_verification_code_expires_at = now()->addMinutes(10);
         $user->save();
