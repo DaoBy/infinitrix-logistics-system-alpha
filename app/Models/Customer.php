@@ -89,14 +89,15 @@ class Customer extends Model
     }
 
     // Check if profile has all required fields
-    public function hasRequiredFields(): bool
-    {
-        return !empty($this->first_name) && 
-               !empty($this->last_name) && 
-               !empty($this->email) && 
-               !empty($this->mobile) &&
-               ($this->customer_category !== 'company' || !empty($this->company_name));
-    }
+// In Customer.php model
+public function hasRequiredFields(): bool
+{
+    return !empty($this->first_name) && 
+           !empty($this->last_name) && 
+           !empty($this->email) && 
+           !empty($this->mobile) && // This will be checked during profile completion
+           ($this->customer_category !== 'company' || !empty($this->company_name));
+}
 
     // Relationships
     public function user(): BelongsTo

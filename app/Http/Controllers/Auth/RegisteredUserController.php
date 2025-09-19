@@ -29,45 +29,44 @@ class RegisteredUserController extends Controller
      * Handle an incoming customer registration request.
      */
     public function store(Request $request): RedirectResponse
-{
-    $validatedData = $request->validate([
-        'email' => 'required|string|lowercase|email|max:255|unique:users,email',
-        'mobile' => 'required|string|max:11|unique:customers,mobile', 
-        'password' => ['required', 'confirmed', Rules\Password::defaults()],
-    ]);
+    {
+        $validatedData = $request->validate([
+            'email' => 'required|string|lowercase|email|max:255|unique:users,email',
+            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+        ]);
 
-    // Generate a temporary username
-    $username = str_replace(['@', '.'], '', $validatedData['email']);
-    $username = substr($username, 0, 20);
+        // Generate a temporary username
+        $username = str_replace(['@', '.'], '', $validatedData['email']);
+        $username = substr($username, 0, 20);
 
-    // Create the user with customer role
-    $user = User::create([
-        'name' => $username, 
-        'email' => $validatedData['email'],
-        'password' => Hash::make($validatedData['password']),
-        'role' => 'customer',
-        'is_active' => true,
-    ]);
+        // Create the user with customer role
+        $user = User::create([
+            'name' => $username, 
+            'email' => $validatedData['email'],
+            'password' => Hash::make($validatedData['password']),
+            'role' => 'customer',
+            'is_active' => true,
+        ]);
 
-    // Create minimal customer profile
-    $user->customer()->create([
-        'email' => $validatedData['email'],
-        'mobile' => $validatedData['mobile'], 
-    ]);
+        // Create minimal customer profile (no mobile required yet)
+        $user->customer()->create([
+            'email' => $validatedData['email'],
+            // Mobile will be filled later during profile completion
+        ]);
 
-    // Generate and save code
-    $code = random_int(100000, 999999);
-    $user->email_verification_code = $code;
-    $user->email_verification_code_expires_at = now()->addMinutes(10);
-    $user->save();
+        // Generate and save code
+        $code = random_int(100000, 999999);
+        $user->email_verification_code = $code;
+        $user->email_verification_code_expires_at = now()->addMinutes(10);
+        $user->save();
 
-    // Send code via email
-    Mail::to($user->email)->send(new \App\Mail\EmailVerificationCode($code));
+        // Send code via email
+        Mail::to($user->email)->send(new \App\Mail\EmailVerificationCode($code));
 
-    Auth::login($user);
-    event(new Registered($user));
+        Auth::login($user);
+        event(new Registered($user));
 
-    return redirect()->route('verification.notice')
-           ->with('status', __('A verification code has been sent to your email address.'));
-}
+        return redirect()->route('verification.notice')
+               ->with('status', __('A verification code has been sent to your email address.'));
+    }
 }
