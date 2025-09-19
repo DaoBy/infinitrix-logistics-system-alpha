@@ -127,6 +127,37 @@ public function waybill(): \Illuminate\Database\Eloquent\Relations\HasOne
         $this->packages()->update(['status' => 'preparing']);
     }
 
+    public function markAsCompleted(): void
+    {
+        $this->update([
+            'status' => 'completed',
+            'payment_status' => $this->isPostpaid() ? 'awaiting_payment' : 'paid'
+        ]);
+    }
+
+    public function isAwaitingPostpaidPayment(): bool
+    {
+        return $this->isPostpaid() && 
+               $this->status === 'completed' && 
+               $this->payment_status === 'awaiting_payment';
+    }
+
+    public function canPayOnline(): bool
+    {
+        // Prepaid can pay online before delivery
+        if ($this->isPrepaid() && in_array($this->status, ['approved', 'pending_payment'])) {
+            return true;
+        }
+        
+        // Postpaid can pay online after delivery
+        if ($this->isPostpaid() && in_array($this->status, ['completed', 'delivered']) && 
+            in_array($this->payment_status, ['awaiting_payment', 'unpaid', 'pending'])) {
+            return true;
+        }
+        
+        return false;
+    }
+
     // Payment helpers
     public function isPrepaid(): bool
     {

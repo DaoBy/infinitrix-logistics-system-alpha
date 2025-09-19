@@ -207,7 +207,7 @@
               {{ row.height }} × {{ row.width }} × {{ row.length }} cm
             </template>
             <template #value="{ row }">
-              ₱{{ row.value?.toFixed(2) || '0.00' }}
+              ₱{{ formatCurrency(row.value) }}
             </template>
             <template #photo="{ row }">
               <img 
@@ -429,6 +429,12 @@ function formatAddress(customer) {
     customer.zip_code
   ].filter(Boolean);
   return addressParts.join(', ') || 'Address not specified';
+}
+
+// Add this helper function to safely format currency
+function formatCurrency(value) {
+  const num = Number(value) || 0;
+  return num.toFixed(2);
 }
 
 

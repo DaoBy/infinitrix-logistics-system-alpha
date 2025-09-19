@@ -25,6 +25,7 @@ use Illuminate\Support\Str;
 
 class CargoAssignmentController extends Controller
 {
+
     public function index()
     {
         $perPage = request('per_page', 5); // Default to 5 if not specified
@@ -194,6 +195,12 @@ class CargoAssignmentController extends Controller
 
         $assignment = \App\Models\DriverTruckAssignment::findOrFail($request->driver_truck_assignment_id);
 
+        // Set driver's current region if not set
+        if (!$assignment->driver->current_region_id) {
+            $assignment->driver->current_region_id = $assignment->region_id;
+            $assignment->driver->save();
+        }
+
         // Allow assignment with pending_payment for postpaid
         $validStatuses = ['ready', 'assigned'];
         if ($deliveryRequest->payment_method === 'postpaid') {
@@ -213,6 +220,17 @@ class CargoAssignmentController extends Controller
         if (!$isReassignment && $order->driver_truck_assignment_id == $assignment->id) {
             return back()->withErrors('This delivery order is already assigned to the selected driver-truck set.');
         }
+
+        // --- NEW VALIDATION: Check if all packages have stickers printed ---
+        $unstickerizedPackages = $deliveryRequest->packages()
+            ->whereNull('sticker_printed_at')
+            ->get();
+
+        if (!$unstickerizedPackages->isEmpty()) {
+            $packageCodes = $unstickerizedPackages->pluck('item_code')->implode(', ');
+            return back()->withErrors("Cannot assign delivery request. The following packages require stickers: {$packageCodes}");
+        }
+        // --- END NEW VALIDATION ---
 
         // --- Calculate estimated_arrival ---
         $deliveryRequest = $order->deliveryRequest;
@@ -266,7 +284,39 @@ class CargoAssignmentController extends Controller
             return redirect()->back()->with('error', 'No ready or assignable delivery orders found for assignment. Please check the delivery order statuses.');
         }
 
+        // --- NEW VALIDATION: Check for unstickerized packages in ALL selected orders ---
+        $unstickerizedPackages = [];
+        foreach ($orders as $order) {
+            $packagesWithoutStickers = $order->deliveryRequest->packages()
+                ->whereNull('sticker_printed_at')
+                ->get();
+
+            if (!$packagesWithoutStickers->isEmpty()) {
+                // Collect info about which order has which unstickerized packages
+                $unstickerizedPackages[] = [
+                    'order_id' => $order->id,
+                    'package_codes' => $packagesWithoutStickers->pluck('item_code')->implode(', ')
+                ];
+            }
+        }
+
+        if (!empty($unstickerizedPackages)) {
+            $errorMessage = "Cannot assign batch. The following delivery orders have packages without stickers: ";
+            $errorDetails = array_map(function($item) {
+                return "DO-{$item['order_id']} (Packages: {$item['package_codes']})";
+            }, $unstickerizedPackages);
+            
+            return redirect()->back()->with('error', $errorMessage . implode('; ', $errorDetails));
+        }
+        // --- END NEW VALIDATION ---
+
         DB::transaction(function() use ($assignment, $orders, $request) {
+            // Set driver's current region if not set
+            if (!$assignment->driver->current_region_id) {
+                $assignment->driver->current_region_id = $assignment->region_id;
+                $assignment->driver->save();
+            }
+
             foreach ($orders as $order) {
                 $deliveryRequest = $order->deliveryRequest;
                 $travelDuration = \App\Models\RegionTravelDuration::where([
@@ -446,6 +496,14 @@ public function getSuggestedAssignments(Request $request)
             if (in_array($order->status, ['assigned', 'dispatched', 'in_transit'])) {
                 $errors[] = "Assignment conflict detected for DO-{$order->id}. Please refresh and try again.";
             }
+
+            // --- NEW VALIDATION: Sticker Check ---
+            $unstickerizedPackages = $order->deliveryRequest->packages->whereNull('sticker_printed_at');
+            if (!$unstickerizedPackages->isEmpty()) {
+                $packageCodes = $unstickerizedPackages->pluck('item_code')->implode(', ');
+                $errors[] = "Delivery Order DO-{$order->id} has packages without stickers: {$packageCodes}";
+            }
+            // --- END NEW VALIDATION ---
 
             // 8. Calculate totals
             $totalVolume += $packages->sum('volume');
@@ -677,50 +735,56 @@ public function getSuggestedAssignments(Request $request)
      * @return \Illuminate\Http\RedirectResponse
      */
     public function dispatchDriverTruckSet($assignmentId)
-    {
-        $assignment = DriverTruckAssignment::with(['driver', 'truck'])->findOrFail($assignmentId);
+{
+    $assignment = DriverTruckAssignment::with(['driver', 'truck'])->findOrFail($assignmentId);
 
-        // Get all assigned orders for this driver-truck set
-        $orders = DeliveryOrder::where('driver_id', $assignment->driver_id)
-            ->where('truck_id', $assignment->truck_id)
-            ->where('status', 'assigned')
-            ->with(['deliveryRequest.waybill', 'deliveryRequest.packages'])
-            ->get();
+    // Ensure driver has current region set
+    if (!$assignment->driver->current_region_id) {
+        $assignment->driver->current_region_id = $assignment->region_id;
+        $assignment->driver->save();
+    }
 
-        if ($orders->isEmpty()) {
-            return back()->withErrors('No assigned delivery orders found for this driver-truck set.');
+    // Get all assigned orders for this driver-truck set
+    $orders = DeliveryOrder::where('driver_id', $assignment->driver_id)
+        ->where('truck_id', $assignment->truck_id)
+        ->where('status', 'assigned')
+        ->with(['deliveryRequest.waybill', 'deliveryRequest.packages'])
+        ->get();
+
+    if ($orders->isEmpty()) {
+        return back()->withErrors('No assigned delivery orders found for this driver-truck set.');
+    }
+
+    // Gather all package IDs for the current assigned orders
+    $currentPackageIds = $orders->flatMap(function($order) {
+        return $order->deliveryRequest->packages->pluck('id');
+    })->unique()->values()->toArray();
+
+    $manifest = Manifest::where('driver_id', $assignment->driver_id)
+        ->where('truck_id', $assignment->truck_id)
+        ->where('status', 'finalized')
+        ->orderByDesc('id')
+        ->first();
+
+    // Improved manifest validation - check if ALL current packages are in manifest
+    $manifestValid = false;
+    if ($manifest && is_array($manifest->package_ids)) {
+        $manifestPackageIds = array_map('intval', $manifest->package_ids);
+        $currentIds = array_map('intval', $currentPackageIds);
+        $manifestValid = empty(array_diff($currentIds, $manifestPackageIds));
+    }
+
+    if (!$manifestValid) {
+        return back()->withErrors('Manifest not found or does not contain all assigned packages.');
+    }
+
+    // Validate Waybills for each order
+    $ordersMissingWaybill = [];
+    foreach ($orders as $order) {
+        if (!$order->deliveryRequest->waybill) {
+            $ordersMissingWaybill[] = $order->id;
         }
-
-        // Gather all package IDs for the current assigned orders
-        $currentPackageIds = $orders->flatMap(function($order) {
-            return $order->deliveryRequest->packages->pluck('id');
-        })->unique()->values()->toArray();
-
-        $manifest = Manifest::where('driver_id', $assignment->driver_id)
-            ->where('truck_id', $assignment->truck_id)
-            ->where('status', 'finalized')
-            ->orderByDesc('id')
-            ->first();
-
-        // Unified manifest validation
-        $manifestValid = false;
-        if ($manifest && is_array($manifest->package_ids)) {
-            $manifestPackageIds = array_map('intval', $manifest->package_ids);
-            $currentIds = array_map('intval', $currentPackageIds);
-            $manifestValid = !array_diff($currentIds, $manifestPackageIds) && !empty($currentIds);
-        }
-
-        if (!$manifestValid) {
-            return back()->withErrors('Manifest not found or does not match current assignments.');
-        }
-
-        // Validate Waybills for each order
-        $ordersMissingWaybill = [];
-        foreach ($orders as $order) {
-            if (!$order->deliveryRequest->waybill) {
-                $ordersMissingWaybill[] = $order->id;
-            }
-        }
+    }
         if (!empty($ordersMissingWaybill)) {
             return back()->withErrors('Cannot dispatch: The following orders are missing waybills: ' . implode(', ', $ordersMissingWaybill));
         }
@@ -781,72 +845,84 @@ public function getSuggestedAssignments(Request $request)
 
     // Add this validation endpoint if not present:
     public function validateDispatchSet($assignmentId)
-    {
-        $assignment = DriverTruckAssignment::with(['driver', 'truck'])->findOrFail($assignmentId);
+{
+    $assignment = DriverTruckAssignment::with(['driver', 'truck'])->findOrFail($assignmentId);
 
-        // Find all assigned orders for this set
-        $orders = DeliveryOrder::where('driver_id', $assignment->driver_id)
-            ->where('truck_id', $assignment->truck_id)
-            ->where('status', 'assigned')
-            ->with('deliveryRequest.waybill', 'deliveryRequest.packages')
-            ->get();
+    // Find all assigned orders for this set
+    $orders = DeliveryOrder::where('driver_id', $assignment->driver_id)
+        ->where('truck_id', $assignment->truck_id)
+        ->where('status', 'assigned')
+        ->with('deliveryRequest.waybill', 'deliveryRequest.packages')
+        ->get();
 
-        // If there are no assigned orders, cannot dispatch
-        if ($orders->isEmpty()) {
-            return response()->json([
-                'has_manifest' => false,
-                'missing_waybills' => [],
-                'can_dispatch' => false,
-                'message' => 'No assigned delivery orders for this driver-truck set.'
-            ]);
-        }
-
-        // Gather all package IDs for the current assigned orders
-        $currentPackageIds = $orders->flatMap(function($order) {
-            return $order->deliveryRequest->packages->pluck('id');
-        })->unique()->values()->toArray();
-
-        // Find a finalized manifest for this truck/driver that covers *at least* all current package IDs
-        $manifest = \App\Models\Manifest::where('driver_id', $assignment->driver_id)
-            ->where('truck_id', $assignment->truck_id)
-            ->where('status', 'finalized')
-            ->orderByDesc('id')
-            ->first();
-
-        // Check for waybills
-        $ordersMissingWaybill = [];
-        foreach ($orders as $order) {
-            if (!$order->deliveryRequest->waybill) {
-                $ordersMissingWaybill[] = $order->id;
-            }
-        }
-
-        // Unified manifest validation
-        $manifestValid = false;
-        if ($manifest && is_array($manifest->package_ids)) {
-            $manifestPackageIds = array_map('intval', $manifest->package_ids);
-            $currentIds = array_map('intval', $currentPackageIds);
-            $manifestValid = !array_diff($currentIds, $manifestPackageIds) && !empty($currentIds);
-        }
-
-        $canDispatch = $manifestValid && empty($ordersMissingWaybill);
-
-        $message = '';
-        if (!$manifestValid) {
-            $message = 'Manifest not found or does not match current assignments.';
-        } elseif (count($ordersMissingWaybill)) {
-            $message = 'Missing waybills for orders: ' . implode(', ', $ordersMissingWaybill);
-        } elseif ($canDispatch) {
-            $message = 'All checks passed. Ready to dispatch this set.';
-        }
-
+    // If there are no assigned orders, cannot dispatch
+    if ($orders->isEmpty()) {
         return response()->json([
-            'has_manifest' => $manifestValid,
-            'missing_waybills' => $ordersMissingWaybill,
-            'can_dispatch' => $canDispatch,
-            'message' => $message,
+            'has_manifest' => false,
+            'missing_waybills' => [],
+            'can_dispatch' => false,
+            'message' => 'No assigned delivery orders for this driver-truck set.'
         ]);
     }
+
+    // Gather all package IDs for the current assigned orders
+    $currentPackageIds = $orders->flatMap(function($order) {
+        return $order->deliveryRequest->packages->pluck('id');
+    })->unique()->values()->toArray();
+
+    // Find a finalized manifest for this truck/driver
+    $manifest = \App\Models\Manifest::where('driver_id', $assignment->driver_id)
+        ->where('truck_id', $assignment->truck_id)
+        ->where('status', 'finalized')
+        ->orderByDesc('id')
+        ->first();
+
+    // Check for waybills
+    $ordersMissingWaybill = [];
+    foreach ($orders as $order) {
+        if (!$order->deliveryRequest->waybill) {
+            $ordersMissingWaybill[] = $order->id;
+        }
+    }
+
+    // Improved manifest validation
+    $manifestValid = false;
+    if ($manifest && is_array($manifest->package_ids)) {
+        $manifestPackageIds = array_map('intval', $manifest->package_ids);
+        $currentIds = array_map('intval', $currentPackageIds);
+        
+        // Check if ALL current packages are in the manifest (manifest can have more packages)
+        $manifestValid = empty(array_diff($currentIds, $manifestPackageIds));
+    }
+
+    $canDispatch = $manifestValid && empty($ordersMissingWaybill);
+
+    $message = '';
+    if (!$manifest) {
+        $message = 'No finalized manifest found for this driver-truck set.';
+    } elseif (!$manifestValid) {
+        $missingPackages = array_diff($currentPackageIds, $manifest->package_ids ?? []);
+        $message = 'Manifest missing ' . count($missingPackages) . ' packages from current assignments.';
+    } elseif (count($ordersMissingWaybill)) {
+        $message = 'Missing waybills for orders: ' . implode(', ', $ordersMissingWaybill);
+    } elseif ($canDispatch) {
+        $message = 'All checks passed. Ready to dispatch this set.';
+    }
+
+    return response()->json([
+        'has_manifest' => (bool)$manifest,
+        'manifest_valid' => $manifestValid,
+        'missing_waybills' => $ordersMissingWaybill,
+        'can_dispatch' => $canDispatch,
+        'message' => $message,
+        'debug' => [ // Add debug info for troubleshooting
+            'current_package_ids' => $currentPackageIds,
+            'manifest_package_ids' => $manifest ? $manifest->package_ids : [],
+            'manifest_id' => $manifest ? $manifest->id : null,
+            'assignment_id' => $assignmentId
+        ]
+    ]);
+}
 
     /**
      * Debug endpoint: Show assigned package IDs and manifest package IDs for a driver+truck set.
@@ -885,8 +961,11 @@ public function getSuggestedAssignments(Request $request)
             'manifest_id' => $manifest ? $manifest->id : null,
             'manifest_package_ids' => $manifestPackageIds,
             'manifest_status' => $manifest ? $manifest->status : null,
-            'manifest_valid' => !array_diff(array_map('intval', $currentPackageIds), $manifestPackageIds) && !empty($currentPackageIds),
+            'manifest_valid' => empty(array_diff($currentPackageIds, $manifestPackageIds)),
+            'missing_packages' => array_diff($currentPackageIds, $manifestPackageIds),
             'orders' => $orders->pluck('id'),
         ]);
     }
+    
 }
+

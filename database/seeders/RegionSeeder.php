@@ -7,117 +7,90 @@ use App\Models\Region;
 
 class RegionSeeder extends Seeder
 {
-  public function run()
-{
-    $regions = [
-        [
-            'name' => 'Naga City Region',
-            'warehouse_address' => '123 Mabolo St., Concepcion Pequeña, Naga City, Camarines Sur',
-            'latitude' => 13.6215,
-            'longitude' => 123.1815,
-            'is_active' => true,
-        ],
-        [
-            'name' => 'Legazpi City Region',
-            'warehouse_address' => '456 Rizal Ave., Barangay Rawis, Legazpi City, Albay',
-            'latitude' => 13.1437,
-            'longitude' => 123.7437,
-            'is_active' => true,
-        ],
-        [
-            'name' => 'Sorsogon City Region',
-            'warehouse_address' => '789 Rizal Blvd., Zone 2, Sorsogon City, Sorsogon',
-            'latitude' => 12.9719,
-            'longitude' => 123.9185,
-            'is_active' => true,
-        ],
-        [
-            'name' => 'Labo Region',
-            'warehouse_address' => 'Warehouse St., Labo, Camarines Norte',
-            'latitude' => 14.1525,
-            'longitude' => 122.8303,
-            'is_active' => true,
-        ],
-        [
-            'name' => 'Talisay Region',
-            'warehouse_address' => 'Warehouse Rd., Talisay, Camarines Norte',
-            'latitude' => 14.1167,
-            'longitude' => 122.8167,
-            'is_active' => true,
-        ],
-        [
-            'name' => 'Daet Region',
-            'warehouse_address' => 'Highway 1, Daet, Camarines Norte',
-            'latitude' => 14.1125,
-            'longitude' => 122.9556,
-            'is_active' => true,
-        ],
-        [
-            'name' => 'Basud Region',
-            'warehouse_address' => 'Central Rd., Basud, Camarines Norte',
-            'latitude' => 14.0667,
-            'longitude' => 122.9667,
-            'is_active' => true,
-        ],
-        [
-            'name' => 'Sipocot Region',
-            'warehouse_address' => 'Main St., Sipocot, Camarines Sur',
-            'latitude' => 13.8167,
-            'longitude' => 122.9833,
-            'is_active' => true,
-        ],
-        [
-            'name' => 'Bagacay Region',
-            'warehouse_address' => 'Barangay Hall Rd., Bagacay, Camarines Sur',
-            'latitude' => 13.7333,
-            'longitude' => 123.0500,
-            'is_active' => true,
-        ],
-        [
-            'name' => 'Pamplona Region',
-            'warehouse_address' => 'Purok 3, Pamplona, Camarines Sur',
-            'latitude' => 13.5833,
-            'longitude' => 123.0667,
-            'is_active' => true,
-        ],
-        [
-            'name' => 'Iriga Region',
-            'warehouse_address' => 'Downtown Rd., Iriga City, Camarines Sur',
-            'latitude' => 13.4333,
-            'longitude' => 123.4167,
-            'is_active' => true,
-        ],
-        [
-            'name' => 'Ligao Region',
-            'warehouse_address' => 'National Hwy, Ligao City, Albay',
-            'latitude' => 13.2167,
-            'longitude' => 123.5167,
-            'is_active' => true,
-        ],
-        [
-            'name' => 'Camalig Region',
-            'warehouse_address' => 'Rural Rd., Camalig, Albay',
-            'latitude' => 13.1500,
-            'longitude' => 123.6000,
-            'is_active' => true,
-        ],
-        [
-            'name' => 'Bacacay Region',
-            'warehouse_address' => 'Coastal Rd., Bacacay, Albay',
-            'latitude' => 13.3000,
-            'longitude' => 123.7833,
-            'is_active' => true,
-        ],
-    ];
+    public function run()
+    {
+        $regions = [
+            [
+                'name' => 'Malabon',
+                'warehouse_address' => 'MXG9+4J City of Malabon, Metro Manila',
+                'latitude' => 14.6625,
+                'longitude' => 120.9564,
+                'is_active' => true,
+                'color_hex' => '#1F77B4',
+            ],
+            [
+                'name' => 'Labo',
+                'warehouse_address' => '4RXR+75Q, Labo, Camarines Norte',
+                'latitude' => 14.1525,
+                'longitude' => 122.8303,
+                'is_active' => true,
+                'color_hex' => '#2CA02C', 
+            ],
+            [
+                'name' => 'Daet',
+                'warehouse_address' => '4W5X+388, Daet, Camarines Norte',
+                'latitude' => 14.1125,
+                'longitude' => 122.9556,
+                'is_active' => true,
+                'color_hex' => '#D62728',
+            ],
+            [
+                'name' => 'Milaor',
+                'warehouse_address' => 'J52H+G8X, Milaor, Camarines Sur',
+                'latitude' => 13.6000,
+                'longitude' => 123.1833,
+                'is_active' => true,
+                'color_hex' => '#FF7F0E', 
+            ],
+            [
+                'name' => 'Naga City',
+                'warehouse_address' => 'J6C5+RXQ, Naga City, Camarines Sur',
+                'latitude' => 13.6215,
+                'longitude' => 123.1815,
+                'is_active' => true,
+                'color_hex' => '#9467BD', 
+            ],
+            [
+                'name' => 'Iriga',
+                'warehouse_address' => 'CCC4+4C4, Iriga City, Camarines Sur',
+                'latitude' => 13.4333,
+                'longitude' => 123.4167,
+                'is_active' => true,
+                'color_hex' => '#17BECF', 
+            ],
+            [
+                'name' => 'Tabaco City',
+                'warehouse_address' => '9P6M+GVR, Tabaco City, Albay',
+                'latitude' => 13.3500,
+                'longitude' => 123.7333,
+                'is_active' => true,
+                'color_hex' => '#E377C2', 
+            ],
+            [
+                'name' => 'Legazpi City',
+                'warehouse_address' => '5P3V+65 Legazpi City, Albay',
+                'latitude' => 13.1437,
+                'longitude' => 123.7437,
+                'is_active' => true,
+                'color_hex' => '#FFD700', 
+            ],
+            [
+                'name' => 'Sorsogon',
+                'warehouse_address' => 'XXCX+FR6, Sorsogon City, Sorsogon',
+                'latitude' => 12.9719,
+                'longitude' => 123.9185,
+                'is_active' => true,
+                'color_hex' => '#7F7F7F', 
+            ],
+        ];
 
-    foreach ($regions as $regionData) {
-        Region::updateOrCreate(
-            ['name' => $regionData['name']],
-            $regionData
-        );
+        foreach ($regions as $regionData) {
+            Region::updateOrCreate(
+                ['name' => $regionData['name']],
+                $regionData
+            );
+        }
+
+        $this->command->info(count($regions) . ' regions seeded successfully!');
     }
-
-    $this->command->info(count($regions) . ' regions seeded successfully!');
-}
-
 }

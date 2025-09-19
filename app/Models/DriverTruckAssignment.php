@@ -15,7 +15,8 @@ class DriverTruckAssignment extends Model
         'region_id',
         'is_active',
         'assigned_at',
-        'unassigned_at'
+        'unassigned_at',
+        'return_status' // Added
     ];
 
     protected $casts = [
@@ -49,7 +50,8 @@ class DriverTruckAssignment extends Model
         if ($this->is_active) {
             $this->update([
                 'is_active' => false,
-                'unassigned_at' => now()
+                'unassigned_at' => now(),
+                'return_status' => 'Returned & Verified' // Added
             ]);
 
             // Optional: Update related truck status

@@ -43,7 +43,7 @@ class Kernel extends HttpKernel
         'role' => \App\Http\Middleware\RoleMiddleware::class, 
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'active' => \App\Http\Middleware\CheckUserStatus::class,
-        'profile.complete' => \App\Http\Middleware\EnsureProfileIsComplete::class,
+        'ensure_profile_complete' => \App\Http\Middleware\EnsureProfileComplete::class,
         'paid' => \App\Http\Middleware\EnsureDeliveryIsPaid::class,
         'postpaid.check' => \App\Http\Middleware\CheckPostpaidEligibility::class,
     ];

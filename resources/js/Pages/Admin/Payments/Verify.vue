@@ -41,6 +41,22 @@
             </span>
             <span class="text-xs text-gray-500 dark:text-gray-300">Amount Collected</span>
           </div>
+          <div v-if="payment.reference_number" class="flex justify-between mb-2">
+            <span class="text-gray-600 dark:text-gray-400">Reference Number:</span>
+            <span class="font-mono text-gray-900 dark:text-gray-100">{{ payment.reference_number }}</span>
+          </div>
+          <div class="flex justify-between mb-2">
+            <span class="text-gray-600 dark:text-gray-400">Payment Source:</span>
+            <span class="capitalize text-gray-900 dark:text-gray-100">
+              {{ payment.source.replace('_', ' ') }}
+            </span>
+          </div>
+          <div class="flex justify-between mb-2">
+            <span class="text-gray-600 dark:text-gray-400">Submitted By:</span>
+            <span class="text-gray-900 dark:text-gray-100">
+              {{ payment.submitted_by?.name || 'N/A' }}
+            </span>
+          </div>
         </div>
         <div class="p-4 md:p-6">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">

@@ -43,6 +43,16 @@
               class="w-44"
               @change="handleFilterChange"
             />
+            <SelectInput
+              v-model="filters.status"
+              :options="[
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' },
+                { value: 'all', label: 'All' }
+              ]"
+              class="w-32"
+              placeholder="Status"
+            />
           </div>
         </div>
 
@@ -87,15 +97,13 @@
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm">
                   <span
-                    :class="[
+                    :class=" [
                       'px-2 py-1 rounded-full text-xs font-semibold',
-                      row.return_status === 'Returned'
-                        ? 'bg-emerald-100 text-emerald-800'
+                      row.return_status === 'Returned & Verified'
+                        ? 'bg-blue-100 text-blue-800'
                         : row.return_status === 'Pending Verification'
                           ? 'bg-yellow-100 text-yellow-800'
-                          : row.return_status === 'Verified'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-gray-100 text-gray-500'
+                          : 'bg-gray-100 text-gray-500'
                     ]"
                   >
                     {{ row.return_status ?? 'Not Returned' }}
@@ -103,21 +111,23 @@
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm">
                   <span
-                    :class="[
+                    :class=" [
                       'px-2 py-1 rounded-full text-xs font-semibold',
-                      getTruckStatusColor(row.truck?.status) === 'green'
+                      row.truck?.status === 'available'
                         ? 'bg-green-100 text-green-700'
-                        : getTruckStatusColor(row.truck?.status) === 'yellow'
-                          ? 'bg-yellow-100 text-yellow-700'
-                          : getTruckStatusColor(row.truck?.status) === 'blue'
+                        : row.truck?.status === 'returning'
+                          ? 'bg-purple-100 text-purple-700'
+                          : row.truck?.status === 'assigned'
                             ? 'bg-blue-100 text-blue-700'
-                            : getTruckStatusColor(row.truck?.status) === 'indigo'
+                            : row.truck?.status === 'in_transit'
                               ? 'bg-indigo-100 text-indigo-700'
-                              : getTruckStatusColor(row.truck?.status) === 'purple'
-                                ? 'bg-purple-100 text-purple-700'
-                                : getTruckStatusColor(row.truck?.status) === 'red'
+                              : row.truck?.status === 'nearly_full'
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : row.truck?.status === 'maintenance'
                                   ? 'bg-red-100 text-red-700'
-                                  : 'bg-gray-100 text-gray-500'
+                                  : row.truck?.status === 'unavailable'
+                                    ? 'bg-gray-100 text-gray-500'
+                                    : 'bg-gray-100 text-gray-500'
                     ]"
                   >
                     {{ getTruckStatusLabel(row.truck?.status) }}
@@ -132,31 +142,37 @@
                     >
                       <EyeIcon class="w-3 h-3" />
                     </SecondaryButton>
+                    
+                    <!-- Show Deactivate button only if active and not returning -->
                     <DangerButton 
-                      v-if="row.is_active"
+                      v-if="row.is_active && row.truck?.status !== 'returning'"
                       @click="confirmDeactivate(row)" 
                       size="xs"
                       title="Deactivate"
                     >
                       <TrashIcon class="w-3 h-3" />
                     </DangerButton>
+                    
+                    <!-- Show Verify Return button if truck is returning -->
                     <PrimaryButton 
-                      v-else
-                      @click="confirmReactivate(row)"
-                      size="xs"
-                      title="Reactivate"
-                    >
-                      <ArrowPathIcon class="w-3 h-3" />
-                    </PrimaryButton>
-                    <PrimaryButton 
-                      v-if="row.return_status === 'Pending Verification'"
-                      @click="verifyDriverReturn(row)"
+                      v-if="row.truck?.status === 'returning' && row.is_active"
+                      @click="openVerifyModal(row)"
                       size="xs"
                       title="Verify Return"
                     >
                       <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                       </svg>
+                    </PrimaryButton>
+                    
+                    <!-- Show Reactivate button if inactive -->
+                    <PrimaryButton 
+                      v-else-if="!row.is_active"
+                      @click="openReactivateModal(row)"
+                      size="xs"
+                      title="Reactivate"
+                    >
+                      <ArrowPathIcon class="w-3 h-3" />
                     </PrimaryButton>
                   </div>
                 </td>
@@ -318,6 +334,60 @@
         </div>
       </div>
     </Modal>
+
+    <!-- Verify Return Modal -->
+    <Modal :show="showVerifyModal" @close="closeVerifyModal">
+      <div class="p-6">
+        <h2 class="text-lg font-semibold mb-4">Verify Driver Return</h2>
+        <p class="mb-6">
+          Are you sure you want to verify the return for this assignment?
+        </p>
+        <div class="flex justify-end space-x-2">
+          <SecondaryButton @click="closeVerifyModal">Cancel</SecondaryButton>
+          <PrimaryButton :loading="verifyingReturn" @click="verifyDriverReturn">
+            Verify Return
+          </PrimaryButton>
+        </div>
+      </div>
+    </Modal>
+
+    <!-- Reactivate Modal -->
+    <Modal :show="showReactivateModal" @close="closeReactivateModal">
+      <div class="p-6">
+        <h2 class="text-lg font-semibold mb-4">Reactivate Assignment</h2>
+        <p class="mb-6">
+          Are you sure you want to reactivate this driver-truck assignment?
+        </p>
+        <div class="flex justify-end space-x-2">
+          <SecondaryButton @click="closeReactivateModal">Cancel</SecondaryButton>
+          <PrimaryButton :loading="reactivatingAssignment" @click="reactivateAssignment">
+            Reactivate
+          </PrimaryButton>
+        </div>
+      </div>
+    </Modal>
+
+    <!-- Updated Deactivate Confirmation Modal -->
+    <Modal :show="showDeactivateModal" @close="closeDeactivateModal">
+      <div class="p-6">
+        <h2 class="text-lg font-semibold mb-4">Confirm Deactivation</h2>
+        <p class="mb-6">
+          Are you sure you want to deactivate this assignment?
+        </p>
+        <div class="flex justify-end space-x-2">
+          <SecondaryButton @click="closeDeactivateModal">
+            Cancel
+          </SecondaryButton>
+          <DangerButton 
+            @click="handleDeactivate" 
+            :loading="deactivatingAssignment"
+            :disabled="deactivatingAssignment"
+          >
+            Deactivate
+          </DangerButton>
+        </div>
+      </div>
+    </Modal>
   </EmployeeLayout>
 </template>
 
@@ -338,6 +408,7 @@ import SearchInput from '@/Components/SearchInput.vue';
 import { ref, computed, watch } from 'vue';
 import { router, useForm } from '@inertiajs/vue3';
 import axios from 'axios';
+
 import { 
   EyeIcon,
   TrashIcon, 
@@ -358,14 +429,19 @@ const showDetailModal = ref(false);
 const showCreateModal = ref(false);
 const showDeactivateModal = ref(false);
 const showReactivateModal = ref(false);
+const showVerifyModal = ref(false);
 const selectedAssignment = ref(null);
 const assignmentToDeactivate = ref(null);
 const assignmentToReactivate = ref(null);
+const assignmentToVerify = ref(null);
 const loading = ref(false);
 const loadingDrivers = ref(false);
 const loadingTrucks = ref(false);
+const verifyingReturn = ref(false);
+const reactivatingAssignment = ref(false);
 const availableDrivers = ref([]);
 const availableTrucks = ref([]);
+const deactivatingAssignment = ref(false);
 
 const filters = ref({
   region_id: props.filters.region_id || '',
@@ -483,24 +559,82 @@ function viewAssignment(assignment) {
   showDetailModal.value = true;
 }
 
-function confirmDeactivate(assignment) {
+const confirmDeactivate = (assignment) => {
   assignmentToDeactivate.value = assignment;
   showDeactivateModal.value = true;
-}
+};
 
-function confirmReactivate(assignment) {
+const handleDeactivate = async () => {
+  if (!assignmentToDeactivate.value) {
+    closeDeactivateModal();
+    return;
+  }
+
+  deactivatingAssignment.value = true;
+  try {
+    await router.delete(
+      route('driver-truck-assignments.destroy', { 
+        assignment: assignmentToDeactivate.value.id 
+      }),
+      {
+        preserveScroll: true,
+        onFinish: () => {
+          closeDeactivateModal();
+        },
+        onError: () => {
+          alert('Failed to deactivate assignment. Please try again.');
+        }
+      }
+    );
+  } catch (error) {
+    console.error('Deactivation failed:', error);
+    alert('Failed to deactivate assignment. Please try again.');
+    closeDeactivateModal();
+  } finally {
+    deactivatingAssignment.value = false;
+  }
+};
+
+const confirmReactivate = (assignment) => {
   assignmentToReactivate.value = assignment;
   showReactivateModal.value = true;
+};
+
+const reactivateAssignment = async () => {
+  router.put(
+    route('driver-truck-assignments.reactivate', { 
+      assignment: assignmentToReactivate.value.id 
+    }),
+    {},
+    {
+      onSuccess: () => {
+        closeReactivateModal();
+      },
+      onError: () => {
+        alert('Failed to reactivate assignment.');
+      }
+    }
+  );
+};
+
+function openVerifyModal(assignment) {
+  assignmentToVerify.value = assignment;
+  showVerifyModal.value = true;
 }
 
-function deactivateAssignment(assignment) {
-  assignmentToDeactivate.value = assignment;
-  showDeactivateModal.value = true;
+function closeVerifyModal() {
+  showVerifyModal.value = false;
+  assignmentToVerify.value = null;
 }
 
-function reactivateAssignment(assignment) {
-  assignmentToReactivate.value = assignment;
-  showReactivateModal.value = true;
+function closeReactivateModal() {
+  showReactivateModal.value = false;
+  assignmentToReactivate.value = null;
+}
+
+function closeDeactivateModal() {
+  showDeactivateModal.value = false;
+  assignmentToDeactivate.value = null;
 }
 
 watch(() => form.region_id, (newRegionId, oldRegionId) => {
@@ -563,16 +697,12 @@ function handlePageChange(page) {
   });
 }
 
+watch(filters, handleFilterChange, { deep: true });
+
 function handleFilterChange() {
-  router.get(route('driver-monitoring.index', {
-    ...filters.value,
-    page: 1
-  }), {
+  router.get(route('driver-truck-assignments.index'), filters.value, {
     preserveState: true,
-    preserveScroll: true,
     replace: true,
-    onStart: () => loading.value = true,
-    onFinish: () => loading.value = false
   });
 }
 
@@ -609,18 +739,26 @@ watch(() => props.assignments, (newVal) => {
     }
 }, { immediate: true, deep: true });
 
-const verifyDriverReturn = (assignment) => {
-  router.post(route('driver-truck-assignments.verify-return', assignment.id), {
-    preserveScroll: true,
-    onSuccess: () => {
-      // Force reload the page to get updated assignment data
-      router.reload({
-        only: ['assignments'],
-        onFinish: () => {
-          // Optionally, show a notification here
-        }
-      });
-    }
-  });
+const verifyDriverReturn = async () => {
+  if (!assignmentToVerify.value) return;
+  verifyingReturn.value = true;
+  try {
+    await axios.post(
+      route('driver-truck-assignments.verify-return', assignmentToVerify.value.id)
+    );
+    // Refresh the data after verification
+    router.reload({ only: ['assignments'] });
+    closeVerifyModal();
+  } catch (error) {
+    console.error('Error verifying return:', error);
+    alert('Failed to verify return. Please try again.');
+  } finally {
+    verifyingReturn.value = false;
+  }
 };
+
+function openReactivateModal(assignment) {
+  assignmentToReactivate.value = assignment;
+  showReactivateModal.value = true;
+}
 </script>

@@ -5,7 +5,6 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
-import AuthLogo from '@/Components/AuthLogo.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 
 defineProps({
@@ -41,9 +40,11 @@ const submit = () => {
         <Head title="Log in" />
         
         <div class="max-w-md w-full mx-auto p-6 bg-white rounded-lg shadow-md">
-            <AuthLogo />
+            <div class="flex justify-center mb-6">
+                <img src="@/assets/logo.jpg" alt="Infinitrix Logo" class="h-36 w-auto" />
+            </div>
             
-            <h1 class="text-2xl font-bold text-center text-gray-800 mb-6">Welcome Back</h1>
+            <h1 class="text-2xl font-bold text-center text-gray-800 mb-6">Sign In To Proceed</h1>
             
             <!-- Error Messages -->
             <div v-if="errors.verification" class="mb-4 p-3 bg-red-50 text-red-600 rounded">

@@ -49,6 +49,15 @@
               <template #name="{ row }">
                 <span class="truncate block w-48">{{ row.name }}</span>
               </template>
+              <template #color_hex="{ row }">
+                <div class="flex items-center">
+                  <div 
+                    class="w-4 h-4 rounded-full mr-2 border border-gray-300" 
+                    :style="{ backgroundColor: row.color_hex }"
+                  ></div>
+                  <span class="text-sm">{{ row.color_hex }}</span>
+                </div>
+              </template>
               <template #warehouse_address="{ row }">
                 <span class="truncate block w-48">{{ row.warehouse_address || 'N/A' }}</span>
               </template>
@@ -135,7 +144,9 @@ const statusOptions = [
 
 const columns = [
   { field: 'name', header: 'Name', sortable: true },
+  { field: 'color_hex', header: 'Color', sortable: false },
   { field: 'warehouse_address', header: 'Warehouse Address', sortable: false },
+  { field: 'status', header: 'Status', sortable: true },
   { field: 'actions', header: 'Actions', sortable: false }
 ];
 

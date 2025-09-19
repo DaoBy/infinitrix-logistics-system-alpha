@@ -1,5 +1,6 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { usePage, router } from '@inertiajs/vue3'; // Added router import
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import NavLink from '@/Components/NavLink.vue';
@@ -107,10 +108,58 @@ onMounted(() => {
 onUnmounted(() => {
   stopAutoSlide();
 });
+
+const showProfileModal = ref(false);
+const page = usePage();
+
+// Show modal if flash warning is present
+if (page.props.flash?.warning && page.props.flash.warning.includes('complete your profile')) {
+    showProfileModal.value = true;
+}
+
+const handleDeliveryRequestClick = (event) => {
+    if (page.props.auth?.user && !page.props.auth.user.customer?.is_profile_complete) {
+        event.preventDefault();
+        showProfileModal.value = true;
+        return false;
+    }
+    return true;
+};
+
+const navigateToCompleteProfile = () => {
+    showProfileModal.value = false;
+    router.visit(route('profile.complete'));
+};
 </script>
 
 <template>
   <GuestLayout>
+    <!-- Profile Completion Modal -->
+    <div v-if="showProfileModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div class="text-center">
+          <h3 class="text-lg font-medium text-gray-900 mb-2">Profile Incomplete</h3>
+          <p class="text-gray-600 mb-4">
+            You need to complete your profile before you can request deliveries.
+          </p>
+          <div class="flex justify-center space-x-4">
+            <button 
+              @click="showProfileModal = false" 
+              class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+            >
+              Cancel
+            </button>
+            <button 
+              @click="navigateToCompleteProfile" 
+              class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            >
+              Complete Profile
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Hero Section -->
     <div
       @click="toggleTruckPop"

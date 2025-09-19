@@ -61,6 +61,7 @@ class RegionController extends Controller
             'warehouse_address' => 'required|string',
             'geographic_location.lat' => 'required|numeric|between:-90,90',
             'geographic_location.lng' => 'required|numeric|between:-180,180',
+            'color_hex' => 'required|string|max:7|regex:/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/',
         ]);
 
         Region::create([
@@ -68,6 +69,7 @@ class RegionController extends Controller
             'warehouse_address' => $validated['warehouse_address'],
             'latitude' => $validated['geographic_location']['lat'],
             'longitude' => $validated['geographic_location']['lng'],
+            'color_hex' => $validated['color_hex'],
             'is_active' => true
         ]);
 
@@ -101,13 +103,15 @@ class RegionController extends Controller
             'warehouse_address' => 'required|string',
             'geographic_location.lat' => 'required|numeric|between:-90,90',
             'geographic_location.lng' => 'required|numeric|between:-180,180',
+            'color_hex' => 'required|string|max:7|regex:/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/',
         ]);
 
         $region->update([
             'name' => $validated['name'],
             'warehouse_address' => $validated['warehouse_address'],
             'latitude' => $validated['geographic_location']['lat'],
-            'longitude' => $validated['geographic_location']['lng']
+            'longitude' => $validated['geographic_location']['lng'],
+            'color_hex' => $validated['color_hex'],
         ]);
 
         return redirect()->route('admin.regions.index')

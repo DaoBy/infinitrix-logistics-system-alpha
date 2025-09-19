@@ -36,9 +36,6 @@
               Manage and review all payment and collection transactions.
             </p>
           </div>
-          <div class="text-sm text-gray-500 dark:text-gray-400 md:ml-auto">
-            Showing {{ requests?.data?.length ?? 0 }} of {{ requests?.total ?? 0 }} entries
-          </div>
         </div>
 
         <div class="overflow-x-auto">
@@ -53,6 +50,9 @@
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Receiver
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Payment Method
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Amount
@@ -91,54 +91,64 @@
                   </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize" 
+                    :class="paymentMethodClass(row)">
+                    {{ paymentMethodLabel(row) }}
+                  </span>
+                  <div v-if="isOnlinePayment(row) && row.payment?.reference_number" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Ref: {{ row.payment?.reference_number }}
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm">
                   ₱{{ amountValue(row) }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm">
                   <StatusBadge 
-                    :status="row.payment_status" 
+                    :status="getPaymentStatus(row)" 
                     :variant="statusVariant(row)"
                   >
                     {{ statusLabel(row) }}
                   </StatusBadge>
-                  <span
-                    v-if="isPostpaid(row) && row.payment_status === 'collected'"
-                    class="block text-blue-600 dark:text-blue-400 text-xs mt-1"
-                  >
-                    Collected by: {{ row.payment?.collectedBy?.name }}
-                  </span>
+                  
                   <span
                     v-if="row.payment_status === 'paid' || row.payment_status === 'verified'"
                     class="block text-green-600 dark:text-green-400 text-xs mt-1"
                   >
                     Verified {{ row.payment?.verifiedBy?.name }}
                   </span>
+                  <span
+                    v-if="isOnlinePaymentPending(row)"
+                    class="block text-yellow-600 dark:text-yellow-400 text-xs mt-1"
+                  >
+                    Awaiting verification
+                  </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div class="flex justify-end space-x-2">
+                    <!-- Record Payment button for cash payments or unverified online payments -->
                     <PrimaryButton
-                      v-if="showRecordAction(row) && !isPostpaid(row)"
-                      @click="goToRecord(row)"
+                      v-if="showRecordAction(row)"
+                      @click="goToRecordPayment(row)"
                       class="mr-2"
                     >
                       Record Payment
                     </PrimaryButton>
-                    <PrimaryButton
-                      v-if="showReviewCollection(row)"
-                      @click="goToReviewCollection(row)"
-                      class="mr-2"
-                    >
-                      Review Collection
-                    </PrimaryButton>
+                    
+                    <!-- Review Collection button for postpaid deliveries with collected payment -->
+                  
+                    
+                    <!-- View Payment Details button for deliveries with existing payment -->
                     <SecondaryButton
-                      @click="goToDetails(row)"
+                      v-if="hasPayment(row)"
+                      @click="goToPaymentDetails(row)"
                     >
-                      View Details
+                      View Payment
                     </SecondaryButton>
                   </div>
                 </td>
               </tr>
               <tr v-if="(requests?.data?.length ?? 0) === 0">
-                <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                <td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                   No {{ type === 'postpaid' ? 'postpaid delivery orders' : type === 'prepaid' ? 'prepaid delivery requests' : 'delivery requests/orders' }} found
                 </td>
               </tr>
@@ -163,7 +173,6 @@ import Pagination from '@/Components/Pagination.vue';
 import SearchInput from '@/Components/SearchInput.vue';
 import SelectInput from '@/Components/SelectInput.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
-import DataTable from '@/Components/DataTable.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import { Link, router } from '@inertiajs/vue3';
@@ -200,13 +209,16 @@ const statusOptions = computed(() => {
     return [
       { value: '', label: 'All Statuses' },
       { value: 'pending', label: 'Pending Payment' },
-      { value: 'paid', label: 'Paid' }
+      { value: 'pending_verification', label: 'Pending Verification' },
+      { value: 'paid', label: 'Paid' },
+      { value: 'rejected', label: 'Rejected' }
     ];
   } else if (type.value === 'postpaid') {
     return [
       { value: '', label: 'All Statuses' },
       { value: 'pending', label: 'Pending Collection' },
       { value: 'collected', label: 'Collected' },
+      { value: 'pending_verification', label: 'Pending Verification' },
       { value: 'verified', label: 'Verified' }
     ];
   } else {
@@ -214,21 +226,14 @@ const statusOptions = computed(() => {
     return [
       { value: '', label: 'All Statuses' },
       { value: 'pending', label: 'Pending' },
+      { value: 'pending_verification', label: 'Pending Verification' },
       { value: 'paid', label: 'Paid' },
       { value: 'collected', label: 'Collected' },
-      { value: 'verified', label: 'Verified' }
+      { value: 'verified', label: 'Verified' },
+      { value: 'rejected', label: 'Rejected' }
     ];
   }
 });
-
-const columns = [
-  { field: 'reference', header: type.value === 'postpaid' ? 'Order #' : 'Reference', sortable: false },
-  { field: 'sender', header: 'Sender', sortable: false },
-  { field: 'receiver', header: 'Receiver', sortable: false },
-  { field: 'amount', header: 'Amount', sortable: false },
-  { field: 'status', header: 'Status', sortable: false },
-  { field: 'actions', header: 'Actions', sortable: false },
-];
 
 const requests = computed(() => {
   if (type.value === 'prepaid') {
@@ -251,30 +256,72 @@ const tableTitle = computed(() => {
 function isPostpaid(row) {
   return type.value === 'postpaid' || row._type === 'postpaid';
 }
+
 function senderName(row) {
   if (isPostpaid(row)) {
     return row.delivery_request?.sender?.name ?? 'N/A';
   }
   return row.sender?.name ?? 'N/A';
 }
+
 function senderMobile(row) {
   if (isPostpaid(row)) {
     return row.delivery_request?.sender?.mobile ?? '';
   }
   return row.sender?.mobile ?? '';
 }
+
 function receiverName(row) {
   if (isPostpaid(row)) {
     return row.delivery_request?.receiver?.name ?? 'N/A';
   }
   return row.receiver?.name ?? 'N/A';
 }
+
 function receiverMobile(row) {
   if (isPostpaid(row)) {
     return row.delivery_request?.receiver?.mobile ?? '';
   }
   return row.receiver?.mobile ?? '';
 }
+
+function paymentMethod(row) {
+  if (isPostpaid(row)) {
+    return row.delivery_request?.payment_method ?? row.payment_method ?? 'cash';
+  }
+  return row.payment_method ?? 'cash';
+}
+
+function paymentMethodLabel(row) {
+  const method = paymentMethod(row);
+  return method?.charAt(0).toUpperCase() + method?.slice(1) || 'Cash';
+}
+
+function paymentMethodClass(row) {
+  const method = paymentMethod(row);
+  switch (method) {
+    case 'cash':
+      return 'bg-gray-100 text-gray-800';
+    case 'gcash':
+      return 'bg-blue-100 text-blue-800';
+    case 'bank':
+      return 'bg-green-100 text-green-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+}
+
+function isOnlinePayment(row) {
+  const method = paymentMethod(row);
+  return method === 'gcash' || method === 'bank';
+}
+
+function isOnlinePaymentPending(row) {
+  return isOnlinePayment(row) && 
+         (row.payment_status === 'pending_verification' || 
+          (!row.payment?.verified_by && !row.payment?.rejected_by));
+}
+
 function amountValue(row) {
   if (isPostpaid(row)) {
     const val = row.delivery_request?.total_price;
@@ -283,51 +330,96 @@ function amountValue(row) {
   const val = row.total_price;
   return (typeof val === 'number' ? val : parseFloat(val || 0)).toFixed(2);
 }
-function statusVariant(row) {
-  const s = row.payment_status;
-  if (s === 'paid' || s === 'verified') return 'success';
-  if (s === 'collected') return 'info';
-  return 'warning';
-}
-function statusLabel(row) {
-  const s = row.payment_status;
-  if (s === 'paid') return 'Paid';
-  if (s === 'collected') return 'Collected';
-  if (s === 'verified') return 'Verified';
-  return 'Pending';
-}
-function showRecordAction(row) {
-  if (isPostpaid(row)) {
-    return row.payment_status !== 'verified';
+
+function getPaymentStatus(row) {
+  // For online payments, check if payment is missing
+  if (isOnlinePayment(row) && !row.payment) {
+    return 'awaiting_payment';
   }
-  return row.payment_status !== 'paid';
+  // For online payments, check the payment verification status
+  if (isOnlinePayment(row) && row.payment) {
+    if (row.payment.verified_by) return 'verified';
+    if (row.payment.rejected_by) return 'rejected';
+    return 'pending_verification';
+  }
+  return row.payment_status;
 }
 
-// Only show Review Collection for postpaid if not yet paid/verified
+function statusVariant(row) {
+  const status = getPaymentStatus(row);
+  if (status === 'paid' || status === 'verified') return 'success';
+  if (status === 'collected') return 'info';
+  if (status === 'rejected') return 'danger';
+  if (status === 'pending_verification') return 'warning';
+  if (status === 'awaiting_payment') return 'secondary';
+  return 'warning';
+}
+
+function statusLabel(row) {
+  const status = getPaymentStatus(row);
+  switch (status) {
+    case 'paid': return 'Paid';
+    case 'collected': return 'Collected';
+    case 'verified': return 'Verified';
+    case 'pending_verification': return 'Pending Verification';
+    case 'rejected': return 'Rejected';
+    case 'awaiting_payment': return 'Awaiting Payment';
+    default: return 'Pending';
+  }
+}
+
+function hasPayment(row) {
+  if (isPostpaid(row)) {
+    return row.payment?.id || row.delivery_request?.payment?.id;
+  }
+  return row.payment?.id;
+}
+
+function showRecordAction(row) {
+  // Always show for cash payments that aren't paid
+  if (!isOnlinePayment(row) && row.payment_status !== 'paid') {
+    return true;
+  }
+  // Always show for Gcash/Bank (online payments), regardless of status
+  if (isOnlinePayment(row)) {
+    return true;
+  }
+  return false;
+}
+
 function showReviewCollection(row) {
   if (!isPostpaid(row)) return false;
   // If payment_status is 'paid' or 'verified', do not show
   if (row.payment_status === 'paid' || row.payment_status === 'verified') return false;
-  // Only show if showRecordAction(row) is true and payment exists
-  return showRecordAction(row) && (row.payment?.id || row.delivery_request?.payment?.id);
+  // Only show if payment exists and status is collected
+  return hasPayment(row) && row.payment_status === 'collected';
 }
 
-function goToRecord(row) {
-  router.visit(route('staff.payments.show', row.id));
-}
-function goToReviewCollection(row) {
-  // Try to get payment from row.payment or row.delivery_request.payment
-  const paymentId =
-    row.payment?.id ||
-    row.delivery_request?.payment?.id;
-  if (paymentId) {
-    router.visit(route('staff.payments.verify', paymentId));
+// Route navigation functions
+function goToRecordPayment(row) {
+  // Always allow staff to record payment for Gcash/Bank or cash
+  const deliveryId = isPostpaid(row) ? row.delivery_request?.id : row.id;
+  if (deliveryId) {
+    router.visit(route('staff.payments.create', { delivery_id: deliveryId }));
   } else {
-    alert('No collection record found for this order. The collector may not have submitted a collection yet.');
+    router.visit(route('staff.payments.create'));
   }
 }
-function goToDetails(row) {
-  router.visit(route('deliveries.show', row.id));
+
+function goToReviewCollection(row) {
+  // For postpaid deliveries with collected payment
+  const paymentId = row.payment?.id || row.delivery_request?.payment?.id;
+  if (paymentId) {
+    router.visit(route('staff.payments.verify.view', paymentId));
+  }
+}
+
+function goToPaymentDetails(row) {
+  // For deliveries with existing payment
+  const paymentId = row.payment?.id || row.delivery_request?.payment?.id;
+  if (paymentId) {
+    router.visit(route('staff.payments.show', paymentId));
+  }
 }
 
 function handlePageChange(page) {

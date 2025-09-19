@@ -19,9 +19,8 @@
         <Alert v-if="error" type="danger">{{ error }}</Alert>
       </div>
 
-      <!-- Pending Requests Section (DISABLED) -->
-      <!--
-      <div class="mb-12">
+      <!-- Pending Delivery Requests Section -->
+      <div class="mb-8">
         <div class="flex justify-between items-center mb-4">
           <h3 class="text-lg font-medium text-gray-900">Pending Delivery Requests</h3>
           <SearchInput 
@@ -33,16 +32,22 @@
 
         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
           <div class="p-5 bg-white border-b border-gray-200">
-            <PendingRequestsTable 
-              :requests="requests"
+            <DeliveryRequestTable 
+              :requests="filteredRequests"
               @view="viewRequest"
               @edit="editRequest"
-              @cancel="cancelRequest"
             />
           </div>
         </div>
+        
+        <!-- Pagination for requests -->
+        <Pagination 
+          v-if="requests && requests.meta"
+          :links="requests.links" 
+          :meta="requests.meta"
+          class="mt-4"
+        />
       </div>
-      -->
 
       <!-- Transaction History Section -->
       <div>
@@ -58,12 +63,20 @@
         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
           <div class="p-5 bg-white border-b border-gray-200">
             <TransactionHistoryTable 
-              :transactions="transactions"
-              @view="viewTransaction"
+              :transactions="filteredTransactions"
               @view-request="viewRequest"
+              @view-payment="viewPayment"
             />
           </div>
         </div>
+        
+        <!-- Pagination for transactions -->
+        <Pagination 
+          v-if="transactions && transactions.meta"
+          :links="transactions.links" 
+          :meta="transactions.meta"
+          class="mt-4"
+        />
       </div>
     </div>
   </GuestLayout>
@@ -74,11 +87,11 @@ import GuestLayout from '@/Layouts/GuestLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SearchInput from '@/Components/SearchInput.vue';
 import Alert from '@/Components/Alert.vue';
-import PendingRequestsTable from '@/Components/PendingRequestsTable.vue';
 import TransactionHistoryTable from '@/Components/TransactionHistoryTable.vue';
+import DeliveryRequestTable from '@/Components/DeliveryRequestTable.vue';
+import Pagination from '@/Components/Pagination.vue';
 import { router } from '@inertiajs/vue3';
-import { computed } from 'vue';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
   requests: Object,
@@ -92,20 +105,69 @@ const props = defineProps({
 const requestSearch = ref(props.filters?.request_search || '');
 const transactionSearch = ref(props.filters?.transaction_search || '');
 
+// Filter requests based on search term
+const filteredRequests = computed(() => {
+  if (!props.requests?.data) return { data: [], links: [] };
+  
+  if (!requestSearch.value) return props.requests;
+  
+  const searchTerm = requestSearch.value.toLowerCase();
+  const filteredData = props.requests.data.filter(request => {
+    return (
+      request.id.toString().includes(searchTerm) ||
+      (request.receiver?.name || '').toLowerCase().includes(searchTerm) ||
+      (request.receiver?.company_name || '').toLowerCase().includes(searchTerm) ||
+      (request.pick_up_region?.name || '').toLowerCase().includes(searchTerm) ||
+      (request.drop_off_region?.name || '').toLowerCase().includes(searchTerm) ||
+      request.status.toLowerCase().includes(searchTerm) ||
+      request.total_price.toString().includes(searchTerm)
+    );
+  });
+  
+  return {
+    ...props.requests,
+    data: filteredData
+  };
+});
+
+// Filter transactions based on search term
+const filteredTransactions = computed(() => {
+  if (!props.transactions?.data) return { data: [], links: [] };
+  
+  if (!transactionSearch.value) return props.transactions;
+  
+  const searchTerm = transactionSearch.value.toLowerCase();
+  const filteredData = props.transactions.data.filter(transaction => {
+    return (
+      transaction.id.toString().includes(searchTerm) ||
+      (transaction.delivery_request?.receiver?.name || '').toLowerCase().includes(searchTerm) ||
+      (transaction.delivery_request?.receiver?.company_name || '').toLowerCase().includes(searchTerm) ||
+      (transaction.delivery_request?.pick_up_region?.name || '').toLowerCase().includes(searchTerm) ||
+      (transaction.delivery_request?.drop_off_region?.name || '').toLowerCase().includes(searchTerm) ||
+      transaction.status.toLowerCase().includes(searchTerm) ||
+      transaction.total_amount.toString().includes(searchTerm)
+    );
+  });
+  
+  return {
+    ...props.transactions,
+    data: filteredData
+  };
+});
+
 const viewRequest = (id) => {
-  router.visit(route('driver.delivery-tracking', id));
+  router.visit(route('customer.delivery-requests.show', id));
+};
+
+const viewPayment = (id) => {
+  router.visit(route('customer.payments.show', id));
 };
 
 const editRequest = (id) => {
   router.visit(route('customer.delivery-requests.edit', id));
 };
 
-const viewTransaction = (id) => {
-  // Use the correct route for viewing delivery order details
-  router.visit(route('deliveries.show', id));
-};
-
-watch([requestSearch, transactionSearch], () => {
+watch(requestSearch, () => {
   router.get(route('customer.delivery-dashboard.index'), {
     request_search: requestSearch.value,
     transaction_search: transactionSearch.value,
@@ -115,17 +177,13 @@ watch([requestSearch, transactionSearch], () => {
   });
 });
 
-const cancelRequest = (id) => {
-  if (confirm('Are you sure you want to cancel this delivery request?')) {
-    router.delete(route('customer.delivery-requests.destroy', id), {
-      preserveScroll: true,
-      onSuccess: () => {
-        // Success handled by Inertia
-      },
-      onError: () => {
-        alert('Failed to cancel request');
-      }
-    });
-  }
-};
+watch(transactionSearch, () => {
+  router.get(route('customer.delivery-dashboard.index'), {
+    request_search: requestSearch.value,
+    transaction_search: transactionSearch.value,
+  }, {
+    preserveState: true,
+    replace: true,
+  });
+});
 </script>

@@ -16,6 +16,11 @@ class CompleteProfileController extends Controller
         $user = Auth::user();
         $customer = $user->customer ?? null;
         
+        // Check if profile is already complete
+        if ($customer && $customer->is_profile_complete) {
+            return redirect()->route('customer.home');
+        }
+        
         return Inertia::render('Auth/CompleteProfile', [
             'initialValues' => [
                 'first_name' => $customer->first_name ?? '',
@@ -62,10 +67,10 @@ class CompleteProfileController extends Controller
             'name' => trim("{$validated['first_name']} {$validated['last_name']}"),
         ]);
 
-        // Update or create customer profile
+        // Update or create customer profile and mark as complete
         $user->customer()->updateOrCreate(
             ['user_id' => $user->id],
-            $validated
+            array_merge($validated, ['is_profile_complete' => true])
         );
 
         return redirect()->route('customer.home')

@@ -446,4 +446,25 @@ function closeInfoDialog() {
   infoDialog.value = false;
   infoDelivery.value = null;
 }
+
+// Add helper methods
+const isPostpaidUnpaid = (delivery) => {
+  return !delivery.delivery_request.payment_method?.includes(['cash', 'gcash', 'bank']) && 
+         ['awaiting_payment', 'unpaid', 'pending'].includes(delivery.delivery_request.payment_status);
+};
+
+const canCollectPayment = (delivery) => {
+  // Can't collect if already paid online
+  if (['pending_verification', 'paid'].includes(delivery.delivery_request.payment_status)) {
+    return false;
+  }
+  // Only postpaid deliveries that are completed/delivered
+  return !delivery.delivery_request.payment_method?.includes(['cash', 'gcash', 'bank']) && 
+         ['completed', 'delivered'].includes(delivery.delivery_request.status);
+};
+
+const canMarkUncollectible = (delivery) => {
+  // Similar logic to canCollectPayment but for marking uncollectible
+  return canCollectPayment(delivery);
+};
 </script>

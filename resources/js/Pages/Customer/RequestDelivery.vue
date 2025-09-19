@@ -1,4 +1,5 @@
 <script setup>
+
 import { ref, computed, onMounted, watch } from 'vue';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import InputLabel from '@/Components/InputLabel.vue';
@@ -20,6 +21,12 @@ const props = defineProps({
 });
 
 const packageStep = ref(1);
+
+// HARDCODED PICKUP REGIONS (Easily editable)
+const PICKUP_REGIONS = [
+  { value: 1, label: 'Metro Manila' },
+  { value: 2, label: 'Cebu City' }
+];
 
 // Container Presets
 const containerPresets = [
@@ -308,10 +315,8 @@ const useMyInfo = () => {
 
 // Price Calculation - Updated version without quantity
 const calculatePrice = async () => {
-  // Optional: set a loading state if you want to show a spinner
   isLoading.value = true;
 
-  // Ensure all required fields are present
   if (
     !priceMatrix.value ||
     !form.pick_up_region_id ||
@@ -428,6 +433,12 @@ watch(() => [
   if (form.pick_up_region_id && form.drop_off_region_id && allValid) {
     calculatePrice();
   }
+});
+
+// Computed property for filtered dropoff regions
+const filteredDropoffRegions = computed(() => {
+  if (!form.pick_up_region_id) return branches.value;
+  return branches.value.filter(region => region.value !== form.pick_up_region_id);
 });
 
 // Validation functions
@@ -818,7 +829,7 @@ const packageValueOptions = [
 <template>
   <GuestLayout>
     <div class="container mx-auto px-6 py-12 flex gap-12">
-      <!-- Progress Indicator (Left Side) - Updated for 6 steps -->
+      <!-- Progress Indicator (Left Side) -->
       <div class="w-1/4 space-y-8">
         <h2 class="text-2xl font-bold">Progress</h2>
         <div class="flex flex-col gap-4">
@@ -847,259 +858,263 @@ const packageValueOptions = [
       <div class="w-3/4 space-y-8">
         <h1 class="text-3xl font-bold">Request a Delivery</h1>
 
-        <!-- Step 1: Sender Details -->
-        <div v-if="currentStep === 1" class="space-y-6">
-          <div class="flex justify-between items-center">
-            <h2 class="text-xl font-semibold">Sender Details</h2>
+  <!-- Step 1: Sender Details -->
+<div v-if="currentStep === 1" class="space-y-6">
+  <!-- Centered Header -->
+  <h2 class="text-xl flex items-center justify-center font-semibold">Sender Details</h2>
 
-            <PrimaryButton 
-              v-if="authCustomer && !isUsingMyInfo"
-              @click="useMyInfo"
-              :disabled="isLoading"
-              class="!px-4 !py-2 text-sm"
-            >
-              Use My Information
-            </PrimaryButton>
-          </div>
+  <!-- Updated Important Information -->
+  <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+    <h3 class="font-semibold text-blue-800 flex items-center">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      Important Information
+    </h3>
+    <p class="text-sm text-blue-700 mt-1">
+      Your sender information is pulled from your profile. To update your details, please visit your 
+      <a :href="route('customer.profile-update.create')" class="text-blue-800 font-semibold underline hover:text-blue-600 transition-colors">
+        Delivery Information Page
+      </a>. This ensures all profile modifications are properly verified and recorded.
+    </p>
+  </div>
 
-          <!-- Sender Type -->
-          <div>
-            <InputLabel value="Sender Type" />
-            <SelectInput
-              v-model="form.sender.customer_category"
-              :options="customerCategoryOptions"
-              option-value="value"
-              option-label="label"
-              class="mt-1 block w-full"
-              :disabled="isUsingMyInfo"
-            />
-          </div>
+  <!-- Sender Type -->
+  <div>
+    <InputLabel value="Sender Type" />
+    <SelectInput
+      v-model="form.sender.customer_category"
+      :options="customerCategoryOptions"
+      option-value="value"
+      option-label="label"
+      class="mt-1 block w-full bg-gray-100 text-gray-600"
+      disabled
+    />
+  </div>
 
-          <!-- Name Fields -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <InputLabel for="senderFirstName" value="First Name *" />
-              <TextInput 
-                id="senderFirstName" 
-                v-model="form.sender.first_name" 
-                class="w-full"
-                :error="!!form.errors['sender.first_name']"
-                placeholder="First name"
-                :readonly="isUsingMyInfo"
-              />
-              <InputError :message="form.errors['sender.first_name']" />
-            </div>
-            
-            <div>
-              <InputLabel for="senderMiddleName" value="Middle Name" />
-              <TextInput 
-                id="senderMiddleName" 
-                v-model="form.sender.middle_name" 
-                class="w-full"
-                :error="!!form.errors['sender.middle_name']"
-                placeholder="Middle name"
-                :readonly="isUsingMyInfo"
-              />
-              <InputError :message="form.errors['sender.middle_name']" />
-            </div>
-            
-            <div>
-              <InputLabel for="senderLastName" value="Last Name *" />
-              <TextInput 
-                id="senderLastName" 
-                v-model="form.sender.last_name" 
-                class="w-full"
-                :error="!!form.errors['sender.last_name']"
-                placeholder="Last name"
-                :readonly="isUsingMyInfo"
-              />
-              <InputError :message="form.errors['sender.last_name']" />
-            </div>
-          </div>
+  <!-- Name Fields -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div>
+      <InputLabel for="senderFirstName" value="First Name *" />
+      <TextInput 
+        id="senderFirstName" 
+        v-model="form.sender.first_name" 
+        class="w-full bg-gray-100 text-gray-600"
+        :error="!!form.errors['sender.first_name']"
+        placeholder="First name"
+        readonly
+      />
+      <InputError :message="form.errors['sender.first_name']" />
+    </div>
+    
+    <div>
+      <InputLabel for="senderMiddleName" value="Middle Name" />
+      <TextInput 
+        id="senderMiddleName" 
+        v-model="form.sender.middle_name" 
+        class="w-full bg-gray-100 text-gray-600"
+        :error="!!form.errors['sender.middle_name']"
+        placeholder="Middle name"
+        readonly
+      />
+      <InputError :message="form.errors['sender.middle_name']" />
+    </div>
+    
+    <div>
+      <InputLabel for="senderLastName" value="Last Name *" />
+      <TextInput 
+        id="senderLastName" 
+        v-model="form.sender.last_name" 
+        class="w-full bg-gray-100 text-gray-600"
+        :error="!!form.errors['sender.last_name']"
+        placeholder="Last name"
+        readonly
+      />
+      <InputError :message="form.errors['sender.last_name']" />
+    </div>
+  </div>
 
-          <!-- Company Name (Conditional) -->
-          <div v-if="form.sender.customer_category === 'company'" class="space-y-2">
-            <InputLabel for="senderCompanyName" value="Company Name *" />
-            <TextInput 
-              id="senderCompanyName" 
-              v-model="form.sender.company_name" 
-              class="w-full"
-              :error="!!form.errors['sender.company_name']"
-              placeholder="Official company name"
-              :readonly="isUsingMyInfo"
-            />
-            <InputError :message="form.errors['sender.company_name']" />
-          </div>
+  <!-- Company Name (Conditional) -->
+  <div v-if="form.sender.customer_category === 'company'" class="space-y-2">
+    <InputLabel for="senderCompanyName" value="Company Name *" />
+    <TextInput 
+      id="senderCompanyName" 
+      v-model="form.sender.company_name" 
+      class="w-full bg-gray-100 text-gray-600"
+      :error="!!form.errors['sender.company_name']"
+      placeholder="Official company name"
+      readonly
+    />
+    <InputError :message="form.errors['sender.company_name']" />
+  </div>
 
-          <!-- Contact Information -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <InputLabel for="senderEmail" value="Email *" />
-              <TextInput 
-                id="senderEmail" 
-                v-model="form.sender.email" 
-                type="email" 
-                class="w-full"
-                :error="!!form.errors['sender.email']"
-                placeholder="contact@example.com"
-                :readonly="isUsingMyInfo"
-              />
-              <InputError :message="form.errors['sender.email']" />
-            </div>
+  <!-- Contact Information -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div>
+      <InputLabel for="senderEmail" value="Email *" />
+      <TextInput 
+        id="senderEmail" 
+        v-model="form.sender.email" 
+        type="email" 
+        class="w-full bg-gray-100 text-gray-600"
+        :error="!!form.errors['sender.email']"
+        placeholder="contact@example.com"
+        readonly
+      />
+      <InputError :message="form.errors['sender.email']" />
+    </div>
 
-            <div>
-              <InputLabel for="senderMobile" value="Mobile *" />
-              <TextInput 
-                id="senderMobile" 
-                v-model="form.sender.mobile" 
-                type="tel" 
-                class="w-full"
-                :error="!!form.errors['sender.mobile']"
-                placeholder="09123456789"
-                maxlength="11"
-                :readonly="isUsingMyInfo"
-              />
-              <InputError :message="form.errors['sender.mobile']" />
-            </div>
+    <div>
+      <InputLabel for="senderMobile" value="Mobile *" />
+      <TextInput 
+        id="senderMobile" 
+        v-model="form.sender.mobile" 
+        type="tel" 
+        class="w-full bg-gray-100 text-gray-600"
+        :error="!!form.errors['sender.mobile']"
+        placeholder="09123456789"
+        maxlength="11"
+        readonly
+      />
+      <InputError :message="form.errors['sender.mobile']" />
+    </div>
 
-            <div>
-              <InputLabel for="senderPhone" value="Phone (Landline)" />
-              <TextInput 
-                id="senderPhone" 
-                v-model="form.sender.phone" 
-                type="tel" 
-                class="w-full"
-                :error="!!form.errors['sender.phone']"
-                placeholder="021234567"
-                maxlength="9"
-                :readonly="isUsingMyInfo"
-              />
-              <InputError :message="form.errors['sender.phone']" />
-            </div>
-          </div>
+    <div>
+      <InputLabel for="senderPhone" value="Phone (Landline)" />
+      <TextInput 
+        id="senderPhone" 
+        v-model="form.sender.phone" 
+        type="tel" 
+        class="w-full bg-gray-100 text-gray-600"
+        :error="!!form.errors['sender.phone']"
+        placeholder="021234567"
+        maxlength="9"
+        readonly
+      />
+      <InputError :message="form.errors['sender.phone']" />
+    </div>
+  </div>
 
-          <!-- Address Information -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <InputLabel for="senderBuildingNumber" value="Building Number" />
-              <TextInput 
-                id="senderBuildingNumber" 
-                v-model="form.sender.building_number" 
-                class="w-full"
-                :error="!!form.errors['sender.building_number']"
-                placeholder="Building/Unit number"
-                :readonly="isUsingMyInfo"
-              />
-              <InputError :message="form.errors['sender.building_number']" />
-            </div>
+  <!-- Address Information -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div>
+      <InputLabel for="senderBuildingNumber" value="Building Number" />
+      <TextInput 
+        id="senderBuildingNumber" 
+        v-model="form.sender.building_number" 
+        class="w-full bg-gray-100 text-gray-600"
+        :error="!!form.errors['sender.building_number']"
+        placeholder="Building/Unit number"
+        readonly
+      />
+      <InputError :message="form.errors['sender.building_number']" />
+    </div>
 
-            <div>
-              <InputLabel for="senderStreet" value="Street *" />
-              <TextInput 
-                id="senderStreet" 
-                v-model="form.sender.street" 
-                class="w-full"
-                :error="!!form.errors['sender.street']"
-                placeholder="Street name"
-                :readonly="isUsingMyInfo"
-              />
-              <InputError :message="form.errors['sender.street']" />
-            </div>
+    <div>
+      <InputLabel for="senderStreet" value="Street *" />
+      <TextInput 
+        id="senderStreet" 
+        v-model="form.sender.street" 
+        class="w-full bg-gray-100 text-gray-600"
+        :error="!!form.errors['sender.street']"
+        placeholder="Street name"
+        readonly
+      />
+      <InputError :message="form.errors['sender.street']" />
+    </div>
 
-            <div>
-              <InputLabel for="senderBarangay" value="Barangay" />
-              <TextInput 
-                id="senderBarangay" 
-                v-model="form.sender.barangay" 
-                class="w-full"
-                :error="!!form.errors['sender.barangay']"
-                placeholder="Barangay/District"
-                :readonly="isUsingMyInfo"
-              />
-              <InputError :message="form.errors['sender.barangay']" />
-            </div>
+    <div>
+      <InputLabel for="senderBarangay" value="Barangay" />
+      <TextInput 
+        id="senderBarangay" 
+        v-model="form.sender.barangay" 
+        class="w-full bg-gray-100 text-gray-600"
+        :error="!!form.errors['sender.barangay']"
+        placeholder="Barangay/District"
+        readonly
+      />
+      <InputError :message="form.errors['sender.barangay']" />
+    </div>
 
-            <div>
-              <InputLabel for="senderCity" value="City/Municipality *" />
-              <TextInput 
-                id="senderCity" 
-                v-model="form.sender.city" 
-                class="w-full"
-                :error="!!form.errors['sender.city']"
-                placeholder="City/Municipality"
-                :readonly="isUsingMyInfo"
-              />
-              <InputError :message="form.errors['sender.city']" />
-            </div>
+    <div>
+      <InputLabel for="senderCity" value="City/Municipality *" />
+      <TextInput 
+        id="senderCity" 
+        v-model="form.sender.city" 
+        class="w-full bg-gray-100 text-gray-600"
+        :error="!!form.errors['sender.city']"
+        placeholder="City/Municipality"
+        readonly
+      />
+      <InputError :message="form.errors['sender.city']" />
+    </div>
 
-            <div>
-              <InputLabel for="senderProvince" value="Province *" />
-              <TextInput 
-                id="senderProvince" 
-                v-model="form.sender.province" 
-                class="w-full"
-                :error="!!form.errors['sender.province']"
-                placeholder="Province"
-                :readonly="isUsingMyInfo"
-              />
-              <InputError :message="form.errors['sender.province']" />
-            </div>
+    <div>
+      <InputLabel for="senderProvince" value="Province *" />
+      <TextInput 
+        id="senderProvince" 
+        v-model="form.sender.province" 
+        class="w-full bg-gray-100 text-gray-600"
+        :error="!!form.errors['sender.province']"
+        placeholder="Province"
+        readonly
+      />
+      <InputError :message="form.errors['sender.province']" />
+    </div>
 
-            <div>
-              <InputLabel for="senderZipCode" value="ZIP Code *" />
-              <TextInput 
-                id="senderZipCode" 
-                v-model="form.sender.zip_code" 
-                maxlength="4" 
-                class="w-full"
-                :error="!!form.errors['sender.zip_code']"
-                placeholder="1234"
-                :readonly="isUsingMyInfo"
-              />
-              <InputError :message="form.errors['sender.zip_code']" />
-            </div>
-          </div>
+    <div>
+      <InputLabel for="senderZipCode" value="ZIP Code *" />
+      <TextInput 
+        id="senderZipCode" 
+        v-model="form.sender.zip_code" 
+        maxlength="4" 
+        class="w-full bg-gray-100 text-gray-600"
+        :error="!!form.errors['sender.zip_code']"
+        placeholder="1234"
+        readonly
+      />
+      <InputError :message="form.errors['sender.zip_code']" />
+    </div>
+  </div>
 
-          <!-- Pick-up Region -->
-          <div>
-            <InputLabel for="pickUpRegion" value="Pick-up Region *" />
-            <SelectInput
-              id="pickUpRegion"
-              v-model="form.pick_up_region_id"
-              :options="branches"
-              option-value="value"
-              option-label="label"
-              class="mt-1 block w-full"
-              :error="!!form.errors.pick_up_region_id"
-            />
-            <InputError :message="form.errors.pick_up_region_id" />
-          </div>
+  <!-- Pick-up Region -->
+  <div>
+    <InputLabel for="pickUpRegion" value="Pick-up Region *" />
+    <SelectInput
+      id="pickUpRegion"
+      v-model="form.pick_up_region_id"
+      :options="PICKUP_REGIONS"
+      option-value="value"
+      option-label="label"
+      class="mt-1 block w-full"
+      :error="!!form.errors.pick_up_region_id"
+    />
+    <InputError :message="form.errors.pick_up_region_id" />
+  </div>
 
-          <!-- Notes -->
-          <div>
-            <InputLabel for="senderNotes" value="Notes" />
-            <TextArea 
-              id="senderNotes" 
-              v-model="form.sender.notes" 
-              class="w-full" 
-              :rows="3"
-              :error="form.errors['sender.notes'] || ''"
-              placeholder="Additional delivery instructions, landmarks, or special requirements"
-            />
-            <InputError :message="form.errors['sender.notes']" />
-          </div>
-
-          <!-- Navigation Buttons -->
-          <div class="flex justify-center mt-6">
-            <PrimaryButton @click="nextStep" :disabled="isLoading">
-              Next
-            </PrimaryButton>
-          </div>
-        </div>
-
+  <!-- Navigation Buttons -->
+  <div class="flex justify-center mt-6">
+    <PrimaryButton @click="nextStep" :disabled="isLoading">
+      Proceed to Receiver Details
+    </PrimaryButton>
+  </div>
+</div>
         <!-- Step 2: Receiver Details -->
         <div v-if="currentStep === 2" class="space-y-6">
           <h2 class="text-xl flex items-center justify-center font-semibold">Receiver Details</h2>
+
+          <!-- Important Information -->
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h3 class="font-semibold text-blue-800 flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Important Information
+            </h3>
+            <p class="text-sm text-blue-700 mt-1">
+              Accurate receiver information is crucial for successful delivery. Please double-check all contact details and address information.
+            </p>
+          </div>
 
           <!-- Receiver Type -->
           <div>
@@ -1291,7 +1306,7 @@ const packageValueOptions = [
             <SelectInput
               id="dropOffRegion"
               v-model="form.drop_off_region_id"
-              :options="branches"
+              :options="filteredDropoffRegions"
               option-value="value"
               option-label="label"
               class="mt-1 block w-full"
@@ -1300,421 +1315,430 @@ const packageValueOptions = [
             <InputError :message="form.errors.drop_off_region_id" />
           </div>
 
-          <!-- Notes -->
-          <div>
-            <InputLabel for="receiverNotes" value="Notes" />
-            <TextArea 
-              id="receiverNotes" 
-              v-model="form.receiver.notes" 
-              class="w-full" 
-              :rows="3"
-              :error="form.errors['receiver.notes'] || ''"
-              placeholder="Additional delivery instructions, landmarks, or special requirements"
-            />
-            <InputError :message="form.errors['receiver.notes']" />
-          </div>
-
           <!-- Navigation Buttons -->
           <div class="flex justify-between mt-6">
             <PrimaryButton @click="prevStep" :disabled="isLoading">
-              Back
+              Return to Sender Details
             </PrimaryButton>
             <PrimaryButton @click="nextStep" :disabled="isLoading">
-              Next
+              Continue to Package Selection
             </PrimaryButton>
           </div>
         </div>
 
-     <!-- Step 3: Package Type Selection -->
-     <div v-if="currentStep === 3" class="space-y-6">
-          <h2 class="text-xl flex items-center justify-center font-semibold">Package Type Selection</h2>
+    <!-- Step 3: Package Type Selection -->
+<div v-if="currentStep === 3" class="space-y-6">
+  <h2 class="text-xl flex items-center justify-center font-semibold">Package Type Selection</h2>
 
-          <!-- Advisory Message -->
-          <div class="bg-yellow-100 text-yellow-800 p-4 rounded-lg">
-            📢 <strong>Advisory:</strong> We only carry packages with a maximum volume of
-            <strong>10 cubic meters</strong> (when converted from cm: height × width × length / 1,000,000) 
-            and a weight of <strong>100 kg</strong> per package. Ensure your items meet these requirements.
+  <!-- Updated Advisory Message with consistent styling -->
+  <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+    <h3 class="font-semibold text-yellow-800 flex items-center">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      Advisory Notice
+    </h3>
+    <p class="text-sm text-yellow-700 mt-1">
+      We only carry individual packages up to 10 cubic meters in volume (calculated as height × width × length in cm ÷ 1,000,000) 
+      and 100 kg in weight. Items exceeding these limits require special freight arrangements. 
+      Please ensure your items meet these requirements before booking.
+    </p>
+  </div>
+
+  <!-- Important Information -->
+  <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+    <h3 class="font-semibold text-blue-800 flex items-center">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      Important Information
+    </h3>
+    <p class="text-sm text-blue-700 mt-1">
+      Select the appropriate package type for your items. Each preset has specific dimension and weight limits. Choose "Custom Size" for irregular items.
+    </p>
+  </div>
+
+  <!-- Package Grid - Centered for single package, grid for multiple -->
+  <div :class="['gap-6', form.packages.length === 1 ? 'flex justify-center' : 'grid grid-cols-1 md:grid-cols-2']">
+    <!-- Dynamic Package Input -->
+    <div v-for="(pkg, index) in form.packages" :key="index" 
+         :class="['border p-4 rounded-lg space-y-4 bg-white shadow-sm hover:shadow-md transition-shadow', 
+                  form.packages.length === 1 ? 'w-full md:w-2/3' : '']">
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-semibold flex items-center">
+          <span class="bg-green-100 text-green-800 rounded-full w-7 h-7 flex items-center justify-center mr-2">{{ index + 1 }}</span>
+          Package {{ index + 1 }}
+        </h3>
+        <DangerButton 
+          v-if="form.packages.length > 1" 
+          @click="removePackage(index)"
+          :disabled="isLoading"
+          class="!px-3 !py-1.5 text-sm"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </DangerButton>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <InputLabel :for="`preset-${index}`" value="Package Type *" />
+          <SelectInput
+            :id="`preset-${index}`"
+            v-model="pkg.preset"
+            :options="containerPresets"
+            option-value="value"
+            option-label="label"
+            class="mt-1 block w-full"
+            @update:modelValue="(val) => handlePresetChange(val, index)"
+          />
+        </div>
+        
+        <!-- Package Type Description -->
+        <div v-if="pkg.preset" class="bg-gray-50 p-3 rounded-lg text-sm">
+          <h4 class="font-semibold mb-1">About this package type:</h4>
+          
+          <div v-if="pkg.preset === 'small_pouch'">
+            <p class="text-xs">Perfect for small, flat items like documents, letters, or compact tools.</p>
+            <p class="mt-1 text-xs text-gray-600">Example: Blueprints, measuring tapes, passports</p>
           </div>
 
-          <!-- Dynamic Package Input -->
-          <div v-for="(pkg, index) in form.packages" :key="index" class="border p-4 rounded-lg space-y-4">
-            <div class="flex justify-between items-center">
-              <h3 class="text-lg font-semibold">📦 Package {{ index + 1 }}</h3>
-              <div class="flex space-x-2">
-                <SecondaryButton 
-                  @click="duplicatePackage(index)"
-                  :disabled="isLoading"
-                  class="!px-3 !py-1.5 text-sm"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                  Duplicate
-                </SecondaryButton>
-                <DangerButton 
-                  v-if="form.packages.length > 1" 
-                  @click="removePackage(index)"
-                  :disabled="isLoading"
-                  class="!px-3 !py-1.5 text-sm"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                  Remove
-                </DangerButton>
-              </div>
+          <div v-else-if="pkg.preset === 'medium_box'">
+            <p class="text-xs">Standard box for books, handheld tools, or medium-sized items.</p>
+            <p class="mt-1 text-xs text-gray-600">Example: Shoes, drills, small appliances, books</p>
+          </div>
+
+          <div v-else-if="pkg.preset === 'large_box'">
+            <p class="text-xs">Great for larger items that need sturdy packaging.</p>
+            <p class="mt-1 text-xs text-gray-600">Example: Safety gear, toolkits, clothing, kitchenware</p>
+          </div>
+
+          <div v-else-if="pkg.preset === 'xl_box'">
+            <p class="text-xs">For bulky items that require extra space.</p>
+            <p class="mt-1 text-xs text-gray-600">Example: Power tools, helmets, small furniture</p>
+          </div>
+
+          <div v-else-if="pkg.preset === 'large_sack'">
+            <p class="text-xs">Best for loose, non-fragile items that can be packed together.</p>
+            <p class="mt-1 text-xs text-gray-600">Example: Work gloves, fabric, plastic fittings</p>
+          </div>
+
+          <div v-else-if="pkg.preset === 'standard_roll'">
+            <p class="text-xs">Good for compact, rollable items that aren't too long.</p>
+            <p class="mt-1 text-xs text-gray-600">Example: Blueprints, rolls of wire, wrapping paper</p>
+          </div>
+
+          <div v-else-if="pkg.preset === 'bundle_roll'">
+            <p class="text-xs">Designed for long, narrow items that can be rolled or bundled.</p>
+            <p class="mt-1 text-xs text-gray-600">Example: Metal pipes, PVC tubes, banners, carpets</p>
+          </div>
+
+          <div v-else-if="pkg.preset === 'custom'">
+            <p class="text-xs">Create your own package dimensions for unique or irregular items.</p>
+            <p class="mt-1 text-xs text-gray-600">Example: Generators, concrete molds, oversized tools</p>
+          </div>
+        </div>
+
+        <!-- Preset Image Gallery with Navigation Arrows -->
+        <div v-if="pkg.preset" class="relative">
+          <div class="relative w-full h-40 bg-gray-100 rounded-lg overflow-hidden shadow-sm flex flex-col justify-center items-center pb-8">
+            <button 
+              v-if="pkg.preset !== 'custom'"
+              @click="cyclePreset(index, -1)"
+              class="absolute left-2 top-1/2 transform -translate-y-1/2 z-10 bg-white bg-opacity-70 rounded-full p-1 hover:bg-opacity-100 transition-all"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            
+            <img 
+              v-if="containerPresets.find(p => p.value === pkg.preset)?.image"
+              :src="containerPresets.find(p => p.value === pkg.preset)?.image" 
+              :alt="containerPresets.find(p => p.value === pkg.preset)?.label"
+              class="max-h-32 max-w-full object-contain mx-auto"
+            />
+            <div v-else class="flex flex-col items-center justify-center h-full text-gray-400">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+              </svg>
+              <span class="mt-2 text-sm">Custom Package</span>
             </div>
+            
+            <button 
+              v-if="pkg.preset !== 'custom'"
+              @click="cyclePreset(index, 1)"
+              class="absolute right-2 top-1/2 transform -translate-y-1/2 z-10 bg-white bg-opacity-70 rounded-full p-1 hover:bg-opacity-100 transition-all"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+            
+            <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white p-2 text-center text-xs">
+              {{ containerPresets.find(p => p.value === pkg.preset)?.label }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-            <div class="space-y-4">
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <InputLabel :for="`preset-${index}`" value="Package Type *" />
-                  <SelectInput
-                    :id="`preset-${index}`"
-                    v-model="pkg.preset"
-                    :options="containerPresets"
-                    option-value="value"
-                    option-label="label"
-                    class="mt-1 block w-full"
-                    @update:modelValue="(val) => handlePresetChange(val, index)"
-                  />
-                </div>
-                
-               <!-- Package Type Description -->
-    <div v-if="pkg.preset" class="bg-gray-50 p-4 rounded-lg">
-      <h4 class="font-semibold mb-2">About this package type:</h4>
+  <!-- Add Package Button -->
+  <div class="flex justify-center pt-2">
+    <PrimaryButton @click="addPackage" :disabled="isLoading" class="!px-4 !py-2">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+      </svg>
+      Add Another Package
+    </PrimaryButton>
+  </div>
 
-      <div v-if="pkg.preset === 'small_pouch'">
-        <p>Perfect for small, flat items like documents, letters, or compact tools.</p>
-        <p class="mt-1 text-sm text-gray-600">Example: Blueprints, measuring tapes, passports, jewelry, small electronics</p>
+  <!-- Navigation Buttons -->
+  <div class="flex justify-between pt-4 border-t">
+    <PrimaryButton @click="currentStep = 2" :disabled="isLoading" class="!px-4 !py-2">
+      Return to Receiver Details
+    </PrimaryButton>
+    <PrimaryButton 
+      @click="currentStep = 4" 
+      :disabled="isLoading || !form.packages.every(p => p.preset)"
+      class="!px-4 !py-2"
+    >
+      Proceed to Package Details
+    </PrimaryButton>
+  </div>
+</div>
+
+    <!-- Step 4: Package Details -->
+<div v-if="currentStep === 4" class="space-y-6">
+  <h2 class="text-xl flex items-center justify-center font-semibold">Package Details</h2>
+
+  <!-- Important Information -->
+  <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+    <h3 class="font-semibold text-blue-800 flex items-center">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      Important Information
+    </h3>
+    <p class="text-sm text-blue-700 mt-1">
+      Please provide accurate details for each package. This information helps us handle your items safely and calculate the correct shipping costs.
+    </p>
+  </div>
+
+  <!-- Dynamic Package Input -->
+  <div v-for="(pkg, index) in form.packages" :key="index" class="border p-4 rounded-lg space-y-4 bg-white shadow-sm">
+    <div class="flex justify-between items-center">
+      <h3 class="text-lg font-semibold flex items-center">
+        <span class="bg-green-100 text-green-800 rounded-full w-7 h-7 flex items-center justify-center mr-2">{{ index + 1 }}</span>
+        Package {{ index + 1 }} - {{ pkg.preset ? containerPresets.find(p => p.value === pkg.preset)?.label : 'Custom Package' }}
+      </h3>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <InputLabel :for="`item_name-${index}`" value="Package Name *" />
+        <TextInput
+          :id="`item_name-${index}`"
+          v-model="pkg.item_name"
+          class="w-full"
+          :error="!!form.errors[`packages.${index}.item_name`]"
+          placeholder="e.g. Document, Electronics, Clothing"
+        />
+        <InputError :message="form.errors[`packages.${index}.item_name`]" />
+        <p class="text-xs text-gray-500 mt-1">Give your package a descriptive name</p>
       </div>
 
-      <div v-else-if="pkg.preset === 'medium_box'">
-        <p>Standard box for books, handheld tools, or medium-sized items.</p>
-        <p class="mt-1 text-sm text-gray-600">Example: Shoes, drills, small appliances, books</p>
-      </div>
-
-      <div v-else-if="pkg.preset === 'large_box'">
-        <p>Great for larger items that need sturdy packaging.</p>
-        <p class="mt-1 text-sm text-gray-600">Example: Safety gear, toolkits, clothing, kitchenware, medium electronics</p>
-      </div>
-
-      <div v-else-if="pkg.preset === 'xl_box'">
-        <p>For bulky items that require extra space.</p>
-        <p class="mt-1 text-sm text-gray-600">Example: Power tools, helmets, small furniture, large toys</p>
-      </div>
-
-      <div v-else-if="pkg.preset === 'large_sack'">
-        <p>Best for loose, non-fragile items that can be packed together.</p>
-        <p class="mt-1 text-sm text-gray-600">Example: Work gloves, fabric, plastic fittings, plush toys</p>
-      </div>
-
-      <div v-else-if="pkg.preset === 'standard_roll'">
-        <p>Good for compact, rollable items that aren't too long.</p>
-        <p class="mt-1 text-sm text-gray-600">Example: Blueprints, rolls of wire, wrapping paper, yoga mats</p>
-      </div>
-
-      <div v-else-if="pkg.preset === 'bundle_roll'">
-        <p>Designed for long, narrow items that can be rolled or bundled.</p>
-        <p class="mt-1 text-sm text-gray-600">Example: Metal pipes, PVC tubes, banners, carpets</p>
-      </div>
-
-      <div v-else-if="pkg.preset === 'custom'">
-        <p>Create your own package dimensions for unique or irregular items.</p>
-        <p class="mt-1 text-sm text-gray-600">Example: Generators, concrete molds, oversized tools</p>
+      <!-- Removed Package Category dropdown but kept spacing -->
+      <div>
+        <InputLabel value="Package Type" />
+        <div class="mt-1 p-2 bg-gray-100 rounded text-sm text-gray-600">
+          {{ pkg.preset ? containerPresets.find(p => p.value === pkg.preset)?.label : 'Custom Package' }}
+        </div>
+        <p class="text-xs text-gray-500 mt-1">Package type is determined by your selection</p>
       </div>
     </div>
 
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <InputLabel :for="`description-${index}`" value="Special Instructions" />
+        <TextArea
+          :id="`description-${index}`"
+          v-model="pkg.description"
+          class="w-full"
+          :rows="3"
+          placeholder="Package contents, special handling instructions, etc."
+          :error="form.errors[`packages.${index}.description`] || ''"
+        />
+        <InputError :message="form.errors[`packages.${index}.description`]" />
+        <p class="text-xs text-gray-500 mt-1">Include any special handling requirements</p>
+      </div>
 
-              </div>
-
-              <!-- Preset Image Gallery with Navigation Arrows -->
-              <div v-if="pkg.preset && pkg.preset !== 'custom'" class="relative">
-                <div class="relative w-full h-56 bg-gray-100 rounded-lg overflow-hidden shadow-md flex flex-col justify-center items-center pb-12">
-                  <button 
-                    @click="cyclePreset(index, -1)"
-                    class="absolute left-2 top-1/2 transform -translate-y-1/2 z-10 bg-white bg-opacity-70 rounded-full p-2 hover:bg-opacity-100 transition-all"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  
-                  <img 
-                    :src="containerPresets.find(p => p.value === pkg.preset)?.image" 
-                    :alt="containerPresets.find(p => p.value === pkg.preset)?.label"
-                    class="max-h-44 max-w-full object-contain mx-auto"
-                  />
-                  
-                  <button 
-                    @click="cyclePreset(index, 1)"
-                    class="absolute right-2 top-1/2 transform -translate-y-1/2 z-10 bg-white bg-opacity-70 rounded-full p-2 hover:bg-opacity-100 transition-all"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                  
-                  <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white p-2 text-center text-sm">
-                    {{ containerPresets.find(p => p.value === pkg.preset)?.label }}
-                    <div class="text-xs opacity-80">
-                      {{ pkg.preset === 'custom' ? 'Custom dimensions' : 
-                        `${containerPresets.find(p => p.value === pkg.preset)?.dimensions.length}cm × 
-                        ${containerPresets.find(p => p.value === pkg.preset)?.dimensions.width}cm × 
-                        ${containerPresets.find(p => p.value === pkg.preset)?.dimensions.height}cm` }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Add Package Button -->
-          <div class="flex justify-center pt-2">
-            <PrimaryButton @click="addPackage" :disabled="isLoading" class="!px-4 !py-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Add Another Package
-            </PrimaryButton>
-          </div>
-
-          <!-- Navigation Buttons -->
-          <div class="flex justify-between pt-4 border-t">
-            <PrimaryButton @click="currentStep = 2" :disabled="isLoading" class="!px-4 !py-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-              </svg>
-              Back
-            </PrimaryButton>
-            <PrimaryButton 
-              @click="currentStep = 4" 
-              :disabled="isLoading || !form.packages.every(p => p.preset)"
-              class="!px-4 !py-2"
-            >
-              Next
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-              </svg>
-            </PrimaryButton>
-          </div>
+      <div>
+        <InputLabel :for="`photo-${index}`" value="Package Photo (Optional)" />
+        <input
+          :id="`photo-${index}`"
+          type="file"
+          accept="image/*"
+          @change="(e) => handlePhotoUpload(e, index)"
+          class="mt-1 block w-full text-sm text-gray-500
+            file:mr-4 file:py-2 file:px-4
+            file:rounded-md file:border-0
+            file:text-sm file:font-semibold
+            file:bg-blue-50 file:text-blue-700
+            hover:file:bg-blue-100"
+        />
+        <InputError :message="form.errors[`packages.${index}.photo`]" />
+        <div v-if="pkg.photo" class="mt-2 text-sm text-gray-600 truncate">
+          Selected: {{ pkg.photo.name }}
         </div>
-
-        <!-- Step 4: Package Details -->
-        <div v-if="currentStep === 4" class="space-y-6">
-          <h2 class="text-xl flex items-center justify-center font-semibold">Package Details</h2>
-
-          <!-- Dynamic Package Input -->
-          <div v-for="(pkg, index) in form.packages" :key="index" class="border p-4 rounded-lg space-y-4">
-            <div class="flex justify-between items-center">
-              <h3 class="text-lg font-semibold">📦 Package {{ index + 1 }} - {{ pkg.preset ? containerPresets.find(p => p.value === pkg.preset)?.label : 'Custom Package' }}</h3>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <InputLabel :for="`item_name-${index}`" value="Package Name *" />
-                <TextInput
-                  :id="`item_name-${index}`"
-                  v-model="pkg.item_name"
-                  class="w-full"
-                  :error="!!form.errors[`packages.${index}.item_name`]"
-                  placeholder="e.g. Document, Electronics, Clothing"
-                />
-                <InputError :message="form.errors[`packages.${index}.item_name`]" />
-              </div>
-
-              <div>
-                <InputLabel :for="`category-${index}`" value="Package Category *" />
-                <SelectInput
-                  :id="`category-${index}`"
-                  v-model="pkg.category"
-                  :options="[
-                    { value: 'piece', label: 'Piece' },
-                    { value: 'carton', label: 'Carton' },
-                    { value: 'sack', label: 'Sack' },
-                    { value: 'bundle', label: 'Bundle' },
-                    { value: 'roll', label: 'Roll' },
-                    { value: 'B/R', label: 'B/R' },
-                    { value: 'C/S', label: 'C/S' }
-                  ]"
-                  option-value="value"
-                  option-label="label"
-                  class="mt-1 block w-full"
-                  :error="!!form.errors[`packages.${index}.category`]"
-                  :disabled="pkg.preset && pkg.preset !== 'custom'"
-                />
-                <InputError :message="form.errors[`packages.${index}.category`]" />
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <InputLabel :for="`description-${index}`" value="Special Instructions" />
-                <TextArea
-                  :id="`description-${index}`"
-                  v-model="pkg.description"
-                  class="w-full"
-                  :rows="3"
-                  placeholder="Package contents, special handling instructions, etc."
-                  :error="form.errors[`packages.${index}.description`] || ''"
-                />
-                <InputError :message="form.errors[`packages.${index}.description`]" />
-              </div>
-
-              <div>
-                <InputLabel :for="`photo-${index}`" value="Package Photo (Optional)" />
-                <input
-                  :id="`photo-${index}`"
-                  type="file"
-                  accept="image/*"
-                  @change="(e) => handlePhotoUpload(e, index)"
-                  class="mt-1 block w-full text-sm text-gray-500
-                    file:mr-4 file:py-2 file:px-4
-                    file:rounded-md file:border-0
-                    file:text-sm file:font-semibold
-                    file:bg-blue-50 file:text-blue-700
-                    hover:file:bg-blue-100"
-                />
-                <InputError :message="form.errors[`packages.${index}.photo`]" />
-                <div v-if="pkg.photo" class="mt-2 text-sm text-gray-600">
-                  Selected: {{ pkg.photo.name }}
-                </div>
-                <div v-if="pkg.photo_url" class="mt-2">
-                  <img :src="pkg.photo_url" class="h-20 object-cover rounded shadow" />
-                </div>
-              </div>
-            </div>
-
-            <!-- Dimensions & Package Value -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <InputLabel :for="`value-${index}`" value="Package Value (₱) *" />
-                <SelectInput
-                  :id="`value-${index}`"
-                  v-model="pkg.value"
-                  :options="packageValueOptions"
-                  option-value="value"
-                  option-label="label"
-                  class="w-full"
-                  :error="!!form.errors[`packages.${index}.value`]"
-                  placeholder="Select package value range"
-                />
-                <InputError :message="form.errors[`packages.${index}.value`]" />
-              </div>
-
-              <!-- Custom: Show editable dimensions and weight -->
-              <template v-if="pkg.preset === 'custom'">
-                <div>
-                  <InputLabel :for="`height-${index}`" value="Height (cm) *" />
-                  <TextInput
-                    :id="`height-${index}`"
-                    v-model.number="pkg.height"
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    class="w-full"
-                    :error="!!form.errors[`packages.${index}.height`]"
-                    placeholder="0.00"
-                  />
-                  <InputError :message="form.errors[`packages.${index}.height`]" />
-                </div>
-                <div>
-                  <InputLabel :for="`width-${index}`" value="Width (cm) *" />
-                  <TextInput
-                    :id="`width-${index}`"
-                    v-model.number="pkg.width"
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    class="w-full"
-                    :error="!!form.errors[`packages.${index}.width`]"
-                    placeholder="0.00"
-                  />
-                  <InputError :message="form.errors[`packages.${index}.width`]" />
-                </div>
-                <div>
-                  <InputLabel :for="`length-${index}`" value="Length (cm) *" />
-                  <TextInput
-                    :id="`length-${index}`"
-                    v-model.number="pkg.length"
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    class="w-full"
-                    :error="!!form.errors[`packages.${index}.length`]"
-                    placeholder="0.00"
-                  />
-                  <InputError :message="form.errors[`packages.${index}.length`]" />
-                </div>
-                <div>
-                  <InputLabel :for="`weight-${index}`" value="Weight (kg) *" />
-                  <TextInput
-                    :id="`weight-${index}`"
-                    v-model.number="pkg.weight"
-                    type="number"
-                    min="0.01"
-                    :max="100"
-                    step="0.01"
-                    class="w-full"
-                    :error="!!form.errors[`packages.${index}.weight`]"
-                    placeholder="0.00"
-                    :readonly="false"
-                    :disabled="false"
-                  />
-                  <InputError :message="form.errors[`packages.${index}.weight`]" />
-                </div>
-              </template>
-
-              <!-- Preset: Hide dimensions, show weight input capped to preset max, but make it readonly/disabled -->
-              <template v-else>
-                <div>
-                  <InputLabel :for="`weight-${index}`" :value="`Weight (kg) (max ${containerPresets.find(p => p.value === pkg.preset)?.weight || 0}kg)`" />
-                  <TextInput
-                    :id="`weight-${index}`"
-                    v-model.number="pkg.weight"
-                    type="number"
-                    min="0.01"
-                    :max="containerPresets.find(p => p.value === pkg.preset)?.weight || 0"
-                    step="0.01"
-                    class="w-full"
-                    :error="!!form.errors[`packages.${index}.weight`]"
-                    :placeholder="`Max ${containerPresets.find(p => p.value === pkg.preset)?.weight || 0} kg`"
-                    :readonly="true"
-                    :disabled="true"
-                  />
-                  <InputError :message="form.errors[`packages.${index}.weight`]" />
-                  <div class="text-xs text-gray-500 mt-1">
-                    Max allowed: {{ containerPresets.find(p => p.value === pkg.preset)?.weight || 0 }} kg
-                  </div>
-                </div>
-              </template>
-            </div>
-          </div>
-
-          <!-- Navigation Buttons: Only show once after all packages -->
-          <div class="flex justify-between pt-4">
-            <PrimaryButton @click="currentStep = 3" :disabled="isLoading" class="!px-4 !py-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-              </svg>
-              Back
-            </PrimaryButton>
-            <PrimaryButton 
-              @click="currentStep = 5" 
-              :disabled="isLoading"
-              class="!px-4 !py-2"
-            >
-              Next
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-              </svg>
-            </PrimaryButton>
-          </div>
+        <div v-if="pkg.photo_url" class="mt-2 flex justify-center">
+          <img :src="pkg.photo_url" class="h-20 object-cover rounded shadow mx-auto" />
         </div>
+        <p class="text-xs text-gray-500 mt-1">Upload a photo to help identify your package</p>
+      </div>
+    </div>
 
-        <!-- Step 5: Payment (formerly step 4) -->
+    <!-- Dimensions & Package Value -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <InputLabel :for="`value-${index}`" value="Package Value (₱) *" />
+        <SelectInput
+          :id="`value-${index}`"
+          v-model="pkg.value"
+          :options="packageValueOptions"
+          option-value="value"
+          option-label="label"
+          class="w-full"
+          :error="!!form.errors[`packages.${index}.value`]"
+          placeholder="Select package value range"
+        />
+        <InputError :message="form.errors[`packages.${index}.value`]" />
+        <p class="text-xs text-gray-500 mt-1">Select the estimated value range for insurance purposes</p>
+      </div>
+
+      <!-- Custom: Show editable dimensions and weight in 2x2 grid -->
+      <template v-if="pkg.preset === 'custom'">
+        <div>
+          <InputLabel value="Package Dimensions *" />
+          <div class="grid grid-cols-2 gap-4 mt-1">
+            <div>
+              <InputLabel :for="`height-${index}`" value="Height (cm)" class="text-xs" />
+              <TextInput
+                :id="`height-${index}`"
+                v-model.number="pkg.height"
+                type="number"
+                min="0.01"
+                step="0.01"
+                class="w-full"
+                :error="!!form.errors[`packages.${index}.height`]"
+                placeholder="0.00"
+              />
+              <InputError :message="form.errors[`packages.${index}.height`]" />
+            </div>
+            <div>
+              <InputLabel :for="`width-${index}`" value="Width (cm)" class="text-xs" />
+              <TextInput
+                :id="`width-${index}`"
+                v-model.number="pkg.width"
+                type="number"
+                min="0.01"
+                step="0.01"
+                class="w-full"
+                :error="!!form.errors[`packages.${index}.width`]"
+                placeholder="0.00"
+              />
+              <InputError :message="form.errors[`packages.${index}.width`]" />
+            </div>
+            <div>
+              <InputLabel :for="`length-${index}`" value="Length (cm)" class="text-xs" />
+              <TextInput
+                :id="`length-${index}`"
+                v-model.number="pkg.length"
+                type="number"
+                min="0.01"
+                step="0.01"
+                class="w-full"
+                :error="!!form.errors[`packages.${index}.length`]"
+                placeholder="0.00"
+              />
+              <InputError :message="form.errors[`packages.${index}.length`]" />
+            </div>
+            <div>
+              <InputLabel :for="`weight-${index}`" value="Weight (kg)" class="text-xs" />
+              <TextInput
+                :id="`weight-${index}`"
+                v-model.number="pkg.weight"
+                type="number"
+                min="0.01"
+                step="0.01"
+                class="w-full"
+                :error="!!form.errors[`packages.${index}.weight`]"
+                placeholder="0.00"
+              />
+              <InputError :message="form.errors[`packages.${index}.weight`]" />
+            </div>
+          </div>
+          <p class="text-xs text-gray-500 mt-2">Enter accurate dimensions for proper pricing</p>
+        </div>
+      </template>
+
+      <!-- Preset: Show weight input with greyed out style -->
+      <template v-else>
+        <div>
+          <InputLabel :for="`weight-${index}`" :value="`Weight (kg) (max ${containerPresets.find(p => p.value === pkg.preset)?.weight || 0}kg)`" />
+          <TextInput
+            :id="`weight-${index}`"
+            v-model.number="pkg.weight"
+            type="number"
+            min="0.01"
+            :max="containerPresets.find(p => p.value === pkg.preset)?.weight || 0"
+            step="0.01"
+            class="w-full bg-gray-100 text-gray-600"
+            :error="!!form.errors[`packages.${index}.weight`]"
+            :placeholder="`Max ${containerPresets.find(p => p.value === pkg.preset)?.weight || 0} kg`"
+            readonly
+            disabled
+          />
+          <InputError :message="form.errors[`packages.${index}.weight`]" />
+          <p class="text-xs text-gray-500 mt-1">Weight is predetermined for this package type</p>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- Navigation Buttons: Only show once after all packages -->
+  <div class="flex justify-between pt-4">
+    <PrimaryButton @click="currentStep = 3" :disabled="isLoading" class="!px-4 !py-2">
+      Return to Package Types
+    </PrimaryButton>
+    <PrimaryButton 
+      @click="currentStep = 5" 
+      :disabled="isLoading"
+      class="!px-4 !py-2"
+    >
+      Continue to Payment
+    </PrimaryButton>
+  </div>
+</div>
+
+        <!-- Step 5: Payment -->
         <div v-if="currentStep === 5" class="space-y-6">
           <h2 class="text-xl flex items-center justify-center font-semibold">Payment Price Calculator</h2>
+
+          <!-- Important Information -->
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h3 class="font-semibold text-blue-800 flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Important Information
+            </h3>
+            <p class="text-sm text-blue-700 mt-1">
+              Review the calculated price based on your package details. Select your preferred payment method to complete your delivery request.
+            </p>
+          </div>
 
           <!-- Pricing Info -->
           <div class="bg-blue-100 text-blue-800 p-4 rounded-lg" v-if="priceMatrix">
@@ -1736,26 +1760,26 @@ const packageValueOptions = [
             </template>
 
             <!-- Updated price breakdown display -->
-            <div v-if="form.priceBreakdown" class="space-y-2 mt-4 bg-white p-4 rounded-lg shadow">
-              <h3 class="font-semibold text-lg">Price Breakdown</h3>
-              <div class="grid grid-cols-2 gap-2">
-                <div>Base Fee:</div>
-                <div class="text-right">₱{{ formatCurrency(form.priceBreakdown.base_fee) }}</div>
-                
-                <div>Volume Fee ({{ form.priceBreakdown.metrics?.total_volume?.toFixed(3) || 0 }} m³):</div>
-                <div class="text-right">₱{{ formatCurrency(form.priceBreakdown.volume_fee) }}</div>
-                
-                <div>Weight Fee ({{ form.priceBreakdown.metrics?.total_weight?.toFixed(2) || 0 }} kg):</div>
-                <div class="text-right">₱{{ formatCurrency(form.priceBreakdown.weight_fee) }}</div>
-                
-                <div>Package Fee ({{ form.packages.length }} items):</div>
-                <div class="text-right">₱{{ formatCurrency(form.priceBreakdown.package_fee) }}</div>
-              </div>
-              <div class="border-t pt-2 mt-2 grid grid-cols-2 font-semibold">
-                <div>Total:</div>
-                <div class="text-right">₱{{ formatCurrency(form.total_price) }}</div>
-              </div>
-            </div>
+      <div v-if="form.priceBreakdown" class="space-y-2 mt-4 bg-white p-4 rounded-lg shadow">
+      <h3 class="font-semibold text-lg">Price Breakdown</h3>
+      <div class="grid grid-cols-2 gap-2">
+        <div>Base Fee:</div>
+        <div class="text-right">₱{{ formatCurrency(form.priceBreakdown.base_fee) }}</div>
+        
+        <div>Volume Fee ({{ form.priceBreakdown.metrics?.total_volume?.toFixed(3) || 0 }} m³):</div>
+        <div class="text-right">₱{{ formatCurrency(form.priceBreakdown.volume_fee) }}</div>
+        
+        <div>Weight Fee ({{ form.priceBreakdown.metrics?.total_weight?.toFixed(2) || 0 }} kg):</div>
+        <div class="text-right">₱{{ formatCurrency(form.priceBreakdown.weight_fee) }}</div>
+        
+        <div>Package Fee ({{ form.packages.length }} items):</div>
+        <div class="text-right">₱{{ formatCurrency(form.priceBreakdown.package_fee) }}</div>
+      </div>
+      <div class="border-t pt-2 mt-2 grid grid-cols-2 font-semibold">
+        <div>Total:</div>
+        <div class="text-right">₱{{ formatCurrency(form.total_price) }}</div>
+      </div>
+    </div>
           </div>
 
           <!-- Payment Type Selection -->
@@ -1812,7 +1836,7 @@ const packageValueOptions = [
           <!-- Navigation Buttons -->
           <div class="flex justify-between pt-4">
             <PrimaryButton @click="prevStep" :disabled="isLoading">
-              Back
+              Return to Package Details
             </PrimaryButton>
             <PrimaryButton 
               @click="submitRequest" 
@@ -1820,14 +1844,27 @@ const packageValueOptions = [
               :class="{ 'opacity-75 cursor-not-allowed': isLoading }"
             >
               <span v-if="isLoading">Submitting...</span>
-              <span v-else>Submit</span>
+              <span v-else>Submit Delivery Request</span>
             </PrimaryButton>
           </div>
         </div>
 
-        <!-- Step 6: Confirmation (formerly step 5) -->
+        <!-- Step 6: Confirmation -->
         <div v-if="currentStep === 6" class="space-y-6">
           <h2 class="text-2xl flex items-center justify-center font-bold text-green-800">Submission Successful</h2>
+
+          <!-- Important Information -->
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h3 class="font-semibold text-blue-800 flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Important Information
+            </h3>
+            <p class="text-sm text-blue-700 mt-1">
+              Thank you for your submission! Please note the next steps for your delivery request based on your selected payment method.
+            </p>
+          </div>
 
           <div class="bg-green-100 text-green-900 p-6 rounded-xl text-center shadow-lg border border-green-200">
             <p class="text-2xl font-bold mb-2">✅ Your delivery request has been submitted successfully!</p>

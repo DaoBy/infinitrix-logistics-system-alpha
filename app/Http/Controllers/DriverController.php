@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use App\Helpers\RouteHelper;
+use App\Services\RouteOptimizerService;
 
 class DriverController extends Controller
 {
@@ -80,6 +81,9 @@ class DriverController extends Controller
         $allPackagesFinal = $allDriverPackages->count() > 0
             && $allDriverPackages->whereNotIn('status', $finalStatuses)->count() === 0;
 
+        // Get route data for the map
+        $routeData = $this->getRouteData($driver);
+
         return Inertia::render('Driver/UpdateStatus', [
             'packages' => $this->getDriverPackages($driver),
             'regions' => $this->getAvailableRegions($driver),
@@ -88,7 +92,189 @@ class DriverController extends Controller
             'hasPendingReturn' => $hasPendingReturn,
             'activeAssignmentId' => $activeAssignmentId,
             'allPackagesFinal' => $allPackagesFinal,
+            'routeData' => $routeData,
         ]);
+    }
+
+    /**
+     * Get route data for the driver's current assignments
+     */
+    private function getRouteData(User $driver): array
+    {
+        $currentRegionId = $driver->current_region_id;
+        $destinationRegionIds = $this->getDriverDestinationRegions($driver);
+
+        if (!$currentRegionId || empty($destinationRegionIds)) {
+            return [
+                'current_region' => null,
+                'route' => []
+            ];
+        }
+
+        $optimizer = new RouteOptimizerService();
+        $route = $optimizer->findOptimalRoute($currentRegionId, $destinationRegionIds);
+
+        // Ensure current region is always first in the route
+        $orderedRoute = array_unique(array_merge([$currentRegionId], $route));
+
+        // Get full region details
+        $regions = Region::whereIn('id', $orderedRoute)
+            ->get(['id', 'name', 'latitude', 'longitude'])
+            ->keyBy('id');
+
+        $routeDetails = [];
+        $previousRegionId = $currentRegionId;
+
+        foreach ($orderedRoute as $index => $regionId) {
+            if ($regionId === $previousRegionId && $index !== 0) continue;
+            
+            $region = $regions[$regionId] ?? null;
+            $routeDetails[] = [
+                'region' => $region ? [
+                    'id' => $region->id,
+                    'name' => $region->name,
+                    'latitude' => $region->latitude,
+                    'longitude' => $region->longitude
+                ] : null,
+                'estimated_minutes' => $index === 0 ? 0 : $optimizer->getTravelTime($previousRegionId, $regionId)
+            ];
+            $previousRegionId = $regionId;
+        }
+
+        return [
+            'current_region' => $regions[$currentRegionId] ? [
+                'id' => $regions[$currentRegionId]->id,
+                'name' => $regions[$currentRegionId]->name,
+                'latitude' => $regions[$currentRegionId]->latitude,
+                'longitude' => $regions[$currentRegionId]->longitude
+            ] : null,
+            'route' => $routeDetails
+        ];
+    }
+
+    /**
+     * Get optimized route for driver
+     */
+    public function getOptimizedRoute(Request $request)
+    {
+        $driver = auth()->user();
+        $currentRegionId = $driver->current_region_id;
+        $destinationRegionIds = $this->getDriverDestinationRegions($driver);
+
+        if (!$currentRegionId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Driver has no current region assigned'
+            ], 400);
+        }
+
+        try {
+            $optimizer = new RouteOptimizerService();
+            $routeData = $optimizer->getRouteDetails($currentRegionId, $destinationRegionIds);
+
+            return response()->json([
+                'success' => true,
+                'data' => $routeData
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Route calculation failed: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get route with status for tracking
+     */
+    public function getRouteWithStatus()
+    {
+        $driver = auth()->user();
+        $currentRegionId = $driver->current_region_id;
+        
+        if (!$currentRegionId) {
+            return response()->json(['message' => 'Driver has no current region'], 400);
+        }
+
+        try {
+            $optimizer = new RouteOptimizerService();
+            $destinationRegionIds = $this->getDriverDestinationRegions($driver);
+            
+            if (empty($destinationRegionIds)) {
+                return response()->json(['message' => 'No active deliveries with destinations'], 400);
+            }
+
+            $route = $optimizer->findOptimalRoute($currentRegionId, $destinationRegionIds);
+            
+            $visitedRegions = $driver->regionLogs()
+                ->whereIn('region_id', $route)
+                ->where('type', 'arrival')
+                ->pluck('region_id')
+                ->toArray();
+
+            $regions = Region::whereIn('id', $route)
+                ->get(['id', 'name', 'latitude', 'longitude'])
+                ->map(function ($region) use ($currentRegionId, $visitedRegions, $route) {
+                    $status = 'upcoming';
+                    
+                    if ($region->id == $currentRegionId) {
+                        $status = 'current';
+                    } elseif (in_array($region->id, $visitedRegions)) {
+                        $status = 'visited';
+                    }
+                    
+                    $position = array_search($region->id, $route);
+                    $isNext = false;
+                    
+                    if ($status === 'current' && isset($route[$position + 1])) {
+                        $isNext = true;
+                    }
+                    
+                    return [
+                        'id' => $region->id,
+                        'name' => $region->name,
+                        'latitude' => $region->latitude,
+                        'longitude' => $region->longitude,
+                        'status' => $status,
+                        'isNext' => $isNext,
+                        'position' => $position,
+                    ];
+                })
+                ->sortBy('position')
+                ->values();
+
+            $routeWithTimes = [];
+            $previousRegion = null;
+            $totalTime = 0;
+            
+            foreach ($regions as $index => $region) {
+                if ($previousRegion) {
+                    $segmentTime = $optimizer->getTravelTime($previousRegion['id'], $region['id']);
+                    $totalTime += $segmentTime;
+                    
+                    $region['eta_from_previous'] = $segmentTime;
+                    $region['eta_from_start'] = $totalTime;
+                } else {
+                    $region['eta_from_previous'] = 0;
+                    $region['eta_from_start'] = 0;
+                }
+                
+                $routeWithTimes[] = $region;
+                $previousRegion = $region;
+            }
+
+            return response()->json([
+                'route' => $routeWithTimes,
+                'current_region_id' => $currentRegionId,
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get route status: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -121,13 +307,6 @@ class DriverController extends Controller
             }
         ]);
 
-        // DEBUG: Log the raw backend data for inspection
-        \Log::debug('TRACK PACKAGE RAW DATA', [
-            'package' => $package->toArray(),
-            'status_history' => $package->statusHistory->toArray(),
-            'transfers' => $package->transfers->toArray(),
-        ]);
-
         return Inertia::render('Driver/PackageTracking', [
             'package' => [
                 'id' => $package->id,
@@ -140,7 +319,6 @@ class DriverController extends Controller
                 'receiver' => $package->deliveryRequest->receiver->name,
                 'destination' => $package->deliveryRequest->dropOffRegion->name,
                 'current_region' => $package->currentRegion->name,
-                // --- Add these fields for specifications ---
                 'weight' => $package->weight,
                 'value' => $package->value,
                 'height' => $package->height,
@@ -148,7 +326,6 @@ class DriverController extends Controller
                 'length' => $package->length,
                 'volume' => $package->volume,
                 'category' => $package->category,
-                // ------------------------------------------------
             ],
             'statusHistory' => $package->statusHistory->map(function($history) {
                 return [
@@ -199,7 +376,6 @@ class DriverController extends Controller
                 $originalRegionId = $package->current_region_id;
                 $finalStatus = $validated['status'];
                 
-                // Auto-set status if region is provided
                 if (isset($validated['region_id'])) {
                     if (RouteHelper::isDestinationRegion($package, $validated['region_id'])) {
                         $finalStatus = 'delivered';
@@ -210,19 +386,20 @@ class DriverController extends Controller
                     }
                 }
                 
-                // Update package status
                 $this->updatePackageStatus($package, array_merge($validated, ['status' => $finalStatus]));
                 
-                // Handle region change if provided
                 if (isset($validated['region_id']) && $validated['region_id'] != $originalRegionId) {
                     $this->handleRegionChange($package, $originalRegionId, $validated['region_id'], $driver, $validated['remarks'] ?? null);
                 }
                 
-                // Handle delivery confirmation
                 if ($finalStatus === 'delivered') {
                     $this->confirmDelivery($package, $validated['remarks']);
                     $updatedDeliveryOrderIds[] = $package->deliveryRequest->deliveryOrder->id;
                 }
+            }
+            
+            if ($this->allPackagesDelivered($driver)) {
+                $driver->update(['all_packages_delivered' => true]);
             }
             
             $this->checkAndUpdateDeliveryOrders($updatedDeliveryOrderIds);
@@ -261,15 +438,17 @@ class DriverController extends Controller
         $newRegionId = $validated['region_id'];
         
         return DB::transaction(function () use ($driver, $newRegionId, $validated, $request) {
-            // Log the region change
             $this->logDriverRegion($driver, $newRegionId);
 
             $response = ['message' => 'Location updated successfully'];
+            $shouldSetTruckReturning = false;
 
             if ($request->update_packages) {
                 $query = $driver->deliveryOrders()
                     ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
-                    ->with(['packages']);
+                    ->with(['packages' => function($query) {
+                        $query->with('deliveryRequest');
+                    }]);
                     
                 if ($validated['only_in_transit']) {
                     $query->where('status', 'in_transit');
@@ -277,6 +456,7 @@ class DriverController extends Controller
                 
                 $orders = $query->get();
                 $updatedPackages = 0;
+                $deliveredPackages = 0;
                 
                 foreach ($orders as $order) {
                     $order->current_region_id = $newRegionId;
@@ -284,36 +464,49 @@ class DriverController extends Controller
                     
                     foreach ($order->packages as $package) {
                         if (!$validated['only_in_transit'] || $package->status === 'in_transit') {
-                            // Save previous region before updating
-                            $fromRegionId = $package->current_region_id;
-                            $package->current_region_id = $newRegionId;
-                            $package->save();
-                            $updatedPackages++;
-                            
-                            // Create transfer record
-                            $package->transfers()->create([
-                                'from_region_id' => $fromRegionId,
-                                'to_region_id' => $newRegionId,
-                                'processed_by' => $driver->id,
-                                'remarks' => 'Updated with driver location change',
-                                'is_return' => $package->shouldMarkAsReturn($newRegionId)
-                            ]);
-
-                            // --- AUTO-DELIVER LOGIC ---
-                            // If the new region is the package's destination, mark as delivered
-                            if (
-                                $package->deliveryRequest &&
-                                $package->deliveryRequest->drop_off_region_id == $newRegionId &&
-                                $package->status !== 'delivered'
-                            ) {
+                            if ($package->deliveryRequest->drop_off_region_id == $newRegionId) {
+                                $package->current_region_id = $newRegionId;
+                                $package->save();
+                                
                                 $package->updateStatus('delivered', $driver, 'Auto-delivered at destination via location update');
                                 $package->confirmDelivery($driver, 'Auto-delivered at destination via location update');
+                                $deliveredPackages++;
+                            } else {
+                                $fromRegionId = $package->current_region_id;
+                                $package->current_region_id = $newRegionId;
+                                $package->save();
+                                $updatedPackages++;
+                                
+                                $package->transfers()->create([
+                                    'from_region_id' => $fromRegionId,
+                                    'to_region_id' => $newRegionId,
+                                    'processed_by' => $driver->id,
+                                    'remarks' => 'Updated with driver location change',
+                                    'is_return' => $package->shouldMarkAsReturn($newRegionId)
+                                ]);
                             }
                         }
                     }
                 }
                 
+                $undeliveredPackages = Package::whereHas('deliveryRequest.deliveryOrder', function($q) use ($driver) {
+                        $q->where('driver_id', $driver->id)
+                          ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
+                    })
+                    ->whereNotIn('status', ['delivered', 'completed', 'returned'])
+                    ->count();
+                
+                $shouldSetTruckReturning = ($undeliveredPackages === 0);
+                
                 $response['updated_packages'] = $updatedPackages;
+                $response['delivered_packages'] = $deliveredPackages;
+            }
+            
+            if ($shouldSetTruckReturning) {
+                $assignment = $driver->currentTruckAssignment;
+                if ($assignment && $assignment->truck) {
+                    $assignment->truck->update(['status' => 'returning']);
+                }
             }
             
             return back()->with($response);
@@ -321,38 +514,116 @@ class DriverController extends Controller
     }
 
     /**
-     * Find all region IDs along the route from start to destination using RegionTravelDuration as a graph.
+     * Show tracking for a delivery order (DeliveryTracking)
      */
-    private function getRouteRegions(int $fromRegionId, int $toRegionId): array
+    public function deliveryTracking(DeliveryOrder $deliveryOrder)
     {
-        if ($fromRegionId === $toRegionId) {
-            return [$fromRegionId];
-        }
+        $deliveryOrder->load([
+            'deliveryRequest.sender',
+            'deliveryRequest.receiver',
+            'deliveryRequest.dropOffRegion',
+            'currentRegion',
+            'deliveryRequest.packages.currentRegion',
+            'regionLogs.fromRegion',
+            'regionLogs.driver',
+        ]);
 
-        $queue = [[$fromRegionId]];
-        $visited = [$fromRegionId];
+        $statusHistory = $deliveryOrder->deliveryRequest->statusHistory()
+            ->with('updatedBy')
+            ->orderByDesc('updated_at')
+            ->get();
 
-        while (!empty($queue)) {
-            $path = array_shift($queue);
-            $last = end($path);
+        return Inertia::render('Driver/DeliveryTracking', [
+            'delivery' => [
+                'id' => $deliveryOrder->id,
+                'reference_number' => $deliveryOrder->deliveryRequest->reference_number,
+                'status' => $deliveryOrder->status,
+                'sender' => $deliveryOrder->deliveryRequest->sender->name,
+                'receiver' => $deliveryOrder->deliveryRequest->receiver->name,
+                'destination' => $deliveryOrder->deliveryRequest->dropOffRegion->name,
+                'current_region' => $deliveryOrder->currentRegion->name,
+                'estimated_arrival' => $deliveryOrder->estimated_arrival,
+                'actual_arrival' => $deliveryOrder->actual_arrival,
+                'package_count' => $deliveryOrder->deliveryRequest->packages->count(),
+            ],
+            'statusHistory' => $statusHistory->map(function($history) {
+                return [
+                    'status' => $history->status,
+                    'remarks' => $history->remarks,
+                    'updated_at' => $history->updated_at,
+                    'updated_by' => $history->updatedBy->name ?? 'System',
+                ];
+            }),
+            'transfers' => $deliveryOrder->regionLogs->map(function($log) {
+                return [
+                    'from' => $log->fromRegion->name,
+                    'to' => $log->fromRegion->name,
+                    'processed_at' => $log->created_at,
+                    'processor' => $log->driver->name,
+                    'remarks' => $log->remarks,
+                ];
+            }),
+            'packages' => $deliveryOrder->deliveryRequest->packages->map(function($package) {
+                return [
+                    'id' => $package->id,
+                    'item_code' => $package->item_code,
+                    'item_name' => $package->item_name,
+                    'description' => $package->description,
+                    'status' => $package->status,
+                    'weight' => $package->weight,
+                    'value' => $package->value,
+                    'dimensions' => $package->height ? "{$package->height} × {$package->width} × {$package->length} cm" : null,
+                    'current_region' => $package->currentRegion->name,
+                ];
+            }),
+        ]);
+    }
 
-            if ($last == $toRegionId) {
-                return $path;
-            }
+    /**
+     * Mark arrival at a region
+     */
+    public function markArrival(Request $request)
+    {
+        $validated = $request->validate([
+            'region_id' => 'required|exists:regions,id',
+        ]);
 
-            $nextRegions = \App\Models\RegionTravelDuration::where('from_region_id', $last)
-                ->pluck('to_region_id')
-                ->toArray();
+        $driver = auth()->user();
+        $regionId = $validated['region_id'];
 
-            foreach ($nextRegions as $next) {
-                if (!in_array($next, $visited)) {
-                    $visited[] = $next;
-                    $queue[] = array_merge($path, [$next]);
-                }
-            }
-        }
+        $this->logDriverRegion($driver, $regionId);
 
-        return []; // No path found
+        return response()->json(['message' => 'Arrival recorded successfully']);
+    }
+
+    // ====================
+    // HELPER METHODS
+    // ====================
+
+    /**
+     * Get driver's destination regions from active packages
+     */
+    private function getDriverDestinationRegions(User $driver): array
+    {
+        $packages = Package::whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
+                $query->where('driver_id', $driver->id)
+                    ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
+            })
+            ->whereNotIn('status', ['delivered', 'completed', 'returned'])
+            ->with('deliveryRequest.dropOffRegion')
+            ->get();
+
+        $destinations = $packages->pluck('deliveryRequest.drop_off_region_id')
+            ->unique()
+            ->values()
+            ->toArray();
+
+        $pickups = $packages->pluck('deliveryRequest.pick_up_region_id')
+            ->unique()
+            ->values()
+            ->toArray();
+
+        return array_unique(array_merge($destinations, $pickups));
     }
 
     /**
@@ -361,26 +632,35 @@ class DriverController extends Controller
     private function getAvailableRegions(User $driver = null)
     {
         if ($driver) {
-            $activeOrder = $driver->deliveryOrders()
-                ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
-                ->latest()
-                ->first();
+            $currentRegionId = $driver->current_region_id;
+            $destinationRegionIds = $this->getDriverDestinationRegions($driver);
+            
+            if ($currentRegionId && !empty($destinationRegionIds)) {
+                $optimizer = new RouteOptimizerService();
+                $route = $optimizer->findOptimalRoute($currentRegionId, $destinationRegionIds);
 
-            if ($activeOrder) {
-                $fromRegionId = $activeOrder->current_region_id ?? $activeOrder->deliveryRequest->pick_up_region_id;
-                $toRegionId = $activeOrder->deliveryRequest->drop_off_region_id;
-                $routeRegionIds = $this->getRouteRegions($fromRegionId, $toRegionId);
+                $orderedRegions = [];
+                foreach ($route as $regionId) {
+                    if (!in_array($regionId, $orderedRegions)) {
+                        $orderedRegions[] = $regionId;
+                    }
+                }
 
-                return Region::active()
-                    ->whereIn('id', $routeRegionIds)
-                    ->orderBy('name')
-                    ->get(['id', 'name']);
+                return Region::whereIn('id', $orderedRegions)
+                    ->active()
+                    ->get(['id', 'name'])
+                    ->sortBy(function ($region) use ($orderedRegions) {
+                        return array_search($region->id, $orderedRegions);
+                    })
+                    ->values()
+                    ->toArray();
             }
         }
 
         return Region::active()
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name'])
+            ->toArray();
     }
 
     /**
@@ -428,7 +708,6 @@ class DriverController extends Controller
      */
     private function handleRegionChange(Package $package, int $fromRegionId, int $toRegionId, User $driver, ?string $remarks = null): void
     {
-        // Create package transfer record
         $transfer = $package->transfers()->create([
             'from_region_id' => $fromRegionId,
             'to_region_id' => $toRegionId,
@@ -438,44 +717,40 @@ class DriverController extends Controller
             'remarks' => $remarks
         ]);
 
-        // Update package's current region
         $package->current_region_id = $toRegionId;
         $package->save();
 
-        // Update delivery order's current region if this is the first package
         $deliveryOrder = $package->deliveryRequest->deliveryOrder;
         if ($deliveryOrder && !$deliveryOrder->current_region_id) {
             $deliveryOrder->current_region_id = $toRegionId;
             $deliveryOrder->save();
         }
 
-        // Log driver's region change
         $this->logDriverRegion($driver, $toRegionId, $deliveryOrder);
     }
 
     /**
      * Log driver's region change
      */
-  private function logDriverRegion(User $driver, int $regionId, ?DeliveryOrder $deliveryOrder = null): void
-{
-    $logData = [
-        'driver_id' => $driver->id,
-        'region_id' => $regionId,
-        'type' => 'arrival',
-        'logged_at' => now()
-    ];
+    private function logDriverRegion(User $driver, int $regionId, ?DeliveryOrder $deliveryOrder = null): void
+    {
+        $logData = [
+            'driver_id' => $driver->id,
+            'region_id' => $regionId,
+            'type' => 'arrival',
+            'logged_at' => now()
+        ];
 
-    if ($deliveryOrder) {
-        $logData['delivery_order_id'] = $deliveryOrder->id;
+        if ($deliveryOrder) {
+            $logData['delivery_order_id'] = $deliveryOrder->id;
+        }
+
+        DriverRegionLog::create($logData);
+
+        $driver->current_region_id = $regionId;
+        $driver->last_region_update = now();
+        $driver->save();
     }
-
-    DriverRegionLog::create($logData);
-
-    $driver->current_region_id = $regionId;
-    $driver->last_region_update = now();
-    $driver->save();
-}
-
 
     /**
      * Get packages that the driver is authorized to update
@@ -511,6 +786,19 @@ class DriverController extends Controller
     }
 
     /**
+     * Check if all packages are delivered
+     */
+    private function allPackagesDelivered(User $driver): bool
+    {
+        return Package::whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
+                $query->where('driver_id', $driver->id)
+                    ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
+            })
+            ->whereNotIn('status', ['delivered', 'completed'])
+            ->doesntExist();
+    }
+
+    /**
      * Check and update delivery orders where all packages are delivered
      */
     private function checkAndUpdateDeliveryOrders(array $deliveryOrderIds): void
@@ -518,50 +806,26 @@ class DriverController extends Controller
         $uniqueOrderIds = array_unique($deliveryOrderIds);
 
         foreach ($uniqueOrderIds as $orderId) {
-            $deliveryOrder = DeliveryOrder::with(['packages', 'deliveryRequest'])->find($orderId);
-
-            \Log::debug('DELIVERYORDER DEBUG 1 - Checking for actual_arrival update', [
-                'order_id' => $orderId,
-                'found' => $deliveryOrder !== null,
-                'package_count' => $deliveryOrder?->packages->count(),
-                'package_ids' => $deliveryOrder?->packages->pluck('id')->toArray(),
-                'package_statuses' => $deliveryOrder?->packages->pluck('status', 'id')->toArray(),
-                'delivery_request_id' => $deliveryOrder?->delivery_request_id,
-                'delivery_request_package_ids' => $deliveryOrder?->deliveryRequest?->packages->pluck('id')->toArray(),
-            ]);
+            $deliveryOrder = DeliveryOrder::with(['packages'])->find($orderId);
 
             if ($deliveryOrder && $deliveryOrder->packages->every(fn($pkg) => $pkg->status === 'delivered')) {
                 $deliveryOrder->update([
                     'status' => 'delivered',
                     'actual_arrival' => now(),
                 ]);
-                \Log::debug('DELIVERYORDER DEBUG 2 - Updated actual_arrival for DeliveryOrder', [
-                    'order_id' => $orderId,
-                    'timestamp' => now()->toDateTimeString(),
-                ]);
-            } else {
-                \Log::debug('DELIVERYORDER DEBUG 3 - Did NOT update actual_arrival for DeliveryOrder', [
-                    'order_id' => $orderId,
-                    'all_delivered' => $deliveryOrder ? $deliveryOrder->packages->every(fn($pkg) => $pkg->status === 'delivered') : null,
-                ]);
             }
         }
     }
 
-    // ====================
-    // DASHBOARD HELPER METHODS
-    // ====================
-
+    /**
+     * Get driver statistics
+     */
     private function getDriverStats(User $driver)
     {
         return [
             'active_deliveries' => DeliveryOrder::where('driver_id', $driver->id)
                 ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
                 ->count(),
-            // 'completed_today' => DeliveryOrder::where('driver_id', $driver->id)
-            //     ->where('status', 'completed')
-            //     ->whereDate('updated_at', today())
-            //     ->count(),
             'packages_in_transit' => Package::whereHas('deliveryRequest.deliveryOrder', function ($q) use ($driver) {
                     $q->where('driver_id', $driver->id)
                         ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
@@ -570,6 +834,9 @@ class DriverController extends Controller
         ];
     }
 
+    /**
+     * Get active deliveries for driver
+     */
     private function getActiveDeliveries(User $driver)
     {
         return DeliveryOrder::with([
@@ -587,16 +854,17 @@ class DriverController extends Controller
             });
     }
 
+    /**
+     * Get recent deliveries for driver
+     */
     private function getRecentDeliveries(User $driver)
     {
-        // Use paginate(5) for pagination support
         $paginator = DeliveryOrder::with(['deliveryRequest.packages', 'deliveryRequest.receiver'])
             ->where('driver_id', $driver->id)
             ->where('status', 'completed')
             ->latest()
             ->paginate(5);
 
-        // Map the data for each delivery order
         $paginator->getCollection()->transform(function ($order) {
             return $this->formatDeliveryOrder($order);
         });
@@ -604,6 +872,9 @@ class DriverController extends Controller
         return $paginator;
     }
 
+    /**
+     * Get current truck assignment
+     */
     private function getCurrentTruck(User $driver)
     {
         $order = DeliveryOrder::with('truck')
@@ -619,6 +890,9 @@ class DriverController extends Controller
         ] : null;
     }
 
+    /**
+     * Format delivery order for response
+     */
     private function formatDeliveryOrder(DeliveryOrder $order)
     {
         return [
@@ -627,8 +901,8 @@ class DriverController extends Controller
             'estimated_arrival' => $order->estimated_arrival?->format('M d, Y H:i'),
             'package_count' => $order->deliveryRequest->packages->count(),
             'receiver' => $order->deliveryRequest->receiver->name,
-            'reference_number' => $order->deliveryRequest->reference_number, // <-- Add this line
-            'delivered_at' => $order->actual_arrival ? $order->actual_arrival->format('M d, Y H:i') : null, // Optional: for delivered_at column
+            'reference_number' => $order->deliveryRequest->reference_number,
+            'delivered_at' => $order->actual_arrival ? $order->actual_arrival->format('M d, Y H:i') : null,
             'packages' => $order->deliveryRequest->packages->take(2)->map(function ($package) {
                 return [
                     'id' => $package->id,
@@ -644,74 +918,7 @@ class DriverController extends Controller
     }
 
     /**
-     * Show tracking for a delivery order (DeliveryTracking)
-     */
-    public function deliveryTracking(DeliveryOrder $deliveryOrder)
-    {
-        $deliveryOrder->load([
-            'deliveryRequest.sender',
-            'deliveryRequest.receiver',
-            'deliveryRequest.dropOffRegion',
-            'currentRegion',
-            'deliveryRequest.packages.currentRegion',
-            'regionLogs.fromRegion',
-            'regionLogs.driver',
-        ]);
-
-        // Use status history from all packages in the delivery request
-        $statusHistory = $deliveryOrder->deliveryRequest->statusHistory()
-            ->with('updatedBy')
-            ->orderByDesc('updated_at')
-            ->get();
-
-        return Inertia::render('Driver/DeliveryTracking', [
-            'delivery' => [
-                'id' => $deliveryOrder->id,
-                'reference_number' => $deliveryOrder->deliveryRequest->reference_number,
-                'status' => $deliveryOrder->status,
-                'sender' => $deliveryOrder->deliveryRequest->sender->name,
-                'receiver' => $deliveryOrder->deliveryRequest->receiver->name,
-                'destination' => $deliveryOrder->deliveryRequest->dropOffRegion->name,
-                'current_region' => $deliveryOrder->currentRegion->name,
-                'estimated_arrival' => $deliveryOrder->estimated_arrival,
-                'actual_arrival' => $deliveryOrder->actual_arrival,
-                'package_count' => $deliveryOrder->deliveryRequest->packages->count(),
-            ],
-            'statusHistory' => $statusHistory->map(function($history) {
-                return [
-                    'status' => $history->status,
-                    'remarks' => $history->remarks,
-                    'updated_at' => $history->updated_at,
-                    'updated_by' => $history->updatedBy->name ?? 'System',
-                ];
-            }),
-            'transfers' => $deliveryOrder->regionLogs->map(function($log) {
-                return [
-                    'from' => $log->fromRegion->name,
-                    'to' => $log->fromRegion->name, // Use fromRegion for both
-                    'processed_at' => $log->created_at,
-                    'processor' => $log->driver->name,
-                    'remarks' => $log->remarks,
-                ];
-            }),
-            'packages' => $deliveryOrder->deliveryRequest->packages->map(function($package) {
-                return [
-                    'id' => $package->id,
-                    'item_code' => $package->item_code,
-                    'item_name' => $package->item_name,
-                    'description' => $package->description,
-                    'status' => $package->status,
-                    'weight' => $package->weight,
-                    'value' => $package->value,
-                    'dimensions' => $package->height ? "{$package->height} × {$package->width} × {$package->length} cm" : null,
-                    'current_region' => $package->currentRegion->name,
-                ];
-            }),
-        ]);
-    }
-
-    /**
-     * Returns available status options for package updates.
+     * Returns available status options for package updates
      */
     private function getStatusOptions()
     {
@@ -720,7 +927,6 @@ class DriverController extends Controller
             'in_transit' => 'In Transit',
             'delivered' => 'Delivered',
             'returned' => 'Returned to Sender Branch',
-            // Add or adjust statuses as needed for your workflow
         ];
     }
 }

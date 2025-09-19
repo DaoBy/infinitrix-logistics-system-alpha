@@ -4,21 +4,28 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
-class EnsureProfileIsComplete
+class EnsureProfileComplete
 {
+    /**
+     * Handle an incoming request.
+     *
+     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     */
     public function handle(Request $request, Closure $next): Response
     {
-        $user = $request->user();
+        $user = Auth::user();
         
-        if ($user && $user->isCustomer()) {
-            $customer = $user->customer;
-            
-            if (!$customer || !$customer->first_name || !$customer->last_name || !$customer->mobile) {
+        // Check if user is a customer and profile is not complete
+        if ($user && $user->isCustomer() && (!$user->customer || !$user->customer->is_profile_complete)) {
+            // Allow access to profile completion and logout routes
+           if (!$request->is('complete-profile') && !$request->is('logout')) {
                 return redirect()->route('profile.complete')
-                 ->with('info', 'Please complete your profile to continue');
+                    ->with('warning', 'Please complete your profile to access all features.');
             }
+
         }
 
         return $next($request);

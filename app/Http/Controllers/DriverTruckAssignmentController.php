@@ -8,6 +8,7 @@ use App\Models\Truck;
 use App\Models\Region;
 use App\Models\DriverRegionLog;
 use App\Models\DeliveryOrder;
+use App\Models\Package;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
@@ -31,11 +32,11 @@ class DriverTruckAssignmentController extends Controller
             $query->where('region_id', $request->region_id);
         }
 
-        if ($request->filled('status')) {
+        // Only apply status filter if not 'all'
+        if ($request->filled('status') && $request->status !== 'all') {
             $query->where('is_active', $request->status === 'active');
-        } else {
-            $query->active();
         }
+        // Remove else block that always applies ->active()
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -49,68 +50,6 @@ class DriverTruckAssignmentController extends Controller
         }
 
         $assignments = $query->paginate(10);
-
-        // Defensive: Ensure driver and regionLogs are loaded and are collections
-        $assignments->getCollection()->transform(function ($assignment) {
-            // Get the current active delivery order for this assignment
-            $activeOrder = $assignment->driver
-                ? $assignment->driver->deliveryOrders()
-                    ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
-                    ->latest()
-                    ->first()
-                : null;
-            $deliveryOrderId = $activeOrder?->id;
-
-            // --- NEW: If no active order, check for latest delivered order (for return verification) ---
-            if (!$deliveryOrderId && $assignment->driver) {
-                $recentDeliveredOrder = $assignment->driver->deliveryOrders()
-                    ->where('status', 'delivered')
-                    ->latest('updated_at')
-                    ->first();
-                if ($recentDeliveredOrder) {
-                    $deliveryOrderId = $recentDeliveredOrder->id;
-                }
-            }
-
-            $logs = collect();
-            if (
-                $assignment->driver &&
-                isset($assignment->driver->regionLogs) &&
-                $assignment->driver->regionLogs instanceof \Illuminate\Support\Collection
-            ) {
-                // Only consider logs for this region and current delivery order
-                $logs = $assignment->driver->regionLogs
-                    ->where('region_id', $assignment->region_id)
-                    ->when($deliveryOrderId, function ($collection) use ($deliveryOrderId) {
-                        return $collection->where('delivery_order_id', $deliveryOrderId);
-                    })
-                    ->whereIn('type', ['driver_returned', 'return_verified_by_staff'])
-                    ->sortByDesc('logged_at')
-                    ->values();
-            }
-
-            $latest = $logs->sortByDesc('logged_at')->first();
-
-            // --- FIX: Only set 'Returned & Verified' if the latest log for this delivery order is 'return_verified_by_staff' ---
-            if ($latest && $latest->type === 'return_verified_by_staff') {
-                $assignment->return_status = 'Returned & Verified';
-            } elseif ($latest && $latest->type === 'driver_returned') {
-                $assignment->return_status = 'Pending Verification';
-            } else {
-                $assignment->return_status = 'Not Returned';
-            }
-
-            // Debug: log what is being set
-            \Log::debug('Assignment status', [
-                'id' => $assignment->id,
-                'driver' => $assignment->driver?->name,
-                'logs_count' => $logs->count(),
-                'latest_type' => $latest?->type,
-                'return_status' => $assignment->return_status
-            ]);
-
-            return $assignment;
-        });
 
         return Inertia::render('Admin/CargoAssignment/DriverTruckAssignments/Index', [
             'assignments' => $assignments,
@@ -247,10 +186,10 @@ class DriverTruckAssignmentController extends Controller
             'unassigned_at' => null
         ]);
 
-        // Update truck status
-        $assignment->truck()->update(['status' => Truck::STATUS_ASSIGNED]);
+        // Set truck status to available (not assigned)
+        $assignment->truck()->update(['status' => Truck::STATUS_AVAILABLE]);
 
-        return redirect()->back()->with('success', 'Assignment reactivated');
+        return redirect()->back()->with('success', 'Assignment reactivated and available for new cargo assignment.');
     }
 
     public function getByRegion(Request $request)
@@ -295,12 +234,11 @@ class DriverTruckAssignmentController extends Controller
             });
         }
 
-        // Active only unless status specified
-        if ($request->filled('status')) {
+        // Only apply status filter if not 'all'
+        if ($request->filled('status') && $request->status !== 'all') {
             $query->where('is_active', $request->status === 'active');
-        } else {
-            $query->active();
         }
+        // Remove else block that always applies ->active()
 
         $assignments = $query->latest()->paginate(10);
 
@@ -312,67 +250,73 @@ class DriverTruckAssignmentController extends Controller
     }
 
     public function confirmReturnToBase(DriverTruckAssignment $assignment)
-    {
-        \Log::debug('1 - Method entered', ['assignment' => $assignment->id]);
-        
-        try {
-            \Log::debug('2 - Getting active orders');
-            $activeOrder = $assignment->driver->deliveryOrders()
-                ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
-                ->first();
+{
+    \Log::debug('Confirm return to base initiated', ['assignment' => $assignment->id]);
+    
+    try {
+        DB::beginTransaction();
 
-            \Log::debug('3 - Active order found?', ['order' => $activeOrder?->id]);
-            
-            $deliveryOrderId = null;
-            if ($activeOrder) {
-                $deliveryOrderId = $activeOrder->id;
-            } else {
-                \Log::debug('4 - Checking recent delivered orders');
-                $recentDeliveredOrder = $assignment->driver->deliveryOrders()
-                    ->where('status', 'delivered')
-                    ->latest('updated_at')
-                    ->first();
-                if ($recentDeliveredOrder) {
-                    $deliveryOrderId = $recentDeliveredOrder->id;
-                }
-            }
+        // Get the latest delivery order (active or delivered)
+        $latestOrder = $assignment->driver->deliveryOrders()
+            ->whereIn('status', ['assigned', 'dispatched', 'in_transit', 'delivered'])
+            ->latest()
+            ->first();
 
-            \Log::debug('5 - Creating driver return log', ['order_id' => $deliveryOrderId]);
-            $log = DriverRegionLog::create([
-                'driver_id' => $assignment->driver_id,
-                'region_id' => $assignment->region_id,
-                'delivery_order_id' => $deliveryOrderId,
-                'type' => 'driver_returned',
-                'logged_at' => now()
+        \Log::debug('Latest order found', ['order_id' => $latestOrder?->id, 'status' => $latestOrder?->status]);
+
+        // Create return log
+        $log = DriverRegionLog::create([
+            'driver_id' => $assignment->driver_id,
+            'region_id' => $assignment->region_id,
+            'delivery_order_id' => $latestOrder?->id,
+            'type' => 'driver_returned',
+            'logged_at' => now()
+        ]);
+
+        \Log::debug('Return log created', ['log_id' => $log->id]);
+
+        // Update truck status to returning
+        $assignment->truck()->update(['status' => Truck::STATUS_RETURNING]);
+
+        // Reset driver's location to home region
+        if ($assignment->driver->employeeProfile && $assignment->driver->employeeProfile->region_id) {
+            $assignment->driver->update([
+                'current_region_id' => $assignment->driver->employeeProfile->region_id,
+                'last_region_update' => now()
             ]);
-
-            \Log::debug('6 - Log created', ['log_id' => $log->id]);
-
-            \Log::debug('7 - Updating truck status');
-            $assignment->truck()->update(['status' => Truck::STATUS_RETURNING]);
-
-            \Log::debug('8 - Truck status updated');
-
-            // Use redirect with flash for Inertia/Vue POST forms
-            return back()->with('success', 'Return to base confirmed. Waiting for staff verification.');
-
-        } catch (\Exception $e) {
-            \Log::error('Error in confirmReturnToBase: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString()
-            ]);
-            return back()->with('error', 'Failed to confirm return to base.');
+            \Log::debug('Driver location reset', ['region_id' => $assignment->driver->employeeProfile->region_id]);
         }
-    }
 
-        public function verifyDriverReturn(DriverTruckAssignment $assignment)
-    {
-        // Get the latest driver return log
+        DB::commit();
+
+        return redirect()->back()->with('success', 'Return to base confirmed. Waiting for staff verification.');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error('Return confirmation failed', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return redirect()->back()->with('error', 'Failed to confirm return to base.');
+    }
+}
+
+public function verifyDriverReturn(DriverTruckAssignment $assignment)
+{
+    \Log::debug('Verifying driver return', ['assignment' => $assignment->id]);
+
+    try {
+        DB::beginTransaction();
+
+        // Get the latest return log
         $returnLog = $assignment->driver->regionLogs()
+            ->where('region_id', $assignment->region_id)
             ->where('type', 'driver_returned')
             ->latest()
             ->first();
 
         if (!$returnLog) {
+            \Log::warning('No return log found for verification');
             return back()->with('error', 'No return confirmation found from driver');
         }
 
@@ -385,11 +329,29 @@ class DriverTruckAssignmentController extends Controller
             'logged_at' => now()
         ]);
 
-        // Update the delivery order's actual arrival time but keep status as 'delivered'
+        \Log::debug('Verification log created');
 
-        // Reset truck status
+        // Update truck to available
         $assignment->truck()->update(['status' => Truck::STATUS_AVAILABLE]);
 
-        return back()->with('success', 'Driver return verified. Delivery remains marked as delivered.');
+        // Update assignment with return status
+        $assignment->update([
+            'is_active' => false,
+            'unassigned_at' => now(),
+            'return_status' => 'Returned & Verified' // Ensure this is set
+        ]);
+
+        DB::commit();
+
+        return redirect()->back()->with('success', 'Driver return verified. Truck is now available.');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error('Return verification failed', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return redirect()->back()->with('error', 'Failed to verify driver return.');
     }
+}
 }

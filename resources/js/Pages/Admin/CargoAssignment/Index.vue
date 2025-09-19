@@ -76,7 +76,15 @@
             </StatusBadge>
           </template>
           <template #packages="{ row }">
-            {{ row.delivery_request?.packages?.length ?? 0 }}
+            <div class="flex flex-col items-center">
+              <span>{{ row.delivery_request?.packages?.length ?? 0 }}</span>
+              <!-- Show warning icon if any packages are missing stickers -->
+              <span v-if="hasUnstickerizedPackages(row)" class="text-yellow-500" title="Some packages are missing stickers">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+              </span>
+            </div>
           </template>
           <template #actions="{ row }">
             <div class="flex space-x-1">
@@ -149,6 +157,13 @@
                       <div class="mt-1 text-xs">
                         <p>Volume: {{ calculateTotalVolume(delivery.delivery_request?.packages ?? []) }} m³</p>
                         <p>Weight: {{ calculateTotalWeight(delivery.delivery_request?.packages ?? []) }} kg</p>
+                        <!-- Show warning if packages are missing stickers -->
+                        <p v-if="hasUnstickerizedPackages(delivery)" class="text-yellow-600 dark:text-yellow-400 flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                          </svg>
+                          Missing stickers
+                        </p>
                       </div>
                     </div>
                     <button 
@@ -172,10 +187,14 @@
                 <p class="font-medium">Total Selected:</p>
                 <p>Volume: {{ totalSelectedVolume }} m³</p>
                 <p>Weight: {{ totalSelectedWeight }} kg</p>
+                <!-- Show warning if any selected delivery has packages without stickers -->
+                <p v-if="hasAnyUnstickerizedPackages" class="text-yellow-600 dark:text-yellow-400 font-medium">
+                  ⚠️ Some packages are missing stickers
+                </p>
               </div>
               <PrimaryButton 
                 class="mt-4 w-full"
-                :disabled="!selectedSet || !selectedDeliveries.length"
+                :disabled="!selectedSet || !selectedDeliveries.length || hasAnyUnstickerizedPackages"
                 @click="openAssignmentModal"
               >
                 Assign Selected
@@ -297,59 +316,67 @@
     </div>
 
     <!-- Batch Assignment Suggestions -->
-    <div class="mt-8 bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
-      <div class="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
-        <h3 class="font-medium text-gray-900 dark:text-gray-100">
-          Batch Assignment Suggestions
-        </h3>
-      </div>
-      <div class="p-4">
-        <div v-if="batchSuggestions.length > 0" class="space-y-4">
-          <div v-for="suggestion in batchSuggestions" :key="suggestion.destination_region.id" 
-               class="border rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-            <div class="flex justify-between items-start">
-              <div>
-                <p class="font-medium">
-                  To: {{ suggestion.destination_region.name }}
-                </p>
-                <p class="text-sm text-gray-600 dark:text-gray-400">
-                  {{ suggestion.delivery_requests.length }} deliveries
-                </p>
-                <p class="text-sm mt-2">
-                  Total Volume: {{ suggestion.total_volume.toFixed(2) }} m³ | 
-                  Total Weight: {{ suggestion.total_weight.toFixed(2) }} kg
-                </p>
-              </div>
-              <PrimaryButton 
-                size="sm" 
-                @click="prepareBatchAssignment(suggestion)"
-                :disabled="!suitableDriverTruckSets(suggestion).length"
-              >
-                Assign Batch
-              </PrimaryButton>
+  <div class="mt-8 bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
+    <div class="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
+      <h3 class="font-medium text-gray-900 dark:text-gray-100">
+        Batch Assignment Suggestions
+      </h3>
+    </div>
+    <div class="p-4">
+      <div v-if="batchSuggestions.length > 0" class="space-y-4">
+        <div v-for="suggestion in batchSuggestions" :key="suggestion.destination_region.id" 
+             class="border rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="font-medium">
+                From: {{ suggestion.pickup_region?.name ?? 'N/A' }} → To: {{ suggestion.destination_region.name }}
+              </p>
+              <p class="text-sm text-gray-600 dark:text-gray-400">
+                {{ suggestion.delivery_requests.length }} deliveries
+              </p>
+              <p class="text-sm mt-2">
+                Total Volume: {{ suggestion.total_volume.toFixed(2) }} m³ | 
+                Total Weight: {{ suggestion.total_weight.toFixed(2) }} kg
+              </p>
+              <!-- Show warning if any delivery has packages without stickers -->
+              <p v-if="hasUnstickerizedPackagesInSuggestion(suggestion)" class="text-yellow-600 dark:text-yellow-400 text-sm mt-1">
+                ⚠️ Some deliveries have packages without stickers
+              </p>
             </div>
-            
-            <div v-if="suitableDriverTruckSets(suggestion).length" class="mt-4">
-              <p class="text-sm font-medium">Suitable Driver-Truck Sets:</p>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
-                <div v-for="set in suitableDriverTruckSets(suggestion)" 
-                     :key="set.id"
-                     class="p-2 border rounded cursor-pointer"
-                     :class="{ 'border-blue-500': selectedSet?.id === set.id }"
-                     @click="selectSet(set)">
-                  <p class="font-medium">{{ set.driver.name }}</p>
-                  <p class="text-xs">{{ set.truck.license_plate }}</p>
-                  <p class="text-xs">Available: {{ set.available_volume.toFixed(2) }}m³ {{ set.available_weight.toFixed(2) }}kg</p>
-                </div>
+            <PrimaryButton 
+              size="sm" 
+              @click="prepareBatchAssignment(suggestion)"
+              :disabled="!suitableDriverTruckSets(suggestion).length || hasUnstickerizedPackagesInSuggestion(suggestion)"
+            >
+              Assign Batch
+            </PrimaryButton>
+          </div>
+          
+          <div v-if="suitableDriverTruckSets(suggestion).length" class="mt-4">
+            <p class="text-sm font-medium">Suitable Driver-Truck Sets (Region: {{ suggestion.pickup_region?.name ?? 'N/A' }}):</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+              <div v-for="set in suitableDriverTruckSets(suggestion)" 
+                   :key="set.id"
+                   class="p-2 border rounded cursor-pointer"
+                   :class="{ 'border-blue-500': selectedSet?.id === set.id }"
+                   @click="selectSet(set)">
+                <p class="font-medium">{{ set.driver.name }}</p>
+                <p class="text-xs">{{ set.truck.license_plate }}</p>
+                <p class="text-xs">Available: {{ set.available_volume.toFixed(2) }}m³ {{ set.available_weight.toFixed(2) }}kg</p>
+                <p class="text-xs text-gray-500">Region: {{ set.region?.name ?? 'N/A' }}</p>
               </div>
             </div>
           </div>
-        </div>
-        <div v-else class="text-center text-gray-500 dark:text-gray-400">
-          No batch assignment suggestions available
+          <div v-else class="mt-4 text-sm text-yellow-600">
+            No suitable driver-truck sets available in region: {{ suggestion.pickup_region?.name ?? 'N/A' }}
+          </div>
         </div>
       </div>
+      <div v-else class="text-center text-gray-500 dark:text-gray-400">
+        No batch assignment suggestions available
+      </div>
     </div>
+  </div>
 
     <!-- Assignment Confirmation Modal -->
     <ConfirmationModal 
@@ -675,491 +702,269 @@ const hasFlashMessages = computed(() => {
 });
 
 const totalSelectedVolume = computed(() => {
-  if (!selectedDeliveries.value?.length) return 0;
-  return selectedDeliveries.value.reduce((sum, delivery) => {
+  if (!selectedDeliveries.value.length) return 0;
+  return selectedDeliveries.value.reduce((total, delivery) => {
     const packages = delivery.delivery_request?.packages || [];
-    return sum + calculateTotalVolume(packages);
-  }, 0).toFixed(2);
+    return total + calculateTotalVolume(packages);
+  }, 0);
 });
 
 const totalSelectedWeight = computed(() => {
-  if (!selectedDeliveries.value?.length) return 0;
-  return selectedDeliveries.value.reduce((sum, delivery) => {
+  if (!selectedDeliveries.value.length) return 0;
+  return selectedDeliveries.value.reduce((total, delivery) => {
     const packages = delivery.delivery_request?.packages || [];
-    return sum + calculateTotalWeight(packages);
-  }, 0).toFixed(2);
+    return total + calculateTotalWeight(packages);
+  }, 0);
 });
 
-const validationSummary = ref({
-  isValid: false,
-  message: '',
-  details: null,
-  totalVolume: 0,
-  totalWeight: 0,
-  availableVolume: 0,
-  availableWeight: 0,
-  etaWarning: null,
+// Check if any selected delivery has packages without stickers
+const hasAnyUnstickerizedPackages = computed(() => {
+  return selectedDeliveries.value.some(delivery => hasUnstickerizedPackages(delivery));
 });
 
-const regionDurations = ref([]); // [{from_region_id, to_region_id, estimated_minutes}, ...]
+// Helper function to check if a delivery has packages without stickers
+const hasUnstickerizedPackages = (delivery) => {
+  const packages = delivery.delivery_request?.packages || [];
+  return packages.some(pkg => pkg.sticker_printed_at === null);
+};
 
-const calculatedETA = computed(() => {
-  if (!assignmentForm.estimated_departure || !selectedDeliveries.value.length) return null;
-  
-  // Find the longest duration among selected deliveries
-  let maxDuration = 0;
-  selectedDeliveries.value.forEach(delivery => {
-    const fromRegion = delivery.delivery_request.pick_up_region_id;
-    const toRegion = delivery.delivery_request.drop_off_region_id;
-    
-    // Get duration from database or use default
-    const duration = regionDurations.value.find(d => 
-      d.from_region_id === fromRegion && d.to_region_id === toRegion
-    )?.estimated_minutes || 1440; // default 24 hours
-    
-    if (duration > maxDuration) maxDuration = duration;
-  });
-
-  const departure = new Date(assignmentForm.estimated_departure);
-  departure.setMinutes(departure.getMinutes() + maxDuration);
-  return departure.toISOString();
-});
-
-// Minimum allowed date/time for Estimated Departure (now, rounded to nearest minute)
-const minDepartureDateTime = computed(() => {
-  const now = new Date();
-  now.setSeconds(0, 0);
-  return now.toISOString().slice(0, 16);
-});
+// Check if a batch suggestion has deliveries with packages without stickers
+const hasUnstickerizedPackagesInSuggestion = (suggestion) => {
+  return suggestion.delivery_requests.some(delivery => hasUnstickerizedPackages(delivery));
+};
 
 // Methods
-function handleSelectionChange(selected = []) {
-  selectedDeliveries.value = selected || [];
-  // --- FIX: Reset selectedSet and assignmentForm when selection changes ---
-  // This ensures that after clearing or changing selection, the assignment form is always in sync.
-  assignmentForm.delivery_request_ids = selectedDeliveries.value
-    .map(d => d.delivery_request?.id)
-    .filter(Boolean);
-  // Optionally, reset selectedSet if you want to force user to reselect after changing selection:
-  // selectedSet.value = null;
-}
+const handleSelectionChange = (selectedRows) => {
+  selectedDeliveries.value = selectedRows;
+};
 
-function removeDelivery(id) {
-  if (!selectedDeliveries.value?.length) return;
-  selectedDeliveries.value = selectedDeliveries.value.filter(d => d?.id !== id);
-}
+const removeDelivery = (deliveryId) => {
+  selectedDeliveries.value = selectedDeliveries.value.filter(d => d.id !== deliveryId);
+};
 
-function clearSelection() {
+const clearSelection = () => {
   selectedDeliveries.value = [];
-}
+};
 
-function selectSet(set) {
+const selectSet = (set) => {
   selectedSet.value = set;
-  assignmentForm.driver_truck_assignment_id = set.id;
-}
+};
 
-function resetSelection() {
-  selectedDeliveries.value = [];
-  selectedSet.value = null;
-  assignmentForm.reset();
-  // Reset to 1 day in the future on clear
-  const now = new Date();
-  now.setDate(now.getDate() + 1);
-  assignmentForm.estimated_departure = now.toISOString().slice(0, 16);
-}
+const refreshData = () => {
+  loading.value = true;
+  router.reload({
+    preserveState: true,
+    preserveScroll: true,
+    onFinish: () => {
+      loading.value = false;
+    }
+  });
+};
 
-function applyFilters(page = 1) {
-  router.get(route('cargo-assignments.index'), {
+const applyFilters = debounce(() => {
+  router.get(route('cargo-assignments.index'), { // Changed route name
     search: searchTerm.value,
     status: statusFilter.value,
-    region_id: regionFilter.value,
-    per_page: 5, // Force 5 items per page
-    page
+    region_id: regionFilter.value
   }, {
     preserveState: true,
     preserveScroll: true,
-    replace: true,
-    only: ['deliveries', 'driverTruckSets', 'regions', 'filters', 'flash'],
-    onStart: () => loading.value = true,
-    onFinish: () => loading.value = false
+    replace: true
   });
-}
+}, 300);
 
-function resetFilters() {
+
+const resetFilters = () => {
   searchTerm.value = '';
   statusFilter.value = '';
   regionFilter.value = '';
-}
+  applyFilters();
+};
 
-function handlePageChange(page) {
-  applyFilters(page);
-}
-
-function refreshData() {
-  router.get(route('cargo-assignments.index'), {
-    search: searchTerm.value,
-    status: statusFilter.value,
-    region_id: regionFilter.value,
-    per_page: 5, // Add this
-    page: deliveries.value?.current_page || 1
+const handlePageChange = (page) => {
+  router.get(route('employee.assignments.index'), {
+    ...props.filters,
+    page
   }, {
     preserveState: true,
-    preserveScroll: true,
-    replace: true,
-    only: ['deliveries', 'driverTruckSets', 'regions', 'filters', 'flash'],
-    onStart: () => loading.value = true,
-    onFinish: () => loading.value = false
+    preserveScroll: true
   });
-}
+};
 
-function viewDetails(deliveryId) {
-  router.visit(route('cargo-assignments.show', deliveryId));
-}
+const viewDetails = (deliveryId) => {
+  router.get(route('employee.delivery-orders.show', deliveryId));
+};
 
-function confirmCancel(delivery) {
+const confirmCancel = (delivery) => {
   deliveryToCancel.value = delivery;
   showCancelModal.value = true;
-}
+};
 
-function cancelAssignment() {
+const closeCancelModal = () => {
+  showCancelModal.value = false;
+  deliveryToCancel.value = null;
+};
+
+const cancelAssignment = () => {
   if (!deliveryToCancel.value) return;
   
-  router.post(route('cargo-assignments.cancel', deliveryToCancel.value.id), {
+  router.delete(route('employee.delivery-orders.cancel', deliveryToCancel.value.id), {
     preserveScroll: true,
     onSuccess: () => {
-      showCancelModal.value = false;
-      deliveryToCancel.value = null;
-      refreshData();
+      toast.success('Delivery order cancelled successfully');
+      closeCancelModal();
     },
     onError: (errors) => {
-      console.error('Error cancelling assignment:', errors);
+      toast.error('Failed to cancel delivery order');
     }
   });
-}
+};
 
-const showValidationModal = ref(false);
-const showAssignmentModal = ref(false);
-const batchSuggestions = ref([]);
-const autoDepartureNote = ref('');
+const statusBadgeClass = (status) => {
+  const classes = {
+    ready: 'bg-blue-100 text-blue-800',
+    assigned: 'bg-yellow-100 text-yellow-800',
+    dispatched: 'bg-purple-100 text-purple-800',
+    in_transit: 'bg-indigo-100 text-indigo-800',
+    delivered: 'bg-green-100 text-green-800',
+    completed: 'bg-green-100 text-green-800',
+    cancelled: 'bg-red-100 text-red-800',
+    pending_payment: 'bg-orange-100 text-orange-800'
+  };
+  return classes[status] || 'bg-gray-100 text-gray-800';
+};
 
-// --- Extracted function to fetch batch suggestions ---
-async function fetchBatchSuggestions() {
-  batchSuggestions.value = [];
-  if (!regionFilter.value) return;
+const formatStatusText = (status) => {
+  const statusMap = {
+    ready: 'Ready',
+    assigned: 'Assigned',
+    dispatched: 'Dispatched',
+    in_transit: 'In Transit',
+    delivered: 'Delivered',
+    completed: 'Completed',
+    cancelled: 'Cancelled',
+    pending_payment: 'Pending Payment'
+  };
+  return statusMap[status] || status;
+};
 
-  loading.value = true;
-  try {
-    // FIX: Use the correct route name as defined in web.php
-    const response = await axios.get(route('cargo-assignments.assign.suggestions'), {
-      params: { 
-        region_id: regionFilter.value,
-        // Exclude already assigned deliveries
-        exclude_assigned: true 
-      }
-    });
+// Watch for filter changes
+watch([searchTerm, statusFilter, regionFilter], applyFilters);
 
-    batchSuggestions.value = Object.entries(response.data.deliveries_by_destination || {}).map(([regionId, deliveries]) => {
-      // Filter out deliveries that are already assigned
-      const unassignedDeliveries = deliveries.filter(d => d.status === 'ready');
-      
-      if (!unassignedDeliveries.length) return null;
-
-      const total_volume = unassignedDeliveries.reduce((sum, d) => sum + (d.delivery_request?.packages?.reduce((s, p) => s + (p.volume || 0), 0) || 0), 0);
-      const total_weight = unassignedDeliveries.reduce((sum, d) => sum + (d.delivery_request?.packages?.reduce((s, p) => s + (p.weight || 0), 0) || 0), 0);
-      
-      return {
-        destination_region: unassignedDeliveries[0]?.delivery_request?.drop_off_region || { id: regionId, name: 'Unknown' },
-        delivery_requests: unassignedDeliveries,
-        total_volume,
-        total_weight
+// Batch Assignment Suggestions - ensure they only include sets that match the delivery's region
+const batchSuggestions = computed(() => {
+  const readyDeliveries = deliveries.value.data?.filter(d => d.status === 'ready') || [];
+  const suggestions = {};
+  
+  readyDeliveries.forEach(delivery => {
+    const regionId = delivery.delivery_request?.drop_off_region?.id;
+    const pickupRegionId = delivery.delivery_request?.pick_up_region?.id;
+    
+    if (!regionId || !pickupRegionId) return;
+    
+    if (!suggestions[regionId]) {
+      suggestions[regionId] = {
+        destination_region: delivery.delivery_request.drop_off_region,
+        pickup_region: delivery.delivery_request.pick_up_region, // Store pickup region too
+        delivery_requests: [],
+        total_volume: 0,
+        total_weight: 0
       };
-    }).filter(Boolean); // Remove null entries
-  } catch (error) {
-    console.error('Error fetching suggestions:', error);
-    batchSuggestions.value = [];
-  } finally {
-    loading.value = false;
-  }
-}
-
-// --- Use the new function in the watcher ---
-watch(regionFilter, debounce(fetchBatchSuggestions, 300), { immediate: true });
-
-watch(regionFilter, () => {
-  applyFilters();
-});
-
-watch(statusFilter, () => {
-  applyFilters();
-});
-
-// Refresh suggestions when deliveries data changes and region filter is applied
-watch(() => props.deliveries, () => {
-  if (regionFilter.value) {
-    fetchBatchSuggestions();
-  }
-}, { deep: true });
-
-// --- existing code ---
-function suitableDriverTruckSets(suggestion) {
-  // Prioritize sets that already have assigned orders for the same route (pickup and drop-off region)
-  const setsWithSameRoute = driverTruckSets.value.filter(set => {
-    return (set.active_orders || []).some(order =>
-      order.status === 'assigned' &&
-      order.delivery_request?.pick_up_region_id === suggestion.delivery_requests[0]?.delivery_request?.pick_up_region_id &&
-      order.delivery_request?.drop_off_region_id === suggestion.destination_region.id
-    ) &&
-    (set.truck.volume_capacity - set.current_volume) >= suggestion.total_volume &&
-    (set.truck.weight_capacity - set.current_weight) >= suggestion.total_weight &&
-    set.driver.available;
+    }
+    
+    suggestions[regionId].delivery_requests.push(delivery);
+    const packages = delivery.delivery_request?.packages || [];
+    suggestions[regionId].total_volume += calculateTotalVolume(packages);
+    suggestions[regionId].total_weight += calculateTotalWeight(packages);
   });
+  
+  return Object.values(suggestions);
+});
 
-  if (setsWithSameRoute.length) {
-    // Sort by fewest assignments, then by last assigned
-    return setsWithSameRoute.sort((a, b) => {
-      if (a.driver.current_assignments !== b.driver.current_assignments) {
-        return a.driver.current_assignments - b.driver.current_assignments;
-      }
-      return new Date(a.driver.last_assigned_at) - new Date(b.driver.last_assigned_at);
-    });
-  }
-
-  // Otherwise, fallback to all suitable sets as before
+// Suitable driver-truck sets should consider region matching even when "All Regions" is selected
+const suitableDriverTruckSets = (suggestion) => {
+  // Get the pickup region ID from the first delivery in the suggestion
+  const pickupRegionId = suggestion.delivery_requests[0]?.delivery_request?.pick_up_region_id;
+  
+  if (!pickupRegionId) return [];
+  
   return driverTruckSets.value.filter(set => {
-    if (regionFilter.value && set.region?.id != regionFilter.value) {
-      return false;
-    }
-    return (set.truck.volume_capacity - set.current_volume) >= suggestion.total_volume &&
-           (set.truck.weight_capacity - set.current_weight) >= suggestion.total_weight &&
-           set.driver.available;
-  }).sort((a, b) => {
-    if (a.driver.current_assignments !== b.driver.current_assignments) {
-      return a.driver.current_assignments - b.driver.current_assignments;
-    }
-    return new Date(a.driver.last_assigned_at) - new Date(b.driver.last_assigned_at);
+    // The set must be in the same region as the delivery's pickup region
+    const regionMatch = set.region?.id == pickupRegionId;
+    
+    const availableVolume = (set.truck?.volume_capacity || 0) - (set.current_volume || 0);
+    const availableWeight = (set.truck?.weight_capacity || 0) - (set.current_weight || 0);
+    
+    return regionMatch && 
+           set.is_available && 
+           availableVolume >= suggestion.total_volume && 
+           availableWeight >= suggestion.total_weight;
   });
-}
+};
 
-async function prepareBatchAssignment(suggestion) {
-  selectedDeliveries.value = suggestion.delivery_requests.map(dr => ({
-    ...dr,
-    delivery_request: dr.delivery_request
-  }));
-
+const prepareBatchAssignment = (suggestion) => {
+  selectedDeliveries.value = suggestion.delivery_requests;
   const suitableSets = suitableDriverTruckSets(suggestion);
-  if (suitableSets.length) {
-    selectSet(suitableSets[0]);
-
-    // --- Improved: Only consider 'assigned' orders for the same destination region ---
-    const assignedOrdersForRegion = (suitableSets[0].active_orders || [])
-      .filter(order =>
-        order.status === 'assigned' &&
-        order.delivery_request?.drop_off_region_id === suggestion.destination_region.id &&
-        order.estimated_departure
-      );
-
-    if (assignedOrdersForRegion.length) {
-      // Use the earliest estimated_departure among matching assigned orders
-      const earliestDeparture = assignedOrdersForRegion
-        .map(o => new Date(o.estimated_departure))
-        .sort((a, b) => a - b)[0]
-        .toISOString()
-        .slice(0, 16);
-      assignmentForm.estimated_departure = earliestDeparture;
-      autoDepartureNote.value = 'Departure time auto-filled to match existing assigned trip for this region.';
-    } else {
-      autoDepartureNote.value = '';
-    }
+  if (suitableSets.length > 0) {
+    selectedSet.value = suitableSets[0];
+    openAssignmentModal();
   } else {
-    // If no suitable set, show error and do not proceed
+    toast.error('No suitable driver-truck sets available for this batch');
+  }
+};
+
+// Assignment Modal
+const showAssignmentModal = ref(false);
+const validationSummary = ref({
+  isValid: false,
+  message: '',
+  details: [],
+  availableVolume: 0,
+  availableWeight: 0,
+  etaWarning: ''
+});
+
+const openAssignmentModal = () => {
+  if (!selectedSet.value || selectedDeliveries.value.length === 0) {
+    toast.error('Please select both deliveries and a driver-truck set');
+    return;
+  }
+
+  // Check if any selected delivery has packages without stickers (sticker_printed_at is null)
+  if (hasAnyUnstickerizedPackages.value) {
     validationSummary.value = {
       isValid: false,
-      message: 'No suitable Driver-Truck set available for this batch.',
-      details: null,
-      totalVolume: 0,
-      totalWeight: 0,
-      availableVolume: 0,
-      availableWeight: 0,
-      etaWarning: null,
+      message: 'Cannot assign deliveries with packages missing stickers',
+      details: ['One or more packages have not been labeled (sticker_printed_at is null)'],
+      availableVolume: selectedSet.value.truck.volume_capacity - selectedSet.value.current_volume,
+      availableWeight: selectedSet.value.truck.weight_capacity - selectedSet.value.current_weight
     };
     showAssignmentModal.value = true;
     return;
   }
 
-  await validateAssignment(); // Wait for validation to finish
-  showAssignmentModal.value = true; // Open the modal after validation
-}
+  // Validate capacity
+  const availableVolume = selectedSet.value.truck.volume_capacity - selectedSet.value.current_volume;
+  const availableWeight = selectedSet.value.truck.weight_capacity - selectedSet.value.current_weight;
+  
+  const volumeValid = totalSelectedVolume.value <= availableVolume;
+  const weightValid = totalSelectedWeight.value <= availableWeight;
+  const driverAvailable = selectedSet.value.driver.canAcceptNewAssignment;
 
-async function validateAssignment() {
-  // Defensive: must have selection and set
-  if (!selectedSet.value || !selectedDeliveries.value.length) {
-    validationSummary.value = {
-      isValid: false,
-      message: 'No deliveries or set selected',
-      details: null,
-      totalVolume: 0,
-      totalWeight: 0,
-      availableVolume: 0,
-      availableWeight: 0,
-      etaWarning: null,
-    };
-    return;
-  }
+  validationSummary.value = {
+    isValid: volumeValid && weightValid && driverAvailable,
+    message: volumeValid && weightValid && driverAvailable 
+      ? 'Assignment is valid' 
+      : 'Assignment validation failed',
+    details: [
+      volumeValid ? null : `Volume exceeds capacity by ${(totalSelectedVolume.value - availableVolume).toFixed(2)} m³`,
+      weightValid ? null : `Weight exceeds capacity by ${(totalSelectedWeight.value - availableWeight).toFixed(2)} kg`,
+      driverAvailable ? null : 'Driver cannot accept new assignments'
+    ].filter(Boolean),
+    availableVolume,
+    availableWeight
+  };
 
-  // Prepare IDs for backend validation
-  const deliveryOrderIds = selectedDeliveries.value.map(d => d.id).filter(Boolean);
-  const driverTruckAssignmentId = selectedSet.value.id;
-  const estimatedDeparture = assignmentForm.estimated_departure;
-
-  try {
-    const { data } = await axios.post(route('cargo-assignments.assign.validate'), {
-      delivery_order_ids: deliveryOrderIds,
-      driver_truck_assignment_id: driverTruckAssignmentId,
-      estimated_departure: estimatedDeparture,
-    });
-
-    validationSummary.value = {
-      isValid: data.is_valid,
-      message: data.is_valid
-        ? (data.is_reassignment
-            ? 'You are reassigning one or more delivery orders that are already assigned!'
-            : 'Ready to assign')
-        : 'Cannot assign due to:',
-      details: data.errors && data.errors.length ? data.errors : null,
-      totalVolume: data.total_volume,
-      totalWeight: data.total_weight,
-      availableVolume: data.available_volume,
-      availableWeight: data.available_weight,
-      etaWarning: data.eta_warning || null,
-      isReassignment: !!data.is_reassignment, // <-- Add this line
-    };
-  } catch (error) {
-    validationSummary.value = {
-      isValid: false,
-      message: 'Validation failed. Please try again.',
-      details: [error?.response?.data?.message || error.message],
-      totalVolume: 0,
-      totalWeight: 0,
-      availableVolume: 0,
-      availableWeight: 0,
-      etaWarning: null,
-    };
-  }
-}
-
-async function submitAssignment() {
-  if (!validationSummary.value.isValid || !selectedSet.value) return;
-
-  assignmentForm.delivery_request_ids = selectedDeliveries.value
-    .map(d => d.delivery_request?.id)
-    .filter(Boolean);
-
-  try {
-    await assignmentForm.post(route('cargo-assignments.assign.batch'), {
-      preserveScroll: true,
-      onSuccess: () => {
-        toast.success('Assignment successful!');
-        resetSelection();
-        // Always reload with per_page: 5 after assignment
-        Promise.all([
-          router.get(route('cargo-assignments.index'), {
-            search: searchTerm.value,
-            status: statusFilter.value,
-            region_id: regionFilter.value,
-            per_page: 5,
-            page: 1
-          }, {
-            preserveState: true,
-            preserveScroll: true,
-            replace: true,
-            only: ['deliveries', 'driverTruckSets', 'regions', 'filters', 'flash'],
-            onStart: () => loading.value = true,
-            onFinish: () => loading.value = false
-          }),
-          fetchBatchSuggestions()
-        ]).then(() => {
-          loading.value = false;
-        });
-      },
-      onError: (errors) => {
-        toast.error('Assignment failed: ' + (errors.message || 'Unknown error'));
-        console.error('Assignment errors:', errors);
-      }
-    });
-  } catch (error) {
-    console.error('Assignment failed:', error);
-    toast.error('Assignment failed: ' + error.message);
-  } finally {
-    showAssignmentModal.value = false;
-  }
-}
-
-// Modal control functions
-const openAssignmentModal = async () => {
-  if (!selectedDeliveries.value.length) {
-    validationSummary.value = {
-      isValid: false,
-      message: 'Please select at least one delivery order.',
-      details: null,
-      totalVolume: 0,
-      totalWeight: 0,
-      availableVolume: 0,
-      availableWeight: 0,
-      etaWarning: null,
-    };
-    showAssignmentModal.value = true;
-    return;
-  }
-
-  if (!selectedSet.value) {
-    toast.error('Please select an available Driver-Truck set before assigning.');
-    return;
-  }
-
-  assignmentForm.delivery_request_ids = selectedDeliveries.value
-    .map(d => d.delivery_request?.id)
-    .filter(Boolean);
-
-  if (selectedSet.value) {
-    assignmentForm.driver_truck_assignment_id = selectedSet.value.id;
-
-    // --- Add this block for single assignment auto-fill ---
-    // Only apply if assigning a single delivery
-    if (selectedDeliveries.value.length === 1) {
-      const delivery = selectedDeliveries.value[0];
-      const dropOffRegionId = delivery?.delivery_request?.drop_off_region_id;
-      // Find assigned orders for this set and region
-      const assignedOrdersForRegion = (selectedSet.value.active_orders || [])
-        .filter(order =>
-          order.status === 'assigned' &&
-          order.delivery_request?.drop_off_region_id === dropOffRegionId &&
-          order.estimated_departure
-        );
-      if (assignedOrdersForRegion.length) {
-        const earliestDeparture = assignedOrdersForRegion
-          .map(o => new Date(o.estimated_departure))
-          .sort((a, b) => a - b)[0]
-          .toISOString()
-          .slice(0, 16);
-        assignmentForm.estimated_departure = earliestDeparture;
-        autoDepartureNote.value = 'Departure time auto-filled to match existing assigned trip for this region.';
-      } else {
-        autoDepartureNote.value = '';
-      }
-    }
-    // --- End block ---
-  }
-
-  // If estimated_departure is in the past, set it to 1 day in the future before validation
-  let dep = new Date(assignmentForm.estimated_departure);
-  const now = new Date();
-  if (dep < now) {
-    dep = new Date();
-    dep.setDate(dep.getDate() + 1);
-    assignmentForm.estimated_departure = dep.toISOString().slice(0, 16);
-  }
-
-  await validateAssignment();
   showAssignmentModal.value = true;
 };
 
@@ -1167,121 +972,140 @@ const closeAssignmentModal = () => {
   showAssignmentModal.value = false;
 };
 
-const closeCancelModal = () => {
-  showCancelModal.value = false;
+const submitAssignment = () => {
+  if (!selectedSet.value || selectedDeliveries.value.length === 0) {
+    toast.error('Please select both deliveries and a driver-truck set');
+    return;
+  }
+
+  assignmentForm.driver_truck_assignment_id = selectedSet.value.id;
+  assignmentForm.delivery_request_ids = selectedDeliveries.value.map(d => d.id);
+
+  // Use the correct route for batch assignment
+  assignmentForm.post(route('cargo-assignments.assign.batch'), {
+    preserveScroll: true,
+    onSuccess: () => {
+      toast.success('Assignment created successfully');
+      closeAssignmentModal();
+      selectedDeliveries.value = [];
+      selectedSet.value = null;
+    },
+    onError: (errors) => {
+      toast.error('Failed to create assignment');
+    }
+  });
+};
+
+// Dispatch Modal
+const showDispatchModal = ref(false);
+const dispatchingSetId = ref(null);
+const dispatchValidation = ref({
+  can_dispatch: false,
+  has_manifest: false,
+  missing_waybills: [],
+  message: '',
+  loading: false
+});
+
+const openDispatchModal = async (set) => {
+  selectedSet.value = set;
+  showDispatchModal.value = true;
+  dispatchValidation.value.loading = true;
+  
+  try {
+    // Use the correct route name from your list
+    const response = await fetch(route('cargo-assignments.dispatch.driver-truck-set.validate', set.id));
+    const data = await response.json();
+    
+    dispatchValidation.value = {
+      can_dispatch: data.can_dispatch,
+      has_manifest: data.has_manifest, // This might need adjustment based on actual response
+      missing_waybills: data.missing_waybills || [],
+      message: data.message || '',
+      loading: false
+    };
+  } catch (error) {
+    toast.error('Failed to validate dispatch');
+    dispatchValidation.value.loading = false;
+  }
+};
+
+const closeDispatchModal = () => {
+  showDispatchModal.value = false;
+  dispatchValidation.value = {
+    can_dispatch: false,
+    has_manifest: false,
+    missing_waybills: [],
+    message: '',
+    loading: false
+  };
+};
+
+const confirmDispatch = () => {
+  if (!selectedSet.value) return;
+  
+  dispatchingSetId.value = selectedSet.value.id;
+  
+  // Use the correct route name from your list
+  router.post(route('cargo-assignments.dispatch.driver-truck-set', selectedSet.value.id), {}, {
+    preserveScroll: true,
+    onSuccess: () => {
+      toast.success('Driver-truck set dispatched successfully');
+      closeDispatchModal();
+      dispatchingSetId.value = null;
+      refreshData();
+    },
+    onError: (errors) => {
+      toast.error('Failed to dispatch driver-truck set');
+      dispatchingSetId.value = null;
+    }
+  });
+};
+
+// Validation Modal
+const showValidationModal = ref(false);
+
+const openValidationModal = () => {
+  showValidationModal.value = true;
 };
 
 const closeValidationModal = () => {
   showValidationModal.value = false;
 };
 
-const showDispatchModal = ref(false);
-const dispatchingSetId = ref(null);
-const setToDispatch = ref(null);
-const dispatchValidation = ref({
-  loading: false,
-  has_manifest: false,
-  missing_waybills: [],
-  can_dispatch: false,
-  message: '',
+// ETA Calculation
+const calculatedETA = computed(() => {
+  if (!assignmentForm.estimated_departure) return null;
+  
+  const departure = new Date(assignmentForm.estimated_departure);
+  // Add average transit time (e.g., 2 days)
+  departure.setDate(departure.getDate() + 2);
+  
+  return departure;
 });
 
-// Always fetch fresh validation when opening the modal
-async function openDispatchModal(set) {
-  setToDispatch.value = set;
-  showDispatchModal.value = true;
-  dispatchValidation.value = { loading: true, has_manifest: false, missing_waybills: [], can_dispatch: false, message: '' };
+const minDepartureDateTime = computed(() => {
+  const now = new Date();
+  // Set minimum to current time
+  return now.toISOString().slice(0, 16);
+});
 
-  try {
-    // Always fetch latest validation from backend
-    const { data } = await axios.get(route('cargo-assignments.dispatch.driver-truck-set.validate', set.id), {
-      headers: { 'Cache-Control': 'no-cache' }
-    });
-    dispatchValidation.value = {
-      ...data,
-      loading: false,
-      message: data.message || '',
-    };
-  } catch (error) {
-    dispatchValidation.value = {
-      loading: false,
-      has_manifest: false,
-      missing_waybills: [],
-      can_dispatch: false,
-      message: error?.response?.data?.message || error.message || 'Validation failed. Please try again.',
-    };
-    toast.error(dispatchValidation.value.message);
+const autoDepartureNote = computed(() => {
+  const now = new Date();
+  const selected = new Date(assignmentForm.estimated_departure);
+  
+  // If departure is set to default (tomorrow)
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  if (selected.toDateString() === tomorrow.toDateString()) {
+    return 'Default departure time set to tomorrow';
   }
-}
-
-function closeDispatchModal() {
-  showDispatchModal.value = false;
-  setToDispatch.value = null;
-  dispatchValidation.value = {
-    loading: false,
-    has_manifest: false,
-    missing_waybills: [],
-    can_dispatch: false,
-    message: '',
-  };
-}
-
-async function confirmDispatch() {
-  if (!setToDispatch.value || !dispatchValidation.value.can_dispatch) return;
-  dispatchingSetId.value = setToDispatch.value.id;
-  try {
-    await axios.post(route('cargo-assignments.dispatch.driver-truck-set', setToDispatch.value.id));
-    toast.success('Dispatch successful!');
-    // Always reload both deliveries and driverTruckSets after dispatch
-    await Promise.all([
-      refreshData(),
-      fetchBatchSuggestions()
-    ]);
-  } catch (error) {
-    toast.error(error?.response?.data?.message || 'Dispatch failed.');
-  } finally {
-    dispatchingSetId.value = null;
-    closeDispatchModal();
-  }
-}
-
-function formatStatusText(status) {
-  const statusMap = {
-    'ready': 'Ready',
-    'assigned': 'Assigned',
-    'dispatched': 'Dispatched',
-    'in_transit': 'In Transit',
-    'delivered': 'Delivered',
-    'completed': 'Completed',
-    'cancelled': 'Cancelled',
-    'pending_payment': 'Pending Payment'
-  };
-  return statusMap[status] || status;
-}
-
-// Add this function for status badge color
-function statusBadgeClass(status) {
-  switch (status) {
-    case 'completed':
-      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200';
-    case 'delivered':
-      return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-200';
-    case 'returned':
-      return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200';
-    case 'in_transit':
-    case 'loaded':
-    case 'ready_for_pickup':
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200';
-    case 'rejected':
-      return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200';
-    case 'pending':
-    case 'preparing':
-    case 'processing':
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200';
-    case 'pending_payment':
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200';
-    default:
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-  }
-}
+  
+  return null;
+});
 </script>
+
+<style scoped>
+/* Add any custom styles here */
+</style>

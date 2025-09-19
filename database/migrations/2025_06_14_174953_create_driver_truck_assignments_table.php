@@ -15,6 +15,7 @@ return new class extends Migration
             $table->foreignId('region_id')->constrained();
             $table->timestamp('assigned_at')->useCurrent();
             $table->timestamp('unassigned_at')->nullable();
+            $table->string('return_status')->nullable()->after('unassigned_at');
             $table->boolean('is_active')->default(true);
             $table->timestamps();
             

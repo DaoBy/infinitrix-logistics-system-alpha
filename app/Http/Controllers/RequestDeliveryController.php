@@ -18,11 +18,21 @@ class RequestDeliveryController extends Controller
 {
     public function create()
     {
+        $user = auth()->user();
+        $customer = $user->customer ?? null;
+
+        // Check for incomplete profile
+        if ($user->isCustomer() && (!$customer || !$customer->is_profile_complete)) {
+            return redirect()->route('profile.complete')
+                ->with('show_modal', true)
+                ->with('warning', 'Please complete your profile to request a delivery.');
+        }
+
         $regions = Region::where('is_active', true)->get();
         $priceMatrix = PriceMatrix::first();
         $customer = auth()->user()->customer ?? null;
 
-        // Add completed_deliveries_count for postpaid eligibility
+        // Only set completed_deliveries_count for frontend eligibility check
         if ($customer) {
             $customer->completed_deliveries_count = \App\Models\DeliveryRequest::where('sender_id', $customer->id)
                 ->where('status', 'completed')
@@ -38,6 +48,22 @@ class RequestDeliveryController extends Controller
 
     public function store(Request $request)
     {
+        // Debugging: log request data and stack trace
+        try {
+            \Log::debug('RequestDeliveryController@store called', [
+                'request_data' => $request->all(),
+                'auth_user_id' => auth()->id(),
+                'auth_customer' => auth()->user()->customer ?? null,
+                'backtrace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 10)
+            ]);
+            // Force log flush (for Monolog)
+            if (method_exists(\Log::getLogger(), 'flush')) {
+                \Log::getLogger()->flush();
+            }
+        } catch (\Exception $e) {
+            error_log('Laravel logging failed: ' . $e->getMessage());
+        }
+
         \Log::info('Delivery request received', $request->all());
 
         // Reconstruct packages array from FormData if necessary
@@ -218,50 +244,60 @@ class RequestDeliveryController extends Controller
     }
 
     public function calculatePrice(Request $request)
-    {
-        $request->validate([
-            'packages' => 'required|array|min:1',
-            'packages.*.height' => 'required|numeric|min:0.1',
-            'packages.*.width' => 'required|numeric|min:0.1',
-            'packages.*.length' => 'required|numeric|min:0.1',
-            'packages.*.weight' => 'required|numeric|min:0.1',
-            'pick_up_region_id' => 'required|exists:regions,id',
-            'drop_off_region_id' => 'required|exists:regions,id',
-        ]);
+{
+    $request->validate([
+        'packages' => 'required|array|min:1',
+        'packages.*.height' => 'required|numeric|min:0.1',
+        'packages.*.width' => 'required|numeric|min:0.1',
+        'packages.*.length' => 'required|numeric|min:0.1',
+        'packages.*.weight' => 'required|numeric|min:0.1',
+        'pick_up_region_id' => 'required|exists:regions,id',
+        'drop_off_region_id' => 'required|exists:regions,id',
+    ]);
 
-        $priceMatrix = PriceMatrix::firstOrFail();
-        $totalPrice = $priceMatrix->base_fee;
-        $packageCount = count($request->packages);
+    $priceMatrix = PriceMatrix::firstOrFail();
+    $totalPrice = $priceMatrix->base_fee;
+    $packageCount = count($request->packages);
 
-        $breakdown = [
-            'base_fee' => $priceMatrix->base_fee,
-            'volume_fee' => 0,
-            'weight_fee' => 0,
-            'package_fee' => $packageCount * $priceMatrix->package_rate,
-        ];
-
-        $metrics = [
+    $breakdown = [
+        'base_fee' => (float) $priceMatrix->base_fee,
+        'volume_fee' => 0,
+        'weight_fee' => 0,
+        'package_fee' => $packageCount * (float) $priceMatrix->package_rate,
+        'metrics' => [
             'total_volume' => 0,
             'total_weight' => 0,
-        ];
+        ]
+    ];
 
-        foreach ($request->packages as $package) {
-            $volume = ($package['height'] / 100) * ($package['width'] / 100) * ($package['length'] / 100);
-            $breakdown['volume_fee'] += $volume * $priceMatrix->volume_rate;
-            $breakdown['weight_fee'] += $package['weight'] * $priceMatrix->weight_rate;
+    foreach ($request->packages as $package) {
+        // Convert cm to meters for volume calculation
+        $heightMeters = $package['height'] / 100;
+        $widthMeters = $package['width'] / 100;
+        $lengthMeters = $package['length'] / 100;
+        
+        $volume = $heightMeters * $widthMeters * $lengthMeters;
+        $breakdown['volume_fee'] += $volume * (float) $priceMatrix->volume_rate;
+        $breakdown['weight_fee'] += $package['weight'] * (float) $priceMatrix->weight_rate;
 
-            $metrics['total_volume'] += $volume;
-            $metrics['total_weight'] += $package['weight'];
-        }
-
-        $totalPrice = array_sum($breakdown);
-
-        return response()->json([
-            'total_price' => round($totalPrice, 2),
-            'breakdown' => (object)$breakdown,
-            'metrics' => (object)$metrics
-        ]);
+        $breakdown['metrics']['total_volume'] += $volume;
+        $breakdown['metrics']['total_weight'] += $package['weight'];
     }
+
+    // Round all values to 2 decimal places
+    $breakdown['volume_fee'] = round($breakdown['volume_fee'], 2);
+    $breakdown['weight_fee'] = round($breakdown['weight_fee'], 2);
+    $breakdown['package_fee'] = round($breakdown['package_fee'], 2);
+    $breakdown['metrics']['total_volume'] = round($breakdown['metrics']['total_volume'], 3);
+    $breakdown['metrics']['total_weight'] = round($breakdown['metrics']['total_weight'], 2);
+
+    $totalPrice = $breakdown['base_fee'] + $breakdown['volume_fee'] + $breakdown['weight_fee'] + $breakdown['package_fee'];
+
+    return response()->json([
+        'total_price' => round($totalPrice, 2),
+        'breakdown' => (object) $breakdown
+    ]);
+}
 
     private function generateItemCode()
     {

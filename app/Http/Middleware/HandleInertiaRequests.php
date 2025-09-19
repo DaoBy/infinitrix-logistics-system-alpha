@@ -37,6 +37,12 @@ class HandleInertiaRequests extends Middleware
             'notifications' => fn () => $request->user() && $request->user()->hasVerifiedEmail()
                 ? $request->user()->notifications()->latest()->take(10)->get()
                 : [],
+            'flash' => [
+                'show_modal' => fn () => $request->session()->get('show_modal'),
+                'warning' => fn () => $request->session()->get('warning'),
+                'error' => fn () => $request->session()->get('error'),
+                'status' => fn () => $request->session()->get('status'),
+            ],
         ];
     }
 }

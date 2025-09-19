@@ -27,10 +27,22 @@ class Package extends Model
         'current_region_id',
         'status',
         'delivery_confirmation_id',
+        'sticker_printed_at', 
+        'sticker_printed_by', 
     ];
 
     protected $appends = ['photo_url'];
 
+        protected $casts = [
+    'sticker_printed_at' => 'datetime',
+    'height' => 'decimal:2',
+    'width' => 'decimal:2', 
+    'length' => 'decimal:2',
+    'volume' => 'decimal:2',
+    'weight' => 'decimal:2',
+    'value' => 'decimal:2',
+];
+    
 public static function getStatuses(): array
 {
     return [
@@ -39,7 +51,7 @@ public static function getStatuses(): array
         'loaded' => 'Loaded',
         'in_transit' => 'In Transit',
         'delivered' => 'Delivered',
-        'completed' => 'Completed', // Ensure this exists
+        'completed' => 'Completed', 
         'returned' => 'Returned',
         'rejected' => 'Rejected'
     ];
@@ -241,5 +253,13 @@ public function deliveryRequest(): \Illuminate\Database\Eloquent\Relations\Belon
                 }
             }
         });
+    }
+
+    /**
+     * Get the user who printed the sticker for this package.
+     */
+    public function printedBy(): BelongsTo // <-- ADD THIS NEW RELATIONSHIP
+    {
+        return $this->belongsTo(User::class, 'sticker_printed_by');
     }
 }

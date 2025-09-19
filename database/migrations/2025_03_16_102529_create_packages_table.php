@@ -16,7 +16,18 @@ return new class extends Migration {
                   ->nullable()
                   ->constrained('delivery_confirmations')
                   ->onDelete('set null');
-            $table->enum('status', ['preparing', 'loaded', 'in_transit', 'delivered', 'completed', 'returned' ])->default('preparing');
+
+            // ⬇️ Added 'ready_for_pickup' to the status enum
+            $table->enum('status', [
+                'preparing',
+                'loaded',
+                'in_transit',
+                'delivered',
+                'ready_for_pickup',
+                'completed',
+                'returned'
+            ])->default('preparing');
+
             $table->enum('category', ['piece', 'carton', 'sack', 'bundle', 'roll', 'B/R', 'C/S']);
             $table->text('description')->nullable();
             $table->string('photo_path')->nullable();

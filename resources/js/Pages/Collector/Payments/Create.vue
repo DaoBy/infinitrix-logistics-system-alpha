@@ -63,6 +63,26 @@
         </div>
       </div>
 
+      <!-- Payment Status Alert Banners -->
+      <div v-if="delivery.payment_status === 'pending_verification'" class="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div class="flex items-center">
+          <div>
+            <h3 class="text-lg font-medium text-yellow-800">Payment Already Submitted Online</h3>
+            <p class="text-yellow-700">This customer has already submitted a payment online. It is pending verification.</p>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="delivery.payment_status === 'paid'" class="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+        <div class="flex items-center">
+          <CheckCircleIcon class="h-5 w-5 text-green-400 mr-2" />
+          <div>
+            <h3 class="text-lg font-medium text-green-800">Payment Already Verified</h3>
+            <p class="text-green-700">This customer's payment has already been verified online.</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Payment Form -->
       <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
         <div class="p-3 md:p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
@@ -132,7 +152,7 @@
               <div class="flex justify-end pt-2">
                 <PrimaryButton
                   type="submit"
-                  :disabled="form.processing"
+                  :disabled="form.processing || isPaymentAlreadySubmitted"
                 >
                   <span v-if="form.processing">
                     <LoadingSpinner size="xs" class="mr-2" /> Processing...
@@ -160,6 +180,8 @@ import TextArea from '@/Components/TextArea.vue';
 import SelectInput from '@/Components/SelectInput.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import LoadingSpinner from '@/Components/LoadingSpinner.vue';
+import { CheckCircleIcon } from '@heroicons/vue/24/outline';
+import { computed } from 'vue';
 
 const props = defineProps({
   delivery: Object
@@ -173,7 +195,15 @@ const form = useForm({
   type: 'postpaid' // Always postpaid for collector
 });
 
+const isPaymentAlreadySubmitted = computed(() => {
+  return ['pending_verification', 'paid'].includes(props.delivery.payment_status);
+});
+
 const submit = () => {
+  if (isPaymentAlreadySubmitted.value) {
+    return; // Prevent submission
+  }
+
   form.post(route('collector.payments.store', props.delivery.id), {
     forceFormData: true,
     onSuccess: () => {

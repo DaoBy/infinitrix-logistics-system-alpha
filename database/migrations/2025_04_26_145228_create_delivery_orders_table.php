@@ -35,6 +35,7 @@ return new class extends Migration {
             $table->timestamp('actual_departure')->nullable();
             $table->timestamp('actual_arrival')->nullable();
             $table->text('notes')->nullable();
+            $table->json('route_plan')->nullable()->after('status');
             // --- add payment fields ---
             $table->string('payment_type')->default('prepaid');
             $table->string('payment_status')->default('unpaid');

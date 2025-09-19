@@ -16,8 +16,11 @@ class Region extends Model
         'warehouse_address',
         'latitude',
         'longitude',
-        'is_active'
+        'is_active',
+        'color_hex'
     ];
+
+    protected $visible = ['id', 'name', 'latitude', 'longitude', 'is_active', 'color_hex'];
 
     protected $casts = [
         'is_active' => 'boolean',
@@ -86,6 +89,7 @@ class Region extends Model
             'warehouse_address' => $this->warehouse_address,
             'geographic_location' => $this->geographic_location,
             'is_active' => $this->is_active,
+            'color_hex' => $this->color_hex,
             'created_at' => $this->created_at ? $this->created_at->toISOString() : null,
             'updated_at' => $this->updated_at ? $this->updated_at->toISOString() : null
         ];

@@ -57,7 +57,8 @@ class DeliveryRequestController extends Controller
             'receiver', 
             'deliveryOrder', 
             'pickUpRegion:id,name', 
-            'dropOffRegion:id,name'
+            'dropOffRegion:id,name',
+            'payment' // Add this to load payment relationship
         ])
         ->where('sender_id', $customerId)
         ->whereIn('status', ['approved', 'delivered', 'completed'])
@@ -84,6 +85,11 @@ class DeliveryRequestController extends Controller
                     'id' => $req->dropOffRegion->id,
                     'name' => $req->dropOffRegion->name
                 ] : ['name' => 'Not specified'],
+                'payment_status' => $req->payment_status, // Add payment_status
+                'payment' => $req->payment ? [ // Add payment data
+                    'id' => $req->payment->id,
+                    'status' => $req->payment->status
+                ] : null
             ],
             // Use actual_arrival as the delivery date if available, else null
             'delivery_date' => $req->deliveryOrder?->actual_arrival,
@@ -92,6 +98,11 @@ class DeliveryRequestController extends Controller
                 ? 'completed'
                 : ($req->deliveryOrder?->status ?? $req->status ?? 'pending'),
             'total_amount' => $req->total_price,
+            'payment_status' => $req->payment_status, // Add payment_status at root level too
+            'payment' => $req->payment ? [ // Add payment at root level too
+                'id' => $req->payment->id,
+                'status' => $req->payment->status
+            ] : null
         ]);
 
     return Inertia::render('Customer/DeliveryRequests/DeliveryDashboard', [
@@ -105,23 +116,21 @@ class DeliveryRequestController extends Controller
 }
 
     public function show(DeliveryRequest $deliveryRequest)
-    {
-        $this->authorizeRequestOwner($deliveryRequest);
+{
+    // Simple loading of relationships
+    $deliveryRequest->load([
+        'sender',
+        'receiver',
+        'packages',
+        'pickUpRegion', 
+        'dropOffRegion',
+        'payment'
+    ]);
 
-        $deliveryRequest->load([
-            'sender',
-            'approvedBy',
-            'receiver',
-            'packages',
-            'pickUpRegion',
-            'dropOffRegion',
-        ]);
-
-        return Inertia::render('Customer/DeliveryRequests/Show', [
-            'deliveryRequest' => $deliveryRequest,
-            'error' => session('error'),
-        ]);
-    }
+    return Inertia::render('Customer/DeliveryRequests/Show', [
+        'delivery' => $deliveryRequest,
+    ]);
+}
 
     public function edit(DeliveryRequest $deliveryRequest)
     {

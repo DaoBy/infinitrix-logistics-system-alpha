@@ -9,26 +9,43 @@ use Illuminate\Support\Facades\Auth;
 class VerifyCodeController extends Controller
 {
     public function verify(Request $request)
-    {
-        $request->validate(['code' => 'required|digits:6']);
+{
+    $request->validate(['code' => 'required|digits:6']);
 
-        $user = Auth::user();
+    $user = Auth::user();
 
-        if (
-            $user->email_verification_code === $request->code &&
-            $user->email_verification_code_expires_at &&
-            now()->lessThanOrEqualTo($user->email_verification_code_expires_at)
-        ) {
-            $user->markEmailAsVerified();
-            $user->email_verification_code = null;
-            $user->email_verification_code_expires_at = null;
-            $user->save();
+    // Check if this is for standard email verification
+    if (
+        $user->email_verification_code === $request->code &&
+        $user->email_verification_code_expires_at &&
+        now()->lessThanOrEqualTo($user->email_verification_code_expires_at)
+    ) {
+        $hasPendingEmailChange = !empty($user->pending_email);
+        
+        // If there's a pending email change, handle it
+        if ($hasPendingEmailChange) {
+            $user->email = $user->pending_email;
+            $user->pending_email = null;
+        }
+        
+        // Mark email as verified
+        $user->markEmailAsVerified();
+        $user->email_verification_code = null;
+        $user->email_verification_code_expires_at = null;
+        $user->save();
 
-            return redirect()->route('verification.success')
-                ->with('verified', true)
-                ->with('status', __('Your email has been verified!'));
+        // For email changes, redirect back to profile with success message
+        if ($hasPendingEmailChange) {
+            return redirect()->route('profile.edit')
+                ->with('status', __('Email successfully changed and verified!'));
         }
 
-        return back()->withErrors(['code' => 'Invalid or expired code.']);
+        // For new registrations, go to the success page
+        return redirect()->route('verification.success')
+            ->with('verified', true)
+            ->with('status', __('Your email has been verified!'));
     }
+
+    return back()->withErrors(['code' => 'Invalid or expired code.']);
+}
 }

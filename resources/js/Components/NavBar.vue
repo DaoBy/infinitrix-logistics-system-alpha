@@ -172,8 +172,8 @@ const homeLink = computed(() => {
               <div class="text-sm font-medium text-gray-800">{{ authUser.name }}</div>
               <div class="text-sm text-gray-500">{{ authUser.email }}</div>
             </div>
-            <DropdownLink :href="route('profile.edit')">My Profile</DropdownLink>
-            <DropdownLink :href="route('address.book')">Address Book</DropdownLink>
+            <DropdownLink :href="route('profile.edit')">Account Settings</DropdownLink>
+            <DropdownLink :href="route('customer.profile-update.create')">Delivery Information</DropdownLink>
             <DropdownLink :href="route('customer.delivery-requests.create')">Request Delivery</DropdownLink>
             <DropdownLink :href="route('tracking')">Track Package</DropdownLink>
             <DropdownLink :href="route('customer.delivery-requests.index')">Request History</DropdownLink>
@@ -291,8 +291,8 @@ const homeLink = computed(() => {
           <NavLink :href="route('profile.edit')" class="text-lg font-medium text-gray-700 hover:bg-gray-100 rounded-lg py-2 justify-center">
             My Profile
           </NavLink>
-          <NavLink :href="route('address.book')" class="text-lg font-medium text-gray-700 hover:bg-gray-100 rounded-lg py-2 justify-center">
-            Address Book
+          <NavLink :href="route('customer.profile-update.create')" class="text-lg font-medium text-gray-700 hover:bg-gray-100 rounded-lg py-2 justify-center">
+            Update Profile Request
           </NavLink>
           <NavLink :href="route('customer.delivery-requests.create')" class="text-lg font-medium text-gray-700 hover:bg-gray-100 rounded-lg py-2 justify-center">
             Request Delivery

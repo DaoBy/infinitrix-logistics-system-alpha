@@ -7,6 +7,7 @@ use App\Models\DeliveryOrder;
 use App\Models\Payment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class CollectorPaymentController extends Controller
 {
@@ -171,13 +172,27 @@ class CollectorPaymentController extends Controller
     }
 
     // 5. View full details of a payment
-    public function show(Payment $payment)
-    {
-        $payment->load(['deliveryRequest.sender', 'deliveryRequest.receiver', 'verifiedBy', 'collectedBy']);
-        return inertia('Collector/Payments/Show', [
-            'payment' => $payment
-        ]);
+public function show(Payment $payment)
+{
+    $payment->load([
+        'deliveryRequest.sender', 
+        'deliveryRequest.receiver', 
+        'verifiedBy', 
+        'collectedBy',
+        'deliveryRequest.pickUpRegion', // Add these
+        'deliveryRequest.dropOffRegion', // Add these
+        'deliveryRequest.packages' // Add this
+    ]);
+    
+    // Add receipt image URL
+    if ($payment->receipt_image) {
+        $payment->receipt_image_url = Storage::url($payment->receipt_image);
     }
+    
+    return inertia('Collector/Payments/Show', [
+        'payment' => $payment
+    ]);
+}
 
     // 6. Allows collector to delete their own unverified payments
     public function destroy(Payment $payment)

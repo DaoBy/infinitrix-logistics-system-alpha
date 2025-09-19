@@ -5,6 +5,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createApp, h } from 'vue';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 import vuetify from './plugins/vuetify';
+import 'leaflet/dist/leaflet.css';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 

@@ -3,6 +3,7 @@ use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\PackageController;
+use App\Http\Controllers\StickerController;
 use App\Http\Controllers\RegionController;
 use App\Http\Controllers\TruckController;
 use App\Http\Controllers\DriverController;
@@ -31,8 +32,10 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\PackageTransferController;
 use App\Http\Controllers\PackageStatusHistoryController;
 use App\Http\Controllers\Auth\RegisteredUserController;
-
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\CustomerProfileController;
+use App\Http\Controllers\CustomerUpdateRequestController;
+use App\Http\Controllers\CustomerPaymentController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -41,16 +44,10 @@ use App\Models\User;
 use App\Models\Truck;
 use App\Http\Controllers\PaymentController;
 
+// =============================================================================
+// PUBLIC ROUTES
+// =============================================================================
 
-// VIEW: Driver Dashboard
-
-
-// Public Routes
-
-
-Route::middleware(['auth', 'role:staff'])->prefix('staff')->group(function () {
-    Route::get('/dashboard', [StaffDashboardController::class, 'index'])->name('staff.dashboard');
-});
 
 Route::get('/', fn() => Inertia::render('Customer/Home'))->name('customer.home');
 Route::get('/tracking', fn() => Inertia::render('Customer/Tracking'))->name('tracking');
@@ -62,10 +59,16 @@ Route::get('/employee', fn() => Inertia::render('Auth/EmployeeLanding'))->name('
 Route::get('/sample', fn() => Inertia::render('ComponentsExample'))->name('sample');
 Route::get('/tablesample', fn() => Inertia::render('TableSample'))->name('tablesample');
 
+// =============================================================================
+// API ROUTES
+// =============================================================================
+
 Route::prefix('api')->group(function () {
     Route::get('/delivery/regions', [RegionController::class, 'getActiveRegions']);
-    
     Route::get('/price-matrix', [PriceMatrixController::class, 'index']);
+    
+    // Debug endpoint
+    Route::get('/debug-manifest/{assignmentId}', [CargoAssignmentController::class, 'debugManifest']);
     
     Route::fallback(function () {
         return response()->json([
@@ -74,233 +77,285 @@ Route::prefix('api')->group(function () {
     });
 });
 
-    // Transactions
-    Route::prefix('transactions')->group(function () {
-        Route::get('/', [TransactionController::class, 'index'])->name('customer.transactions.index');
-        Route::get('/{deliveryOrder}', [TransactionController::class, 'show'])->name('customer.transactions.show');
-    });
+// =============================================================================
+// AUTHENTICATED ROUTES (PROFILE)
+// =============================================================================
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // Extra profile routes
+    Route::patch('/profile/update-with-verification', [ProfileController::class, 'updateWithVerification'])
+        ->name('profile.update.with-verification');
+
+    Route::post('/profile/verify-email-change', [ProfileController::class, 'verifyEmailChange'])
+        ->name('profile.verify.email.change');
+});
 
 
-// Profile Management
-Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+// =============================================================================
+// CUSTOMER ROUTES
+// =============================================================================
 
-
-// Customer Routes
-Route::middleware(['auth', 'role:customer', 'verified'])->group(function () {
+Route::middleware(['auth', 'role:customer', 'verified', \App\Http\Middleware\EnsureProfileComplete::class])->group(function () {
+   
+    // Customer payment routes
+    Route::get('/my-deliveries/{delivery}/pay', [CustomerPaymentController::class, 'create'])
+        ->name('customer.payments.create');
+    Route::post('/my-deliveries/{delivery}/pay', [CustomerPaymentController::class, 'store'])
+        ->name('customer.payments.store');
+    Route::get('/my-payments/{payment}', [CustomerPaymentController::class, 'show'])
+        ->name('customer.payments.show');
+    Route::get('/deliveries/{delivery}/payments/resubmit/{payment}', [CustomerPaymentController::class, 'resubmit'])
+    ->name('customer.payments.resubmit');
+    Route::post('/deliveries/{delivery}/payments/{payment}', [CustomerPaymentController::class, 'update'])
+    ->name('customer.payments.update');
+   
     // Address Book
     Route::get('/address-book', [AddressBookController::class, 'index'])->name('address.book');
     Route::post('/address-book', [AddressBookController::class, 'store'])->name('address.book.store');
     Route::put('/address-book/{id}', [AddressBookController::class, 'update'])->name('address.book.update');
     Route::delete('/address-book/{id}', [AddressBookController::class, 'destroy'])->name('address.book.destroy');
 
-    // Delivery Requests
+    // Customer Dashboard (separate from delivery requests to avoid conflicts)
+    Route::get('/my-deliveries', [DeliveryRequestController::class, 'index'])
+        ->name('customer.deliveries.index');
+
+    // Delivery Requests - KEEP THE INDEX ROUTE HERE
     Route::prefix('delivery-requests')->group(function () {
-        Route::get('/', [DeliveryRequestController::class, 'index'])->name('customer.delivery-requests.index');
-        Route::get('/create', [RequestDeliveryController::class, 'create'])->name('customer.delivery-requests.create');
-        // Apply postpaid eligibility check on store route
+        // Index route must be FIRST
+        Route::get('/', [DeliveryRequestController::class, 'index'])
+            ->name('customer.delivery-requests.index');
+
+        Route::get('/create', [RequestDeliveryController::class, 'create'])
+            ->name('customer.delivery-requests.create');
+
         Route::post('/', [RequestDeliveryController::class, 'store'])
             ->name('customer.delivery-requests.store');
-        Route::get('/{deliveryRequest}', [DeliveryRequestController::class, 'show'])->name('customer.delivery-requests.show');
-        Route::get('/{deliveryRequest}/edit', [DeliveryRequestController::class, 'edit'])->name('customer.delivery-requests.edit');
-        Route::put('/{deliveryRequest}', [DeliveryRequestController::class, 'update'])->name('customer.delivery-requests.update');
-        Route::delete('/{deliveryRequest}', [DeliveryRequestController::class, 'destroy'])->name('customer.delivery-requests.destroy');
 
-        // Separate dashboard route
-        Route::get('/delivery-dashboard', [DeliveryRequestController::class, 'index'])->name('delivery-dashboard.index');
+        // Static routes
+        Route::post('/calculate-price', [RequestDeliveryController::class, 'calculatePrice'])
+            ->name('customer.delivery-requests.calculate-price');
 
-        // Calculation route
-        Route::post('/calculate-price', [RequestDeliveryController::class, 'calculatePrice'])->name('customer.delivery-requests.calculate-price');
+        // Parameter routes LAST
+        Route::get('/{deliveryRequest}', [DeliveryRequestController::class, 'show'])
+            ->name('customer.delivery-requests.show');
+
+        Route::get('/{deliveryRequest}/edit', [DeliveryRequestController::class, 'edit'])
+            ->name('customer.delivery-requests.edit');
+
+        Route::put('/{deliveryRequest}', [DeliveryRequestController::class, 'update'])
+            ->name('customer.delivery-requests.update');
+
+        Route::delete('/{deliveryRequest}', [DeliveryRequestController::class, 'destroy'])
+            ->name('customer.delivery-requests.destroy');
     });
 
+    // Profile Update Requests
+    Route::prefix('profile')->group(function () {
+        Route::get('/update-request', [CustomerProfileController::class, 'create'])->name('customer.profile-update.create');
+        Route::post('/update-request', [CustomerProfileController::class, 'store'])->name('customer.profile-update.store');
+    });
+
+    // Notifications
     Route::put('/notifications/{notification}/mark-as-read', [NotificationController::class, 'markAsRead'])
         ->name('notifications.markAsRead');
     Route::put('/notifications/mark-all-as-read', [NotificationController::class, 'markAllAsRead'])
         ->name('notifications.markAllAsRead');
     Route::get('/notifications', [NotificationController::class, 'index'])
         ->name('customer.notifications.index');
+
+    // Transactions
+    Route::prefix('transactions')->group(function () {
+        Route::get('/', [TransactionController::class, 'index'])->name('customer.transactions.index');
+        Route::get('/{deliveryOrder}', [TransactionController::class, 'show'])->name('customer.transactions.show');
+    });
 });
 
-
-
-Route::middleware(['auth', 'role:admin,staff'])->prefix('reports')->name('reports.')->group(function () {
-    Route::get('/delivery', [ReportController::class, 'deliveryReport'])
-        ->name('delivery');
-    Route::get('/delivery/export', [ReportController::class, 'exportDeliveryReport'])
-        ->name('delivery.export');
-    Route::get('/financial', [ReportController::class, 'financialReport'])
-        ->name('financial');
-    Route::get('/financial/export', [ReportController::class, 'exportFinancialReport'])
-        ->name('financial.export');
-    Route::get('/manifest/{truck}', [ReportController::class, 'generateTruckManifest'])
-        ->name('manifest.show')
-        ->where('truck', '[0-9]+');
-    Route::get('/manifest/{truck}/export', [ReportController::class, 'exportManifestReport'])
-        ->name('manifest.export')
-        ->where('truck', '[0-9]+');
-    Route::get('/waybills', [ReportController::class, 'waybillReport'])
-        ->name('waybills');
-    Route::get('/waybills/export', [ReportController::class, 'exportWaybillReport'])
-        ->name('waybills.export');
-});
-
-
-
-Route::middleware(['auth', 'role:admin,staff,driver'])->prefix('deliveries')->group(function () {
-    Route::get('/', [RequestApprovalController::class, 'index'])->name('deliveries.index');
-    Route::get('/pending', [RequestApprovalController::class, 'pending'])->name('deliveries.pending');
-    Route::get('/rejected', [RequestApprovalController::class, 'rejected'])->name('deliveries.rejected');
-    Route::get('/{delivery}', [RequestApprovalController::class, 'show'])->name('deliveries.show');
-    Route::get('/{delivery}/edit', [RequestApprovalController::class, 'edit'])->name('deliveries.edit');
-    Route::put('/{delivery}', [RequestApprovalController::class, 'update'])->name('deliveries.update');
-    Route::post('/{delivery}/approve', [RequestApprovalController::class, 'approve'])->name('deliveries.approve');
-    Route::post('/{delivery}/reject', [RequestApprovalController::class, 'reject'])->name('deliveries.reject');
-    Route::post('/bulk-approve', [RequestApprovalController::class, 'bulkApprove'])->name('deliveries.bulk-approve');
-    Route::post('/bulk-reject', [RequestApprovalController::class, 'bulkReject'])->name('deliveries.bulk-reject');
-});
-
-
-Route::prefix('admin')->middleware(['auth','role:admin,staff'])->group(function () {
-    Route::get('/manifests', [ManifestController::class, 'index'])->name('manifests.index');
-
-    Route::get('/manifests/create/{truck}', [ManifestController::class, 'create'])->name('manifests.create');
-    Route::post('/manifests/{truck}', [ManifestController::class, 'store'])->name('manifests.store');
-
-    Route::get('/manifests/{manifest}', [ManifestController::class, 'show'])->name('manifests.show');
-    Route::post('/manifests/{manifest}/finalize', [ManifestController::class, 'finalize'])->name('manifests.finalize');
-    Route::get('/manifests/{manifest}/print', [ManifestController::class, 'print'])->name('manifests.print');
-
-    Route::delete('/manifests/{manifest}', [ManifestController::class, 'destroy'])->name('manifests.destroy');
-});
-
+// =============================================================================
+// ADMIN & STAFF ROUTES
+// =============================================================================
 
 Route::middleware(['auth', 'role:admin,staff'])->group(function () {
-
-// 🛻 Driver-Truck Assignments
-Route::put('/driver-truck-assignments/{assignment}/reactivate', 
-    [DriverTruckAssignmentController::class, 'reactivate']
-)->name('driver-truck-assignments.reactivate');
-
-Route::post('/driver-truck-assignments/{assignment}/verify-return', 
-    [DriverTruckAssignmentController::class, 'verifyDriverReturn']
-)->name('driver-truck-assignments.verify-return');
-
-Route::resource('driver-truck-assignments', DriverTruckAssignmentController::class)
-    ->only(['index', 'store', 'destroy']);
-
-Route::post('driver-truck-assignments/available-resources', 
-    [DriverTruckAssignmentController::class, 'getAvailableResources']
-)->name('driver-truck-assignments.available-resources');
-
-Route::get('driver-truck-assignments/by-region', 
-    [DriverTruckAssignmentController::class, 'getByRegion']
-)->name('driver-truck-assignments.by-region');
-
-Route::get('/driver-monitoring', [DriverTruckAssignmentController::class, 'monitor'])
-    ->name('driver-monitoring.index');
-
-});
-
-// Allow drivers to confirm return to base
-Route::middleware(['auth', 'role:driver,admin,staff'])->group(function () {
-    Route::post('/driver-truck-assignments/{assignment}/confirm-return', 
-        [DriverTruckAssignmentController::class, 'confirmReturnToBase']
-    )->name('driver-truck-assignments.confirm-return');
-});
-
-
-// 📦 Cargo Assignment Management
-Route::middleware(['auth', 'role:admin,staff'])->prefix('cargo-assignments')->name('cargo-assignments.')->group(function () {
-
-    // ➡️ Basic CRUD Operations
-    Route::get('/', [CargoAssignmentController::class, 'index'])->name('index');
-    Route::get('/{deliveryOrder}', [CargoAssignmentController::class, 'show'])->name('show');
-
-    // ➡️ Assignment Operations
-    Route::prefix('assign')->name('assign.')->group(function () {
-        Route::get('/suggestions', [CargoAssignmentController::class, 'getSuggestedAssignments'])
-            ->name('suggestions');
-        Route::post('/validate', [CargoAssignmentController::class, 'validateAssignment'])->name('validate');
-        Route::post('/check', [CargoAssignmentController::class, 'checkAssignment'])->name('check');
-        Route::post('/batch', [CargoAssignmentController::class, 'batchAssign'])->name('batch');
-        Route::post('/{deliveryRequest}', [CargoAssignmentController::class, 'assign'])->name('single');
+    // Reports
+    Route::prefix('reports')->name('reports.')->group(function () {
+        Route::get('/delivery', [ReportController::class, 'deliveryReport'])->name('delivery');
+        Route::get('/delivery/export', [ReportController::class, 'exportDeliveryReport'])->name('delivery.export');
+        Route::get('/financial', [ReportController::class, 'financialReport'])->name('financial');
+        Route::get('/financial/export', [ReportController::class, 'exportFinancialReport'])->name('financial.export');
+        Route::get('/manifest/{truck}', [ReportController::class, 'generateTruckManifest'])->name('manifest.show')->where('truck', '[0-9]+');
+        Route::get('/manifest/{truck}/export', [ReportController::class, 'exportManifestReport'])->name('manifest.export')->where('truck', '[0-9]+');
+        Route::get('/waybills', [ReportController::class, 'waybillReport'])->name('waybills');
+        Route::get('/waybills/export', [ReportController::class, 'exportWaybillReport'])->name('waybills.export');
     });
 
-    // ➡️ Delivery Operations
-    Route::prefix('deliveries')->name('deliveries.')->group(function () {
-        Route::post('/{deliveryOrder}/arrival', [CargoAssignmentController::class, 'recordArrival'])->name('arrival');
-        Route::post('/{deliveryOrder}/cancel', [CargoAssignmentController::class, 'cancelAssignment'])->name('cancel');
+    // Deliveries
+    Route::prefix('deliveries')->group(function () {
+        Route::get('/', [RequestApprovalController::class, 'index'])->name('deliveries.index');
+        Route::get('/pending', [RequestApprovalController::class, 'pending'])->name('deliveries.pending');
+        Route::get('/rejected', [RequestApprovalController::class, 'rejected'])->name('deliveries.rejected');
+        Route::get('/{delivery}', [RequestApprovalController::class, 'show'])->name('deliveries.show');
+        Route::get('/{delivery}/edit', [RequestApprovalController::class, 'edit'])->name('deliveries.edit');
+        Route::put('/{delivery}', [RequestApprovalController::class, 'update'])->name('deliveries.update');
+        Route::post('/{delivery}/approve', [RequestApprovalController::class, 'approve'])->name('deliveries.approve');
+        Route::post('/{delivery}/reject', [RequestApprovalController::class, 'reject'])->name('deliveries.reject');
+        Route::post('/bulk-approve', [RequestApprovalController::class, 'bulkApprove'])->name('deliveries.bulk-approve');
+        Route::post('/bulk-reject', [RequestApprovalController::class, 'bulkReject'])->name('deliveries.bulk-reject');
     });
 
-    // ➡️ Dispatch Operations
-    Route::prefix('dispatch')->name('dispatch.')->group(function () {
-        Route::post('/driver-truck-set/{assignment}', [CargoAssignmentController::class, 'dispatchDriverTruckSet'])
-            ->name('driver-truck-set');
-        Route::get('/driver-truck-set/{assignment}/validate', [CargoAssignmentController::class, 'validateDispatchSet'])
-            ->name('driver-truck-set.validate');
+    // Driver-Truck Assignments
+    Route::prefix('driver-truck-assignments')->group(function () {
+        // Index page
+        Route::get('/', [DriverTruckAssignmentController::class, 'index'])->name('driver-truck-assignments.index');
+        
+        // Create new assignment
+        Route::post('/store', [DriverTruckAssignmentController::class, 'store'])->name('driver-truck-assignments.store');
+        
+        // Assignment actions
+        Route::prefix('{assignment}')->group(function () {
+            // Deactivate/destroy assignment
+            Route::delete('/destroy', [DriverTruckAssignmentController::class, 'destroy'])->name('driver-truck-assignments.destroy');
+            
+            // Reactivate assignment
+            Route::put('/reactivate', [DriverTruckAssignmentController::class, 'reactivate'])->name('driver-truck-assignments.reactivate');
+            
+            // Verify driver return
+            Route::post('/verify-return', [DriverTruckAssignmentController::class, 'verifyDriverReturn'])->name('driver-truck-assignments.verify-return');
+        });
+
+        // Resource availability check
+        Route::post('/available-resources', [DriverTruckAssignmentController::class, 'getAvailableResources'])->name('driver-truck-assignments.available-resources');
+        
+        // Region filtered assignments
+        Route::get('/by-region', [DriverTruckAssignmentController::class, 'getByRegion'])->name('driver-truck-assignments.by-region');
     });
 
-    // ➡️ Truck Operations
-    Route::prefix('trucks')->name('trucks.')->group(function () {
-        Route::get('/{truck}/manifest', [CargoAssignmentController::class, 'generateManifest'])->name('manifest');
+    // Driver monitoring dashboard
+    Route::get('/driver-monitoring', [DriverTruckAssignmentController::class, 'monitor'])->name('driver-monitoring.index');
+
+    // Cargo Assignment Management
+    Route::prefix('cargo-assignments')->name('cargo-assignments.')->group(function () {
+        // Basic CRUD Operations
+        Route::get('/', [CargoAssignmentController::class, 'index'])->name('index');
+        Route::get('/{deliveryOrder}', [CargoAssignmentController::class, 'show'])->name('show');
+
+        // Assignment Operations
+        Route::prefix('assign')->name('assign.')->group(function () {
+            Route::get('/suggestions', [CargoAssignmentController::class, 'getSuggestedAssignments'])->name('suggestions');
+            Route::post('/validate', [CargoAssignmentController::class, 'validateAssignment'])->name('validate');
+            Route::post('/check', [CargoAssignmentController::class, 'checkAssignment'])->name('check');
+            Route::post('/batch', [CargoAssignmentController::class, 'batchAssign'])->name('batch');
+            Route::post('/{deliveryRequest}', [CargoAssignmentController::class, 'assign'])->name('single');
+        });
+
+        // Delivery Operations
+        Route::prefix('deliveries')->name('deliveries.')->group(function () {
+            Route::post('/{deliveryOrder}/arrival', [CargoAssignmentController::class, 'recordArrival'])->name('arrival');
+            Route::post('/{deliveryOrder}/cancel', [CargoAssignmentController::class, 'cancelAssignment'])->name('cancel');
+        });
+
+        // Dispatch Operations
+        Route::prefix('dispatch')->name('dispatch.')->group(function () {
+            Route::post('/driver-truck-set/{assignment}', [CargoAssignmentController::class, 'dispatchDriverTruckSet'])->name('driver-truck-set');
+            Route::get('/driver-truck-set/{assignment}/validate', [CargoAssignmentController::class, 'validateDispatchSet'])->name('driver-truck-set.validate');
+        });
+
+        // Truck Operations
+        Route::prefix('trucks')->name('trucks.')->group(function () {
+            Route::get('/{truck}/manifest', [CargoAssignmentController::class, 'generateManifest'])->name('manifest');
+        });
+
+        // Delivery Completion Operations
+        Route::prefix('delivery-completion')->name('delivery-completion.')->group(function() {
+            Route::get('/ready-for-release', [DeliveryCompletionController::class, 'readyForRelease'])->name('ready-for-release');
+            Route::get('/{order}/release', [DeliveryCompletionController::class, 'showReleaseForm'])->name('release');
+            Route::post('/{order}/complete', [DeliveryCompletionController::class, 'completeOrder'])->name('complete');
+        });
     });
 
-    // ➡️ Delivery Completion Operations (moved to separate group)
-    Route::prefix('delivery-completion')->name('delivery-completion.')->group(function() {
-        Route::get('/ready-for-release', [DeliveryCompletionController::class, 'readyForRelease'])
-            ->name('ready-for-release');
-        Route::get('/{order}/release', [DeliveryCompletionController::class, 'showReleaseForm'])
-            ->name('release');
-        Route::post('/{order}/complete', [DeliveryCompletionController::class, 'completeOrder'])
-            ->name('complete');
+    // Region Travel Durations
+    Route::prefix('region-durations')->name('region-durations.')->group(function () {
+        Route::get('/', [RegionTravelDurationController::class, 'index'])->name('index');
+        Route::post('/', [RegionTravelDurationController::class, 'store'])->name('store');
+        Route::put('/{region_duration}', [RegionTravelDurationController::class, 'update'])->name('update');
+        Route::delete('/{region_duration}', [RegionTravelDurationController::class, 'destroy'])->name('destroy');
     });
 
+    // Waybills
+    Route::prefix('waybills')->name('waybills.')->group(function () {
+        // List all waybills
+        Route::get('/', [WaybillController::class, 'index'])->name('index');
+
+        // Show a specific waybill
+        Route::get('/{waybill}', [WaybillController::class, 'show'])->name('show');
+
+        // Generate a waybill from a delivery request
+        Route::post('/generate/{deliveryRequest}', [WaybillController::class, 'generate'])->name('generate');
+
+        // View billing page for a delivery request
+        Route::get('/billing/{deliveryRequest}', [WaybillController::class, 'billing'])->name('billing');
+
+        // Bulk generate waybills from a truck's manifest
+        Route::post('/generate-from-manifest/{truck}', [WaybillController::class, 'generateFromManifest'])->name('generateFromManifest');
+
+        // Download single waybill PDF
+        Route::get('/download/{waybill}', [WaybillController::class, 'download'])->name('download');
+
+        Route::get('/waybills/{waybill}/preview', [WaybillController::class, 'preview'])->name('preview');
+
+        // Download truck's manifest PDF
+        Route::get('/download-manifest/{manifest}', [WaybillController::class, 'downloadManifest'])->name('downloadManifest');
+    });
+
+    // Manifests
+    Route::prefix('admin')->group(function () {
+        Route::get('/manifests', [ManifestController::class, 'index'])->name('manifests.index');
+        Route::get('/manifests/create/{truck}', [ManifestController::class, 'create'])->name('manifests.create');
+        Route::post('/manifests/{truck}', [ManifestController::class, 'store'])->name('manifests.store');
+        Route::get('/manifests/{manifest}', [ManifestController::class, 'show'])->name('manifests.show');
+        Route::post('/manifests/{manifest}/finalize', [ManifestController::class, 'finalize'])->name('manifests.finalize');
+        Route::get('/manifests/{manifest}/print', [ManifestController::class, 'print'])->name('manifests.print');
+        Route::delete('/manifests/{manifest}', [ManifestController::class, 'destroy'])->name('manifests.destroy');
+    });
+
+// Payment Management (Prepaid Payment Collection) - KEEP THIS ONE
+Route::prefix('staff/payments')->name('staff.payments.')->group(function () {
+    Route::get('/', [PaymentController::class, 'index'])->name('index');
+
+    // Static routes must come first
+    Route::get('verification', [PaymentController::class, 'verificationIndex'])->name('verification.index');
+Route::get('verify/{payment}', [PaymentController::class, 'verifyView'])->name('verify');
+Route::get('verify-view/{payment}', [PaymentController::class, 'verifyView'])->name('verify-view');
+        Route::post('verify/{payment}', [PaymentController::class, 'verify'])->name('verify.action');
+    Route::post('{payment}/reject', [PaymentController::class, 'reject'])->name('reject');
+
+    // Don't forget create route (put before catch-all)
+    Route::get('create', [PaymentController::class, 'create'])->name('create');
+
+    // Catch-all parameter routes go last
+    Route::get('{payment}', [PaymentController::class, 'show'])->name('show');
+    Route::post('{payment}', [PaymentController::class, 'store'])->name('store');
 });
 
 
-Route::middleware(['auth', 'role:admin,staff'])->prefix('region-durations')->name('region-durations.')->group(function () {
-    Route::get('/', [\App\Http\Controllers\RegionTravelDurationController::class, 'index'])->name('index');
-    Route::post('/', [\App\Http\Controllers\RegionTravelDurationController::class, 'store'])->name('store');
-    Route::put('/{region_duration}', [\App\Http\Controllers\RegionTravelDurationController::class, 'update'])->name('update');
-    Route::delete('/{region_duration}', [\App\Http\Controllers\RegionTravelDurationController::class, 'destroy'])->name('destroy');
+    // Customer Update Requests (Admin/Staff)
+    Route::prefix('admin')->group(function () {
+        Route::get('/customer-update-requests', [CustomerUpdateRequestController::class, 'index'])->name('admin.customer-update-requests.index');
+        Route::get('/customer-update-requests/{customerUpdateRequest}', [CustomerUpdateRequestController::class, 'show'])->name('admin.customer-update-requests.show');
+        Route::post('/customer-update-requests/{customerUpdateRequest}/approve', [CustomerUpdateRequestController::class, 'approve'])->name('admin.customer-update-requests.approve');
+        Route::post('/customer-update-requests/{customerUpdateRequest}/reject', [CustomerUpdateRequestController::class, 'reject'])->name('admin.customer-update-requests.reject');
+    });
 });
 
-
-Route::middleware(['auth', 'role:admin,staff'])->prefix('waybills')->name('waybills.')->group(function () {
-    // List all waybills
-    Route::get('/', [WaybillController::class, 'index'])->name('index');
-
-    // Show a specific waybill
-    Route::get('/{waybill}', [WaybillController::class, 'show'])->name('show');
-
-    // Generate a waybill from a delivery request
-    Route::post('/generate/{deliveryRequest}', [WaybillController::class, 'generate'])->name('generate');
-
-    // View billing page for a delivery request
-    Route::get('/billing/{deliveryRequest}', [WaybillController::class, 'billing'])->name('billing');
-
-    // Bulk generate waybills from a truck's manifest
-    Route::post('/generate-from-manifest/{truck}', [WaybillController::class, 'generateFromManifest'])->name('generateFromManifest');
-
-    // Download single waybill PDF
-    Route::get('/download/{waybill}', [WaybillController::class, 'download'])->name('download');
-
-Route::get('/waybills/{waybill}/preview', [WaybillController::class, 'preview'])
-    ->name('preview');
-
-    // Download truck's manifest PDF
-     Route::get('/download-manifest/{manifest}', [WaybillController::class, 'downloadManifest'])
-        ->name('downloadManifest');
-});
-
+// =============================================================================
+// ADMIN-ONLY ROUTES
+// =============================================================================
 
 Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function () {
     // Dashboard
-       Route::get('/', [AdminDashboardController::class, 'index'])->name('admin.dashboard');
-
-
-
+    Route::get('/', [AdminDashboardController::class, 'index'])->name('admin.dashboard');
 
     // Price Matrix
     Route::get('/price-matrix/edit', [PriceMatrixController::class, 'edit'])->name('admin.price-matrix.edit');
@@ -400,40 +455,36 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function () {
         Route::get('/package-tracking', fn () => Inertia::render('Admin/PackageTrack'))->name('admin.package-tracking');
     });
 
-    // Financial
-    Route::prefix('financial')->group(function () {
-        Route::get('/billing', fn () => Inertia::render('Admin/Billing'))->name('admin.billing');
-        Route::get('/payment-management', fn () => Inertia::render('Admin/PaymentManagement'))->name('admin.payment-management');
-        Route::get('/payment-status', fn () => Inertia::render('Admin/PaymentStatus'))->name('admin.payment-status');
-        Route::get('/transaction-history', fn () => Inertia::render('TransacHistory'))->name('admin.transaction-history');
-    });
-
     // System
     Route::prefix('system')->group(function () {
         Route::get('/backup-restore', fn () => Inertia::render('Admin/BackupRestore'))->name('admin.backup-restore');
         Route::get('/settings', fn () => Inertia::render('Admin/Settings'))->name('admin.settings');
     });
 
-
     // Package Management
-Route::prefix('packages')->middleware(['auth'])->group(function () {
-    Route::get('/', [PackageController::class, 'index'])->name('packages.index');
-    Route::get('/{package}', [PackageController::class, 'show'])->name('packages.show');
+    Route::prefix('packages')->name('admin.packages.')->group(function () {
+        // Index and show routes
+        Route::get('/', [PackageController::class, 'index'])->name('index');
+        Route::get('/{package}', [PackageController::class, 'show'])->name('show');
 
-    Route::post('/{package}/transfer', [PackageController::class, 'transfer'])->name('packages.transfer');
-    Route::post('/{package}/status', [PackageController::class, 'updateStatus'])->name('packages.update-status');
-    Route::post('/transfers/{transfer}/arrived', [PackageController::class, 'markAsArrived'])->name('packages.mark-arrived');
-    Route::post('/check-duplicate', [PackageController::class, 'checkDuplicate'])->name('packages.check-duplicate');
+        // Package transfer and status management
+        Route::post('/{package}/transfer', [PackageController::class, 'transfer'])->name('transfer');
+        Route::post('/{package}/status', [PackageController::class, 'updateStatus'])->name('update-status');
+        
+        // Transfer arrival management
+        Route::post('/transfers/{transfer}/arrived', [PackageController::class, 'markAsArrived'])->name('mark-arrived');
+        
+        // Bulk operations
+        Route::post('/bulk-status-update', [PackageController::class, 'bulkStatusUpdate'])->name('bulk-status-update');
+        
+        // Utility routes
+        Route::post('/check-duplicate', [PackageController::class, 'checkDuplicate'])->name('check-duplicate');
+    });
 });
 
-    
-});
-
-
-
-    
-  
-
+// =============================================================================
+// DRIVER ROUTES
+// =============================================================================
 
 Route::prefix('driver')->middleware(['auth', 'role:driver,staff,admin,customer'])->group(function () {
     // Dashboard
@@ -451,7 +502,7 @@ Route::prefix('driver')->middleware(['auth', 'role:driver,staff,admin,customer']
         Route::get('/assigned', [DriverController::class, 'assignedDeliveries'])->name('driver.assigned-deliveries');
         Route::get('/completed', [DriverController::class, 'completedDeliveries'])->name('driver.completed-deliveries');
 
-        // 🚛📍 New Tracking Route!
+        // Tracking Route
         Route::get('/{deliveryOrder}/tracking', [DriverController::class, 'deliveryTracking'])->name('driver.delivery-tracking');
     });
 
@@ -464,9 +515,86 @@ Route::prefix('driver')->middleware(['auth', 'role:driver,staff,admin,customer']
     // Route Optimization
     Route::prefix('route')->group(function () {
         Route::get('/optimized', [DriverController::class, 'optimizedRoute'])->name('driver.optimized-route');
+
+        // Route for Filtering Relevant Regions
+        Route::get('/regions', [DriverController::class, 'getRouteRegions'])->name('driver.route-regions');
+    });
+
+    // Route Tracking UI Support
+    Route::get('/route-with-status', [DriverController::class, 'getRouteWithStatus'])->name('driver.route-with-status');
+    Route::post('/mark-arrival', [DriverController::class, 'markArrival'])->name('driver.mark-arrival');
+});
+
+// Driver-specific routes
+Route::middleware(['auth', 'role:driver,admin,staff'])->group(function () {
+    Route::post('/driver-truck-assignments/{assignment}/confirm-return', 
+        [DriverTruckAssignmentController::class, 'confirmReturnToBase'])
+        ->name('driver-truck-assignments.confirm-return');
+});
+
+// =============================================================================
+// COLLECTOR ROUTES
+// =============================================================================
+
+Route::middleware(['auth', 'role:collector'])->prefix('collector')->name('collector.')->group(function () {
+    Route::get('dashboard', [CollectorDashboardController::class, 'index'])->name('dashboard');
+    
+    // Collector Payment Routes
+    Route::prefix('payments')->name('payments.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\CollectorPaymentController::class, 'index'])->name('index');
+        Route::get('/pending', [\App\Http\Controllers\CollectorPaymentController::class, 'pending'])->name('pending');
+        Route::get('/create/{delivery}', [\App\Http\Controllers\CollectorPaymentController::class, 'create'])->name('create');
+        Route::post('/{delivery}', [\App\Http\Controllers\CollectorPaymentController::class, 'store'])->name('store');
+        Route::post('/{delivery}/mark-uncollectible', [\App\Http\Controllers\CollectorPaymentController::class, 'markUncollectible'])->name('mark-uncollectible');
+        Route::get('/show/{payment}', [\App\Http\Controllers\CollectorPaymentController::class, 'show'])->name('show');
+        Route::delete('/{payment}', [\App\Http\Controllers\CollectorPaymentController::class, 'destroy'])->name('destroy');
+        Route::get('/{payment}/edit', [\App\Http\Controllers\CollectorPaymentController::class, 'edit'])->name('edit');
+        Route::put('/{payment}', [\App\Http\Controllers\CollectorPaymentController::class, 'update'])->name('update');
     });
 });
 
+// =============================================================================
+// STAFF ROUTES
+// =============================================================================
+
+Route::middleware(['auth', 'role:staff'])->prefix('staff')->group(function () {
+    Route::get('/dashboard', [StaffDashboardController::class, 'index'])->name('staff.dashboard');
+});
+
+// =============================================================================
+// PAYMENT ROUTES (FOR BOTH PREPAID AND POSTPAID)
+// =============================================================================
+
+Route::prefix('payments')->group(function () {
+    // Index shows both types with filters
+    Route::get('/', [PaymentController::class, 'index'])->name('payments.index');
+
+    // Prepaid specific
+    Route::get('prepaid/{payment}', [PaymentController::class, 'showPrepaid'])->name('payments.prepaid.show');
+    Route::post('prepaid/{payment}/verify', [PaymentController::class, 'verify'])->name('payments.prepaid.verify');
+
+    // Postpaid specific
+    Route::get('postpaid/{payment}', [PaymentController::class, 'showPostpaid'])->name('payments.postpaid.show');
+    Route::post('postpaid/{payment}/collect', [PaymentController::class, 'collect'])->name('payments.postpaid.collect');
+    Route::post('postpaid/{payment}/verify', [PaymentController::class, 'verify'])->name('payments.postpaid.verify');
+});
+
+// =============================================================================
+// STICKER ROUTES
+// =============================================================================
+
+Route::prefix('stickers')->name('stickers.')->group(function () {
+    Route::get('/', [StickerController::class, 'index'])->name('index');
+    Route::get('/statistics', [StickerController::class, 'statistics'])->name('statistics');
+    Route::get('/print/{package}', [StickerController::class, 'print'])->name('print');
+    Route::get('/bulk-print', [StickerController::class, 'bulkPrint'])->name('bulk-print');
+    Route::get('/print-delivery-request/{deliveryRequest}', [StickerController::class, 'printForDeliveryRequest'])->name('print-delivery-request');
+    Route::post('/reset/{package}', [StickerController::class, 'reset'])->name('reset');
+});
+
+// =============================================================================
+// DEBUG ROUTES
+// =============================================================================
 
 // Debug endpoints for driver/truck assignment testing
 Route::get('/api/debug/drivers', function(Request $request) {
@@ -500,62 +628,8 @@ Route::get('/api/debug/trucks', function(Request $request) {
     ];
 });
 
-
-// Collector Payment Routes
-Route::middleware(['auth', 'role:collector'])->prefix('collector/payments')->name('collector.payments.')->group(function () {
-    Route::get('/', [\App\Http\Controllers\CollectorPaymentController::class, 'index'])->name('index');
-    Route::get('/pending', [\App\Http\Controllers\CollectorPaymentController::class, 'pending'])->name('pending');
-    Route::get('/create/{delivery}', [\App\Http\Controllers\CollectorPaymentController::class, 'create'])->name('create');
-    Route::post('/{delivery}', [\App\Http\Controllers\CollectorPaymentController::class, 'store'])->name('store');
-    Route::post('/{delivery}/mark-uncollectible', [\App\Http\Controllers\CollectorPaymentController::class, 'markUncollectible'])->name('mark-uncollectible');
-    Route::get('/show/{payment}', [\App\Http\Controllers\CollectorPaymentController::class, 'show'])->name('show');
-    Route::delete('/{payment}', [\App\Http\Controllers\CollectorPaymentController::class, 'destroy'])->name('destroy');
-    Route::get('/{payment}/edit', [\App\Http\Controllers\CollectorPaymentController::class, 'edit'])->name('edit');
-    Route::put('/{payment}', [\App\Http\Controllers\CollectorPaymentController::class, 'update'])->name('update');
-});
-
-// Payment Management (Prepaid Payment Collection)
-Route::middleware(['auth', 'role:admin,staff'])->prefix('staff/payments')->name('staff.payments.')->group(function () {
-    Route::get('/', [\App\Http\Controllers\PaymentController::class, 'index'])->name('index');
-    Route::get('/{delivery}', [\App\Http\Controllers\PaymentController::class, 'show'])->name('show');
-    Route::post('/{delivery}', [\App\Http\Controllers\PaymentController::class, 'store'])->name('store');
-    Route::get('verify/{payment}', [PaymentController::class, 'verifyView'])->name('verify');
-    Route::post('verify/{payment}', [PaymentController::class, 'verify'])->name('verify.action');
-});
-
-// Payment routes (for both prepaid and postpaid, with filters)
-Route::prefix('payments')->group(function () {
-    // Index shows both types with filters
-    Route::get('/', [\App\Http\Controllers\PaymentController::class, 'index'])->name('payments.index');
-
-    // Prepaid specific
-    Route::get('prepaid/{payment}', [\App\Http\Controllers\PaymentController::class, 'showPrepaid'])
-        ->name('payments.prepaid.show');
-    Route::post('prepaid/{payment}/verify', [\App\Http\Controllers\PaymentController::class, 'verify'])
-        ->name('payments.prepaid.verify');
-
-    // Postpaid specific
-    Route::get('postpaid/{payment}', [\App\Http\Controllers\PaymentController::class, 'showPostpaid'])
-        ->name('payments.postpaid.show');
-    Route::post('postpaid/{payment}/collect', [\App\Http\Controllers\PaymentController::class, 'collect'])
-        ->name('payments.postpaid.collect');
-    Route::post('postpaid/{payment}/verify', [\App\Http\Controllers\PaymentController::class, 'verify'])
-        ->name('payments.postpaid.verify');
-});
-
-// Customer Notifications
-Route::middleware(['auth', 'role:customer', 'verified'])->group(function () {
-    Route::get('/notifications', [\App\Http\Controllers\Customer\NotificationController::class, 'index'])
-        ->name('customer.notifications.index');
-    Route::put('/notifications/{notification}/mark-as-read', [\App\Http\Controllers\Customer\NotificationController::class, 'markAsRead'])
-        ->name('notifications.markAsRead');
-    Route::put('/notifications/mark-all-as-read', [\App\Http\Controllers\Customer\NotificationController::class, 'markAllAsRead'])
-        ->name('notifications.markAllAsRead');
-});
-
+// =============================================================================
+// AUTH ROUTES
+// =============================================================================
 
 require __DIR__.'/auth.php';
-
-Route::middleware(['auth', 'role:collector'])->prefix('collector')->name('collector.')->group(function () {
-    Route::get('dashboard', [CollectorDashboardController::class, 'index'])->name('dashboard');
-});

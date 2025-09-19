@@ -40,6 +40,28 @@
               <InputError :message="form.errors.warehouse_address" />
             </div>
 
+            <!-- ADD COLOR PICKER FIELD -->
+            <div>
+              <InputLabel for="color_hex" value="Region Color *" />
+              <div class="flex items-center mt-1">
+                <input 
+                  type="color" 
+                  id="color_hex"
+                  v-model="form.color_hex"
+                  class="h-10 w-10 rounded border border-gray-300 mr-2"
+                />
+                <TextInput 
+                  v-model="form.color_hex"
+                  class="block w-32"
+                  placeholder="#FF0000"
+                  required
+                  pattern="^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"
+                />
+              </div>
+              <InputError :message="form.errors.color_hex" />
+              <p class="text-sm text-gray-500 mt-1">Hex color code (e.g., #FF0000 for red)</p>
+            </div>
+
             <div>
               <InputLabel value="Set Region Location *" />
               <MapPicker 
@@ -67,7 +89,7 @@
 <script setup>
 import EmployeeLayout from '@/Layouts/EmployeeLayout.vue';
 import { useForm } from '@inertiajs/vue3';
-import { router } from '@inertiajs/vue3'; // Add this import
+import { router } from '@inertiajs/vue3';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
 import TextareaInput from '@/Components/TextArea.vue';
@@ -87,6 +109,7 @@ const props = defineProps({
 const form = useForm({
   name: props.region.name,
   warehouse_address: props.region.warehouse_address,
+  color_hex: props.region.color_hex || '#CCCCCC', // <-- ADD COLOR
   geographic_location: {
     lat: parseFloat(props.region.geographic_location.latitude),
     lng: parseFloat(props.region.geographic_location.longitude)

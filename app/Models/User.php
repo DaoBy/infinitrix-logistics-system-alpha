@@ -20,7 +20,10 @@ class User extends Authenticatable
         'role',
         'is_active',
         'current_region_id',
-        'last_region_update'
+        'last_region_update',
+        'pending_email',
+        'email_change_verification_code',
+        'email_change_verification_code_expires_at'
     ];
 
     protected $hidden = [
@@ -42,6 +45,24 @@ class User extends Authenticatable
             // Use forceDelete() if using soft deletes
             $user->customer?->delete();
             $user->employeeProfile?->delete();
+        });
+    }
+
+    protected static function booted()
+    {
+        static::retrieved(function ($user) {
+            if ($user->role === 'driver' && !$user->current_region_id) {
+                // Try to get region from active assignment
+                $assignment = $user->truckAssignments()
+                    ->where('is_active', true)
+                    ->latest()
+                    ->first();
+
+                if ($assignment) {
+                    $user->current_region_id = $assignment->region_id;
+                    $user->save();
+                }
+            }
         });
     }
 

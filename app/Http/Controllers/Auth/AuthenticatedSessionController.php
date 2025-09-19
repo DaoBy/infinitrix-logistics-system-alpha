@@ -27,10 +27,10 @@ class AuthenticatedSessionController extends Controller
     /**
      * Handle an incoming authentication request.
      */
-public function store(LoginRequest $request): RedirectResponse
-{
-    $request->authenticate();
-    $user = Auth::user();
+    public function store(LoginRequest $request): RedirectResponse
+    {
+        $request->authenticate();
+        $user = Auth::user();
 
         if ($user->isCustomer() && !$user->hasVerifiedEmail()) {
             Auth::logout();
@@ -38,25 +38,32 @@ public function store(LoginRequest $request): RedirectResponse
                 ->with('error', __('You must verify your email address before logging in.'));
         }
 
-    // Ensure a user is authenticated before redirecting
-    if (!$user->isCustomer() && !$user->is_active) {
-        Auth::logout();
-        return redirect()->route('login')
-               ->with('error', 'Your account is inactive. Please contact administrator.');
-    }
-  
-    $request->session()->regenerate();
+        // Check if customer profile is complete
+        if ($user->isCustomer() && (!$user->customer || !$user->customer->is_profile_complete)) {
+            return redirect()->route('profile.complete')
+                ->with('show_modal', true) // Added this line to trigger the modal
+                ->with('warning', 'Please complete your profile to access all features.');
+        }
 
-    // Role-specific redirect logic
-    return match ($user->role) {
-        'customer'  => redirect()->intended(route('customer.home')),
-        'admin'     => redirect()->intended(route('admin.dashboard')),
-        'staff'     => redirect()->intended(route('staff.dashboard')),
-        'driver'    => redirect()->intended(route('driver.dashboard')),
-        'collector' => redirect()->intended(route('collector.dashboard')),
-        default     => redirect()->route('login'),
-    };
-}
+        // Ensure a user is authenticated before redirecting
+        if (!$user->isCustomer() && !$user->is_active) {
+            Auth::logout();
+            return redirect()->route('login')
+                   ->with('error', 'Your account is inactive. Please contact administrator.');
+        }
+      
+        $request->session()->regenerate();
+
+        // Role-specific redirect logic
+        return match ($user->role) {
+            'customer'  => redirect()->intended(route('customer.home')),
+            'admin'     => redirect()->intended(route('admin.dashboard')),
+            'staff'     => redirect()->intended(route('staff.dashboard')),
+            'driver'    => redirect()->intended(route('driver.dashboard')),
+            'collector' => redirect()->intended(route('collector.dashboard')),
+            default     => redirect()->route('login'),
+        };
+    }
 
     /**
      * Destroy an authenticated session (Logout).
@@ -84,9 +91,9 @@ public function store(LoginRequest $request): RedirectResponse
     }
 
     public function canLogin(): bool
-{
-    return $this->isActive() && (
-        $this->isEmployee() || $this->hasVerifiedEmail()
-    );
-}
+    {
+        return $this->isActive() && (
+            $this->isEmployee() || $this->hasVerifiedEmail()
+        );
+    }
 }
