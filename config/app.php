@@ -122,6 +122,9 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    // ADD GOOGLE MAPS API KEY CONFIGURATION
+    'google_maps_api_key' => env('GOOGLE_MAPS_API_KEY', ''),
+
     'providers' => [
         // Laravel Framework Service Providers...
         Illuminate\Auth\AuthServiceProvider::class,

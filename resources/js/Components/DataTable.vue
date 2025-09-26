@@ -5,7 +5,7 @@
         <thead class="bg-gray-50">
           <tr>
             <!-- Add checkbox for select all if selectable -->
-            <th v-if="selectable" class="px-4 py-3">
+            <th v-if="selectable" class="px-4 py-3 w-12">
               <input
                 type="checkbox"
                 :checked="allSelected"
@@ -18,10 +18,13 @@
               :key="column.field"
               scope="col"
               class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-              :class="{ 'cursor-pointer hover:bg-gray-100': column.sortable }"
-              @click="column.sortable ? sort(column.field) : null"
+              :class="{ 
+                'cursor-pointer hover:bg-gray-100': column.sortable,
+                'text-right': column.field === 'actions'
+              }"
+              @click="column.sortable ? handleSortClick(column.field) : null"
             >
-              <div class="flex items-center">
+              <div class="flex items-center" :class="{ 'justify-end': column.field === 'actions' }">
                 {{ column.header }}
                 <span v-if="sortField === column.field" class="ml-1">
                   <ArrowUpIcon
@@ -44,10 +47,10 @@
             class="hover:bg-gray-50 transition-colors duration-100"
             :class="{ 'bg-blue-50': selectable && isSelected(row) }"
             @click="selectable ? toggleRow(row) : undefined"
-            style="cursor: pointer"
+            :style="{ cursor: selectable ? 'pointer' : 'default' }"
           >
             <!-- Row checkbox if selectable -->
-            <td v-if="selectable" class="px-4 py-4">
+            <td v-if="selectable" class="px-4 py-4 w-12">
               <input
                 type="checkbox"
                 :checked="isSelected(row)"
@@ -58,14 +61,18 @@
             <td
               v-for="column in columns"
               :key="column.field"
-              class="px-6 py-4 whitespace-nowrap text-sm"
+              class="px-6 py-4 text-sm"
               :class="{
+                'whitespace-nowrap': column.field !== 'warehouse_address',
                 'text-gray-900': !column.field.endsWith('_at'),
                 'text-gray-500': column.field.endsWith('_at'),
+                'text-right': column.field === 'actions'
               }"
             >
               <template v-if="column.field === 'actions'">
-                <slot name="actions" :row="row"></slot>
+                <div class="flex space-x-2 justify-end">
+                  <slot name="actions" :row="row"></slot>
+                </div>
               </template>
               <template v-else-if="column.field === 'status' && column.formatter">
                 <span :class="column.formatter(row[column.field]).class">
@@ -109,24 +116,65 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  sortField: {
+    type: String,
+    default: ''
+  },
+  sortDirection: {
+    type: String,
+    default: 'asc'
+  }
 });
 
-const emit = defineEmits(['selection-change']);
+const emit = defineEmits(['selection-change', 'sort']);
 
-const sortField = ref(props.columns[0]?.field);
-const sortDirection = ref('asc');
+// Use provided sort values from parent
+const internalSortField = ref(props.sortField);
+const internalSortDirection = ref(props.sortDirection);
 
+// Sort data based on current sort field/direction
 const sortedData = computed(() => {
-  if (!sortField.value) return props.data;
+  if (!internalSortField.value) return props.data;
 
   return [...props.data].sort((a, b) => {
-    let modifier = sortDirection.value === 'desc' ? -1 : 1;
+    let aValue = a[internalSortField.value];
+    let bValue = b[internalSortField.value];
+    
+    // Handle null/undefined values
+    if (aValue == null) aValue = '';
+    if (bValue == null) bValue = '';
+    
+    // Convert to string for case-insensitive comparison
+    aValue = String(aValue).toLowerCase();
+    bValue = String(bValue).toLowerCase();
 
-    if (a[sortField.value] < b[sortField.value]) return -1 * modifier;
-    if (a[sortField.value] > b[sortField.value]) return 1 * modifier;
+    let modifier = internalSortDirection.value === 'desc' ? -1 : 1;
+
+    if (aValue < bValue) return -1 * modifier;
+    if (aValue > bValue) return 1 * modifier;
     return 0;
   });
 });
+
+// Handle sort click - emit to parent and update internal state
+const handleSortClick = (field) => {
+  let newDirection = 'asc';
+  
+  if (internalSortField.value === field) {
+    // Toggle direction if clicking the same column
+    newDirection = internalSortDirection.value === 'asc' ? 'desc' : 'asc';
+  } else {
+    // Default to ascending when clicking a new column
+    newDirection = 'asc';
+  }
+  
+  // Update internal state
+  internalSortField.value = field;
+  internalSortDirection.value = newDirection;
+  
+  // Emit to parent component
+  emit('sort', { field, direction: newDirection });
+};
 
 // Selection logic
 const selectedRows = ref([]);
@@ -167,12 +215,22 @@ watch(
   }
 );
 
-const sort = (field) => {
-  if (sortField.value === field) {
-    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
-  } else {
-    sortField.value = field;
-    sortDirection.value = 'asc';
+// Watch for external sort changes from parent
+watch(
+  () => props.sortField,
+  (newVal) => {
+    if (newVal !== internalSortField.value) {
+      internalSortField.value = newVal;
+    }
   }
-};
+);
+
+watch(
+  () => props.sortDirection,
+  (newVal) => {
+    if (newVal !== internalSortDirection.value) {
+      internalSortDirection.value = newVal;
+    }
+  }
+);
 </script>

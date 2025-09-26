@@ -5,6 +5,7 @@ namespace App\Providers;
 use Illuminate\Support\Facades\Vite;
 use App\Services\RouteOptimizerService;
 use Illuminate\Support\ServiceProvider;
+use Inertia\Inertia;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -23,6 +24,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Share Google Maps API key with all Inertia responses
+        Inertia::share([
+            'googleMapsApiKey' => config('app.google_maps_api_key'),
+        ]);
         Vite::prefetch(concurrency: 3);
     }
 }

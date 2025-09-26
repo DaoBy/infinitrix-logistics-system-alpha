@@ -4,13 +4,12 @@
 
 <script setup>
 import { ref, onMounted, watch } from 'vue';
-import * as L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 
 const props = defineProps({
   modelValue: {
     type: Object,
-    default: () => ({ lat: 51.505, lng: -0.09 }),
+    // Change from Singapore to Philippines (Manila coordinates)
+    default: () => ({ lat: 14.5995, lng: 120.9842 }),
   },
   readonly: {
     type: Boolean,
@@ -18,61 +17,73 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['update:modelValue']);
+const emit = defineEmits(['update:modelValue', 'marker-updated']);
 const mapContainer = ref(null);
-const map = ref(null);
-const marker = ref(null);
+let map = null;
+let marker = null;
 
-// Fix for default marker icons
-const initLeafletIcons = () => {
-  delete L.Icon.Default.prototype._getIconUrl;
-  L.Icon.Default.mergeOptions({
-    iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
-    iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
-    shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+const initMap = () => {
+  if (!window.google || !window.google.maps) {
+    console.error('Google Maps not loaded');
+    return;
+  }
+
+  if (!mapContainer.value) return;
+
+  map = new google.maps.Map(mapContainer.value, {
+    center: props.modelValue,
+    zoom: 13,
   });
+
+  marker = new google.maps.Marker({
+    position: props.modelValue,
+    map: map,
+    draggable: !props.readonly,
+  });
+
+  if (!props.readonly) {
+    marker.addListener('dragend', (event) => {
+      const newCoords = {
+        lat: event.latLng.lat(),
+        lng: event.latLng.lng()
+      };
+      emit('update:modelValue', newCoords);
+      emit('marker-updated', newCoords);
+    });
+
+    map.addListener('click', (event) => {
+      marker.setPosition(event.latLng);
+      const newCoords = {
+        lat: event.latLng.lat(),
+        lng: event.latLng.lng()
+      };
+      emit('update:modelValue', newCoords);
+      emit('marker-updated', newCoords);
+    });
+  }
 };
 
-// Initialize the map
 onMounted(() => {
-  if (!mapContainer.value) return;
-  
-  initLeafletIcons();
-
-  // Create the map
-  map.value = L.map(mapContainer.value).setView(
-    [props.modelValue.lat, props.modelValue.lng],
-    13
-  );
-
-  // Add OpenStreetMap tiles
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors',
-  }).addTo(map.value);
-
-  // Add a draggable marker
-  marker.value = L.marker([props.modelValue.lat, props.modelValue.lng], {
-    draggable: !props.readonly,
-  }).addTo(map.value);
-
-  // Update position when marker is dragged
-  if (!props.readonly) {
-    marker.value.on('dragend', (e) => {
-      const newPos = e.target.getLatLng();
-      emit('update:modelValue', { lat: newPos.lat, lng: newPos.lng });
-    });
+  // Wait for Google Maps to load
+  if (window.google && window.google.maps) {
+    initMap();
+  } else {
+    const checkInterval = setInterval(() => {
+      if (window.google && window.google.maps) {
+        clearInterval(checkInterval);
+        initMap();
+      }
+    }, 100);
   }
 });
 
-// Update marker position if modelValue changes
 watch(
   () => props.modelValue,
   (newVal) => {
-    if (marker.value && newVal) {
-      marker.value.setLatLng([newVal.lat, newVal.lng]);
-      map.value.panTo([newVal.lat, newVal.lng]);
+    if (marker && newVal) {
+      marker.setPosition(newVal);
+      if (map) map.panTo(newVal);
     }
-  },
-  { deep: true }
+  }
 );
 </script>
