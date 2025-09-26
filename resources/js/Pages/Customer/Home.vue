@@ -177,15 +177,15 @@ const navigateToCompleteProfile = () => {
         </p>
 
         <div class="mt-10 flex flex-col md:flex-row justify-center md:space-x-6 space-y-4 md:space-y-0">
-          <NavLink :href="route('tracking')">
-            <PrimaryButton variant="dark" class="text-lg w-full md:w-auto shadow bg-green-600">
-              Track Package
-            </PrimaryButton>
-          </NavLink>
-
           <NavLink :href="route('customer.delivery-requests.create')">
             <PrimaryButton variant="dark" class="text-lg w-full md:w-auto shadow bg-green-600">
               Request Delivery
+            </PrimaryButton>
+          </NavLink>
+
+          <NavLink :href="route('tracking')">
+            <PrimaryButton variant="dark" class="text-lg w-full md:w-auto shadow bg-green-600">
+              Track Package
             </PrimaryButton>
           </NavLink>
         </div>
