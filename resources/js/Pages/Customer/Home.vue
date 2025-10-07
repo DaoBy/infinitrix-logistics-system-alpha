@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue';
-import { usePage, router } from '@inertiajs/vue3'; // Added router import
+import { usePage, router } from '@inertiajs/vue3';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import NavLink from '@/Components/NavLink.vue';
@@ -56,10 +56,10 @@ const caseStudies = ref([
 ]);
 
 const getVisibleCards = () => {
-  if (window.innerWidth > 1200) return 6;
-  if (window.innerWidth > 768) return 4;
-  if (window.innerWidth > 480) return 2;
-  return 1;
+  if (window.innerWidth >= 1024) return 4; // lg and above: 4 cards
+  if (window.innerWidth >= 768) return 3; // md: 3 cards
+  if (window.innerWidth >= 640) return 2; // sm: 2 cards
+  return 1; // mobile: 1 card
 };
 
 const maxSlides = () => Math.max(0, caseStudies.value.length - getVisibleCards());
@@ -216,10 +216,10 @@ const navigateToCompleteProfile = () => {
             <div
               v-for="(caseStudy, index) in caseStudies"
               :key="index"
-              class="flex-shrink-0 w-full sm:w-1/2 md:w-1/3 lg:w-1/4 xl:w-1/6 bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group"
+              class="flex-shrink-0 w-full sm:w-1/2 md:w-1/3 lg:w-1/4 bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer group"
               @click="() => console.log('Case study clicked:', caseStudy.title)"
             >
-              <div class="relative h-48 overflow-hidden">
+              <div class="relative h-72 overflow-hidden">
                 <img 
                   :src="caseStudy.image" 
                   :alt="caseStudy.title"
@@ -227,8 +227,8 @@ const navigateToCompleteProfile = () => {
                 >
                 <div class="absolute inset-0 bg-gradient-to-t from-green-600/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
               </div>
-              <div class="p-4">
-                <h3 class="text-sm font-semibold text-gray-800 text-center leading-tight">
+              <div class="p-5">
+                <h3 class="text-base font-semibold text-gray-800 text-center leading-tight">
                   {{ caseStudy.title }}
                 </h3>
               </div>
@@ -287,7 +287,6 @@ const navigateToCompleteProfile = () => {
           >
             <div class="absolute inset-0 bg-black/50"></div>
             <div class="absolute inset-0 from-black/90 to-transparent"></div>
-            <!-- Removed button from here -->
           </div>
 
           <!-- Button moved here, outside the image container -->
