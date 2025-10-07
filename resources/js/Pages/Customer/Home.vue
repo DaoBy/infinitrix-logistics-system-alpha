@@ -169,7 +169,7 @@ const navigateToCompleteProfile = () => {
       <div class="absolute inset-0 bg-black/50"></div>
       <div class="absolute inset-0 bg-gradient-to-b from-black/90 to-transparent"></div>
       <div class="relative z-10 text-center max-w-[90%] xl:max-w-[1280px] mx-auto">
-        <h1 class="text-8xl md:text-8xl font-extrabold tracking-tight drop-shadow-lg"> 
+        <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold tracking-tight drop-shadow-lg text-center"> 
           <span class="text-green-600">Sending a package?</span> We've got you covered.
         </h1>
         <p class="mt-6 text-xl md:text-2xl font-medium drop-shadow">
