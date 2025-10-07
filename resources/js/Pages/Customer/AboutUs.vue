@@ -18,7 +18,7 @@ import truck2Image from '@/assets/truck2.jpg';
       <div class="absolute inset-0 from-black/90 to-transparent"></div>
       <div class="relative z-10  max-w-[90%] xl:max-w-[1280px] mx-auto">
       
-        <h1 class="text-8xl md:text-8xl font-extrabold tracking-tight drop-shadow-lg">
+        <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold tracking-tight drop-shadow-lg">
           We <span class="text-green-500">simplify </span> your logistics.
         </h1>
         <p class="mt-6 text-xl md:text-2xl font-medium drop-shadow">
@@ -34,10 +34,10 @@ import truck2Image from '@/assets/truck2.jpg';
 <div class="mt-24 max-w-7xl mx-auto px-6 md:px-12 lg:px-20 grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
   <!-- Text Content -->
   <div>
-    <h3 class="text-4xl font-extrabold text-gray-900 mb-4">
+    <h3 class="text-4xl font-extrabold text-green-700 mb-4">
       About Infinitrix
     </h3>
-    <p class="text-xl font-semibold text-green-700 mb-6">
+    <p class="text-xl text-gray-700 mb-6">
       Speed, reliability, and innovation—Infinitrix leads modern logistics with purpose.
     </p>
     <p class="text-gray-700 text-base leading-relaxed mb-4">
@@ -63,10 +63,10 @@ import truck2Image from '@/assets/truck2.jpg';
 
   <!-- Text Content -->
   <div>
-    <h3 class="text-4xl font-extrabold text-gray-900 mb-4">
+    <h3 class="text-4xl font-extrabold text-green-700 mb-4">
       Our Story
     </h3>
-    <p class="text-xl font-semibold text-green-700 mb-6">
+    <p class="text-xl text-gray-700 mb-6">
       Infinitrix Express Cargo began with a simple vision: to create a reliable and efficient solution for moving goods.
     </p>
     <p class="text-gray-700 text-base leading-relaxed mb-4">
@@ -83,7 +83,7 @@ import truck2Image from '@/assets/truck2.jpg';
 <div class="mt-16 grid grid-cols-1 md:grid-cols-2 gap-8">
   <!-- Mission -->
   <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-gray-900">🚀 Our Mission</h3>
+    <h3 class="text-2xl font-semibold text-green-700">Our Mission</h3>
     <p class="mt-4 text-gray-600 max-w-md">
       To revolutionize nationwide logistics with fast, transparent, and secure delivery services—while keeping things efficient, human, and just a little bit fun.
     </p>
@@ -91,7 +91,7 @@ import truck2Image from '@/assets/truck2.jpg';
 
   <!-- Values -->
   <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-gray-900">💡 Our Values</h3>
+    <h3 class="text-2xl font-semibold text-green-700">Our Values</h3>
     <ul class="mt-4 list-disc list-inside text-gray-600 space-y-1 text-left max-w-md">
       <li>Customer-Centered Innovation</li>
       <li>Transparency & Trust</li>
@@ -106,12 +106,12 @@ import truck2Image from '@/assets/truck2.jpg';
 
 
 
-<h3 class="text-3xl pt-20 text-center font-bold text-gray-900">Our Core Values</h3>
+<h3 class="text-3xl pt-20 text-center font-bold text-green-700">Our Core Values</h3>
 <div class="mt-16 grid grid-cols-1 md:grid-cols-2 gap-8">
 
   <!-- Customer-Centered Innovation -->
   <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-gray-900">Customer-Centered Innovation</h3>
+    <h3 class="text-2xl font-semibold text-green-700">Customer-Centered Innovation</h3>
     <p class="mt-4 text-gray-600 max-w-md">
       We relentlessly innovate, always with our customers' evolving needs at the forefront, to deliver solutions that simplify and enhance their logistics experience.
     </p>
@@ -119,14 +119,14 @@ import truck2Image from '@/assets/truck2.jpg';
 
   <!-- Values -->
   <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-gray-900">Transparency & Trust</h3>
+    <h3 class="text-2xl font-semibold text-green-700">Transparency & Trust</h3>
     <p class="mt-4 text-gray-600 max-w-md">
       Open communication and unwavering integrity are the cornerstones of our relationships, fostering complete trust with every interaction.
     </p>
   </div>
 
   <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-gray-900">Operational Excellence</h3>
+    <h3 class="text-2xl font-semibold text-green-700">Operational Excellence</h3>
     <p class="mt-4 text-gray-600 max-w-md">
       We commit to the highest standards in every operation, ensuring efficiency, accuracy, and continuous improvement across our entire network.
     </p>
@@ -134,7 +134,7 @@ import truck2Image from '@/assets/truck2.jpg';
 
   <!-- Values -->
   <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-gray-900">Team Culture with Personality</h3>
+    <h3 class="text-2xl font-semibold text-green-700">Team Culture with Personality</h3>
     <p class="mt-4 text-gray-600 max-w-md">
       We foster a vibrant and supportive team environment where diverse perspectives are celebrated, encouraging creativity and collaboration.
     </p>
@@ -143,7 +143,7 @@ import truck2Image from '@/assets/truck2.jpg';
 
         <!-- Team Section -->
         <div class="mt-20 text-center">
-          <h3 class="text-3xl font-bold text-gray-900">Meet the Leadership Team</h3>
+          <h3 class="text-3xl font-bold text-green-700">Meet the Leadership Team</h3>
           <p class="mt-4 text-lg text-gray-600 max-w-xl mx-auto">
             Our team blends industry experience with creative thinking, ensuring your deliveries run on time—and with a touch of personality.
           </p>

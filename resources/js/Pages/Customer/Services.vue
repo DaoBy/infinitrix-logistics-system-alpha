@@ -21,7 +21,7 @@ import welding from '@/assets/welding.png';
       <div class="absolute inset-0 bg-black/50"></div>
       <div class="absolute inset-0 from-black/90 to-transparent"></div>
       <div class="relative z-10  max-w-[90%] xl:max-w-[1280px] mx-auto">
-        <h1 class="text-8xl md:text-8xl font-extrabold tracking-tight drop-shadow-lg">
+        <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold tracking-tight drop-shadow-lg">
           Road <span class="text-green-500">Freight</span> & Transport
         </h1>
         <p class="mt-6 text-xl md:text-2xl font-medium drop-shadow">
@@ -66,38 +66,38 @@ import welding from '@/assets/welding.png';
   <!-- Box 1 -->
   <div class="h-80 bg-white p-6 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.3)] hover:shadow-[0_6px_30px_rgba(0,0,0,0.5)] transition-shadow duration-300">
     <h2 class="text-xl text-green-700 font-semibold mb-2">Assorted hardware</h2>
-     <img :src="hardwareImage" alt="Warehouse and Truck" class="w-80 h-70 object-contain" />
+     <img :src="hardwareImage" alt="Warehouse and Truck" class="w-80 h-70 object-contain transform transition-transform duration-300 hover:scale-110" />
   </div>
 
   <!-- Box 2 -->
   <div class="h-80 bg-white p-6 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.3)] hover:shadow-[0_6px_30px_rgba(0,0,0,0.5)] transition-shadow duration-300">
     <h2 class="text-xl text-green-700 font-semibold mb-2">Paints and industrial supplies</h2>
-    <img :src="paintImage" alt="Paints and Industrial Supplies" class="w-80 h-70 object-contain" />
+    <img :src="paintImage" alt="Paints and Industrial Supplies" class="w-80 h-70 object-contain transform transition-transform duration-300 hover:scale-110" />
   </div>
 
   <!-- Box 3 -->
   <div class="h-80 bg-white p-6 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.3)] hover:shadow-[0_6px_30px_rgba(0,0,0,0.5)] transition-shadow duration-300">
     <h2 class="text-xl text-green-700 font-semibold mb-2">Motorcycle parts and accessories</h2>
-    <img :src="motorImage" alt="Motorcycle Parts" class="w-80 h-70 object-contain" />
+    <img :src="motorImage" alt="Motorcycle Parts" class="w-80 h-70 object-contain transform transition-transform duration-300 hover:scale-110" />
    
   </div>
 
   <!-- Box 4 -->
   <div class="h-80 bg-white p-6 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.3)] hover:shadow-[0_6px_30px_rgba(0,0,0,0.5)] transition-shadow duration-300">
     <h2 class="text-xl text-green-700 font-semibold mb-2">Tires and tubes</h2>
-    <img :src="tireImage" alt="Tires and Tubes" class="w-80 h-80 object-contain" />
+    <img :src="tireImage" alt="Tires and Tubes" class="w-80 h-70 object-contain transform transition-transform duration-300 hover:scale-110" />
   </div>
 
   <!-- Box 5 -->
   <div class="h-80 bg-white p-6 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.3)] hover:shadow-[0_6px_30px_rgba(0,0,0,0.5)] transition-shadow duration-300">
     <h2 class="text-xl text-green-700 font-semibold mb-2">Electrical wires and equipment</h2>
-    <img :src="wires" alt="Electrical Wires and Equipment" class="w-80 h-80 object-contain" />
+    <img :src="wires" alt="Electrical Wires and Equipment" class="w-80 h-70 object-contain transform transition-transform duration-300 hover:scale-110" />
   </div>
 
   <!-- Box 6 -->
   <div class="h-80 bg-white p-6 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.3)] hover:shadow-[0_6px_30px_rgba(0,0,0,0.5)] transition-shadow duration-300">
     <h2 class="text-xl text-green-700 font-semibold mb-2">Welding tools and more</h2>
-    <img :src="welding" alt="Welding Tools" class="w-80 h-80 object-contain" />
+    <img :src="welding" alt="Welding Tools" class="w-80 h-70 object-contain transform transition-transform duration-300 hover:scale-110" />
 
   </div>
 </div>
