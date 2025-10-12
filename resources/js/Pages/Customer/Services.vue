@@ -1,7 +1,7 @@
 <script setup>
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import truckImage from '@/assets/truck2.jpg';
-import services1Image from '@/assets/services1.jpg';
+import services1Image from '@/assets/services1.png';
 import contact1Image from '@/assets/contact1.jpg';
 import hardwareImage from '@/assets/hardware.png';
 import paintImage from '@/assets/paint.png';
@@ -15,15 +15,17 @@ import welding from '@/assets/welding.png';
   <GuestLayout>
     <div
       @click="toggleTruckPop"
-      class="relative w-full bg-cover bg-center bg-no-repeat text-white py-32 px-6 md:px-12 lg:px-20 cursor-pointer"
+      class="relative w-full bg-cover bg-[position:70%_30%] bg-no-repeat text-white py-32 px-6 md:px-12 lg:px-20 cursor-pointer"
       :style="`background-image: url(${services1Image})`"
     >
       <div class="absolute inset-0 bg-black/50"></div>
       <div class="absolute inset-0 from-black/90 to-transparent"></div>
       <div class="relative z-10  max-w-[90%] xl:max-w-[1280px] mx-auto">
+      <motion preset="slideVisibleLeft" :duration="900">
         <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold tracking-tight drop-shadow-lg">
           Road <span class="text-green-500">Freight</span> & Transport
         </h1>
+        </motion>
         <p class="mt-6 text-xl md:text-2xl font-medium drop-shadow">
           Built to Move Your Business Forward.
         </p>
@@ -38,7 +40,7 @@ import welding from '@/assets/welding.png';
             <div class="flex flex-col md:flex-row items-center justify-between mb-6 gap-8">
   <!-- Left: Text Section -->
   <div class="w-full md:w-1/2">
-    <h1 class="text-4xl md:text-5xl font-extrabold text-green-700 mb-6">
+    <h1 class="text-4xl md:text-5xl font-extrabold text-green-700 mb-6 drop-shadow-md">
       No Load Too Large or Too Small – We Deliver with Precision and Care
     </h1>
 
@@ -58,7 +60,7 @@ import welding from '@/assets/welding.png';
 </div>
 <div class="py-28">
   <div>
-    <h3 class="text-4xl md:text-5xl font-extrabold text-green-700 mb-6 py-4">
+    <h3 class="text-4xl md:text-5xl font-extrabold text-green-700 mb-6 py-4 drop-shadow-md">
               What can we transport? Just about everything — including but not limited to:
             </h3>
   </div>
@@ -101,7 +103,7 @@ import welding from '@/assets/welding.png';
 
   </div>
 </div>
-<p class="text-gray-700 text-lg leading-relaxed mb-6">
+<p class="text-gray-700 text-lg leading-relaxed mb-6 drop-shadow-lg">
               Wherever your cargo fits in the supply chain, we’ve got the wheels and the know-how to get it there safely.
             </p>
 

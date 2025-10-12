@@ -34,7 +34,9 @@ const submitForm = () => {
     <!-- Hero Section -->
     <div class="w-full bg-gray-100 py-16">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <h1 class="text-4xl font-bold text-gray-900">Contact Us</h1>
+        <h2 class="text-4xl md:text-5xl font-bold text-green-700 uppercase tracking-wide mb-4 drop-shadow-md" v-motion-slide-visible-right>
+            Contact Us
+          </h2>
         <p class="mt-4 text-lg text-gray-600">
           We're here to help! Reach out to us with any questions or concerns.
         </p>
@@ -46,7 +48,7 @@ const submitForm = () => {
       <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
         <!-- Contact Form -->
         <div class="bg-white p-8 rounded-lg shadow-md">
-          <h2 class="text-2xl font-bold text-gray-900 mb-6">Send Us a Message</h2>
+          <h2 class="text-2xl font-bold text-green-700 mb-6">Send Us a Message</h2>
           <form @submit.prevent="submitForm">
             <!-- Name -->
             <div class="mb-6">
@@ -84,7 +86,7 @@ const submitForm = () => {
 
             <!-- Submit Button -->
             <div class="flex justify-end">
-              <PrimaryButton type="submit" :disabled="form.processing">
+              <PrimaryButton type="submit" :disabled="form.processing" class="bg-green-600">
                 Send Message
               </PrimaryButton>
             </div>
@@ -93,18 +95,19 @@ const submitForm = () => {
 
         <!-- Contact Information -->
         <div class="bg-white p-8 rounded-lg shadow-md">
-          <h2 class="text-2xl font-bold text-gray-900 mb-6">Contact Information</h2>
+          <h2 class="text-2xl font-bold text-green-700 mb-6">Contact Information</h2>
           <div class="space-y-6">
             <!-- Address -->
             <div>
               <h3 class="text-lg font-semibold text-gray-900">Address</h3>
-              <p class="text-gray-600">123 Logistics Street, Naga City, Philippines</p>
+              <p class="text-gray-600">MANILA - Camelo Building, Tahao Rd, Barangay</p>
+              <p class="text-gray-600">LEGAZPI - Cruzada, Legazpi City, 4500 Albay</p>
             </div>
 
             <!-- Phone -->
             <div>
               <h3 class="text-lg font-semibold text-gray-900">Phone</h3>
-              <p class="text-gray-600">+63 123 456 7890</p>
+              <p class="text-gray-600">+63 917 543 7005</p>
             </div>
 
             <!-- Email -->

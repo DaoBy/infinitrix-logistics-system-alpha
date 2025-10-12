@@ -9,6 +9,7 @@ import truck2Image from '@/assets/truck2.jpg';
 import transportationImage from '@/assets/transportation.png';
 import packageImage from '@/assets/package.png';
 import weightImage from '@/assets/weight.png';
+import calculatorImage from '@/assets/calculator.png';
 
 // Add your case study image imports
 import caseStudy1 from '@/assets/caseStudy1.jpg';
@@ -61,6 +62,42 @@ const getVisibleCards = () => {
   if (window.innerWidth >= 640) return 2; // sm: 2 cards
   return 1; // mobile: 1 card
 };
+
+//CALCULATOR
+// Constants
+const base_fee = 500
+const volume_rate = 50
+const weight_rate = 20
+const package_rate = 10
+
+// User inputs
+const height = ref('')
+const width = ref('')
+const length = ref('')
+const weight = ref('')
+const numPackages = ref(1)
+
+// Computed values
+const volumeInMeters = computed(() => {
+  if (!height.value || !width.value || !length.value) return 0
+  return (height.value / 100) * (width.value / 100) * (length.value / 100)
+})
+
+const volumeFee = computed(() => volumeInMeters.value * volume_rate)
+const weightFee = computed(() => (weight.value ? weight.value * weight_rate : 0))
+const packageFee = computed(() => numPackages.value * package_rate)
+
+const totalPrice = computed(() => {
+  if (
+    volumeInMeters.value > 10 ||
+    weight.value > 100
+  ) return '⚠️ Package exceeds limit!'
+
+  const total =
+    base_fee + volumeFee.value + weightFee.value + packageFee.value
+  return total.toFixed(2)
+})
+//END CALCULATOR
 
 const maxSlides = () => Math.max(0, caseStudies.value.length - getVisibleCards());
 
@@ -169,9 +206,11 @@ const navigateToCompleteProfile = () => {
       <div class="absolute inset-0 bg-black/50"></div>
       <div class="absolute inset-0 bg-gradient-to-b from-black/90 to-transparent"></div>
       <div class="relative z-10 text-center max-w-[90%] xl:max-w-[1280px] mx-auto">
-        <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold tracking-tight drop-shadow-lg text-center"> 
-          <span class="text-green-600">Sending a package?</span> We've got you covered.
+      <motion preset="slideVisibleLeft" :duration="900">
+        <h1 class="text-6xl sm:text-6xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold tracking-tight drop-shadow-lg text-center"> 
+          <span class="text-green-600 drop-shadow-md">Sending a package?</span> We've got you covered.
         </h1>
+        </motion>
         <p class="mt-6 text-xl md:text-2xl font-medium drop-shadow">
           Shipping made simple for businesses and individuals.
         </p>
@@ -193,11 +232,11 @@ const navigateToCompleteProfile = () => {
     </div>
 
     <!-- Goowell Case Section -->
-    <div class="w-full bg-gradient-to-br from-gray-50 to-gray-100 py-16 px-6 md:px-12 lg:px-20">
+    <div class="w-full bg-gradient-to-br from-gray-50 to-gray-100 py-16 px-6 md:px-12 lg:px-20" >
       <div class="max-w-[90%] xl:max-w-[1280px] mx-auto">
         <!-- Header -->
         <div class="text-center mb-12">
-          <h2 class="text-4xl md:text-5xl font-bold text-green-700 uppercase tracking-wide mb-4">
+          <h2 class="text-4xl md:text-5xl font-bold text-green-700 uppercase tracking-wide mb-4 drop-shadow-md" v-motion-slide-visible-right :duration="600">
             Our Story
           </h2>
           <p class="text-gray-600 text-lg max-w-2xl mx-auto">
@@ -273,7 +312,7 @@ const navigateToCompleteProfile = () => {
       <div class="max-w-[90%] xl:max-w-[1280px] mx-auto space-y-12">
         <div class="space-y-6">
           <div class="text-center mb-12">
-          <h2 class="text-4xl md:text-5xl font-bold text-green-700 uppercase tracking-wide mb-4">
+          <h2 class="text-4xl md:text-5xl font-bold text-green-700 uppercase tracking-wide mb-4 drop-shadow-md" v-motion-slide-visible-right :duration="600">
             Services
           </h2>
             <p class="text-gray-700 text-lg leading-relaxed mt-4">
@@ -281,6 +320,7 @@ const navigateToCompleteProfile = () => {
           </div>
 
           <div
+            v-motion-fade-visible :duration="600"
             @click="toggleTruckPop"
             class="relative w-full bg-cover bg-center bg-no-repeat text-white py-80 px-6 md:px-12 lg:px-20 cursor-pointer"
             :style="`background-image: url(${truck2Image})`"
@@ -301,10 +341,78 @@ const navigateToCompleteProfile = () => {
       </div>
     </div>
 
+    <div class="w-full bg-gradient-to-br from-gray-50 to-gray-100 py-16 px-6 md:px-12 lg:px-20">
+  <div class="flex flex-col lg:flex-row items-center justify-center gap-10">
+    
+    <!-- Image (smaller size) -->
+    <Motion preset="slideVisibleLeft" :duration="600">
+      <div class="flex justify-center">
+      <img
+        :src="calculatorImage"
+        alt="Delivery Cost Calculator"
+        class="w-64 h-auto md:w-80 lg:w-96 object-contain"
+      />
+    </div>
+    </Motion>
+
+    <!-- Calculator Card -->
+    <div class="max-w-md bg-white shadow-lg rounded-2xl p-6">
+      <h2 class="text-2xl font-bold text-green-700 text-center mb-2 drop-shadow-md">
+        Delivery Cost Calculator
+      </h2>
+      <p class="text-gray-700 text-sm leading-relaxed text-center mb-4">
+        Calculate the estimated delivery cost based on your package dimensions and weight.
+      </p>
+
+      <div class="grid gap-4">
+        <div>
+          <label class="block font-medium">Height (cm)</label>
+          <input v-model.number="height" type="number" class="w-full p-2 border rounded-md" placeholder="Enter height" />
+        </div>
+
+        <div>
+          <label class="block font-medium">Width (cm)</label>
+          <input v-model.number="width" type="number" class="w-full p-2 border rounded-md" placeholder="Enter width" />
+        </div>
+
+        <div>
+          <label class="block font-medium">Length (cm)</label>
+          <input v-model.number="length" type="number" class="w-full p-2 border rounded-md" placeholder="Enter length" />
+        </div>
+
+        <div>
+          <label class="block font-medium">Weight (kg)</label>
+          <input v-model.number="weight" type="number" class="w-full p-2 border rounded-md" placeholder="Enter weight" />
+        </div>
+
+        <div>
+          <label class="block font-medium">Number of Packages</label>
+          <input v-model.number="numPackages" type="number" min="1" class="w-full p-2 border rounded-md" />
+        </div>
+      </div>
+
+      <div class="mt-6 bg-green-50 p-4 rounded-xl text-center">
+        <p class="text-lg font-semibold text-gray-700">
+          Volume: {{ volumeInMeters.toFixed(3) }} m³
+        </p>
+        <p class="text-lg font-semibold text-gray-700">
+          Total Price:
+          <span class="text-green-700 font-bold text-xl">
+            {{ totalPrice }}
+          </span>
+        </p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+    
+
     <!-- What Our Logistics Service Means Section -->
      
     <div class="pt-4 pb-14 px-6 md:px-12 lg:px-20 text-center"> 
-      <h2 class="leading-normal font-semibold text-5xl md:text-md text-green-700 pb-3 text-center mt-15">
+      <h2 class="leading-normal font-semibold text-5xl md:text-md text-green-700 pb-3 text-center mt-15 drop-shadow-md" v-motion-slide-visible-right :duration="600">
         What Our Logistics Service Means for Your Business
       </h2>
       <p class="text-gray-700 max-w-4xl mx-auto mb-12 text-xl">
@@ -314,7 +422,11 @@ const navigateToCompleteProfile = () => {
       <div class="grid grid-cols-1 md:grid-cols-3 gap-10 text-center">
         <!-- Item 1 -->
         <div class="flex flex-col items-center space-y-4">
-          <img :src="packageImage" alt="Warehouse and Truck" class="w-50 h-50 object-contain" />
+          <img :src="packageImage" alt="Warehouse and Truck" class="w-50 h-50 object-contain cursor-pointer"  
+          v-motion
+            :initial="{ scale: 1, rotate: 0 }"
+            :hovered="{ scale: 1.1, rotate: 10 }"
+            :transition="{ type: 'spring', stiffness: 200, damping: 100 }"/>
           <h3 class="font-bold text-4xl text-green-700 text-md mb-2">Transportation</h3>
           <p class="text-gray-700 max-w-4xl mx-auto mb-12 text-xl">
            We handle the critical early stages of the logistics process—from pick-up to delivery at our central warehouse—ensuring your goods move efficiently and securely.
@@ -323,7 +435,11 @@ const navigateToCompleteProfile = () => {
 
         <!-- Item 2 -->
         <div class="flex flex-col items-center space-y-4">
-          <img :src="transportationImage" alt="Boxes and Ninja" class="w-50 h-50 object-contain" />
+          <img :src="transportationImage" alt="Boxes and Ninja" class="w-50 h-50 object-contain cursor-pointer" 
+          v-motion
+            :initial="{ scale: 1, rotate: 0 }"
+            :hovered="{ scale: 1.1, rotate: 10 }"
+            :transition="{ type: 'spring', stiffness: 200, damping: 100 }"/>
           <h3 class="font-bold text-4xl text-green-700 text-md mb-2">Lightweight package delivery</h3>
           <p class="text-gray-700 max-w-4xl mx-auto mb-12 text-xl">
             Our fleet includes a range of trucks, each designed for different load capacities. If your package is lightweight, 
@@ -333,7 +449,11 @@ const navigateToCompleteProfile = () => {
 
         <!-- Item 3 -->
         <div class="flex flex-col items-center space-y-4">
-          <img :src="weightImage" alt="Nationwide Map" class="w-50 h-50 object-contain" />
+          <img :src="weightImage" alt="Nationwide Map" class="w-50 h-50 object-contain cursor-pointer" 
+          v-motion
+            :initial="{ scale: 1, rotate: 0 }"
+            :hovered="{ scale: 1.1, rotate: 10 }"
+            :transition="{ type: 'spring', stiffness: 200, damping: 100 }"/>
           <h3 class="font-bold text-4xl text-green-700 text-md mb-2">Heavyweight</h3>
           <p class="text-gray-700 max-w-4xl mx-auto mb-12 text-xl">
             Our fleet also includes trucks built to handle large and heavy loads. No matter how bulky your package is, 
