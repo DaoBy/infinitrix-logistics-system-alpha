@@ -164,11 +164,11 @@ function toggleFlip(index) {
 
 
         <!-- ADDITIONAL TEXT -->
-        <p class="text-gray-700 text-lg leading-relaxed mb-6 drop-shadow-lg">
+        <p class="text-gray-700 text-lg leading-relaxed drop-shadow-lg">
           Wherever your cargo fits in the supply chain, we’ve got the wheels and the know-how to get it there safely.
         </p>
-        <p class="text-gray-700 text-lg leading-relaxed mb-6">
-          Located at <strong>13 Platinum St., Goldendale Subdivision, Tinajeros, Malabon, Metro Manila</strong>, <strong>INFINITRIX EXPRESS CARGO (C)</strong> offers more than just transport. Our full-service logistics operation includes warehousing, inventory management, order fulfillment, and secure distribution — all backed by a highly trained team.
+        <p class="text-gray-700 text-lg leading-relaxed">
+          Located at <strong>Camelo Building, Tahao Rd, Barangay Cruzada, Legazpi City, 4500 Albay, Philippines</strong>, <strong>INFINITRIX EXPRESS CARGO (C)</strong> offers more than just transport. Our full-service logistics operation includes warehousing, inventory management, order fulfillment, and secure distribution — all backed by a highly trained team.
         </p>
         <p class="text-gray-700 text-lg leading-relaxed">
           Whether you're a small business or a large enterprise, we deliver logistics solutions that scale with you.
