@@ -3,14 +3,19 @@ import GuestLayout from '@/Layouts/GuestLayout.vue';
 import services1Image from '@/assets/services1.png';
 import sack1Image from '@/assets/sack1.png';
 import truck2Image from '@/assets/truck2.jpg';
+import customerfocus from '@/assets/customerfocus.png';
 import missionIcon from '@/assets/missionIcon.png';
+import operationfocus from '@/assets/operationfocus.png';
 import visionIcon from '@/assets/visionIcon.png';
+import trusticon from '@/assets/trusticon.png';
+import peopleicon from '@/assets/peopleicon.png';
 
 </script>
 
 <template>
   <GuestLayout>
   <div
+    v-motion-fade-visible :duration="600"
       @click="toggleTruckPop"
       class="relative w-full bg-cover bg-[position:70%_30%] bg-no-repeat text-white py-32 px-6 md:px-12 lg:px-20 cursor-pointer"
       :style="`background-image: url(${services1Image})`"
@@ -36,8 +41,8 @@ import visionIcon from '@/assets/visionIcon.png';
 <div class="mt-24 max-w-7xl mx-auto px-6 md:px-12 lg:px-20 grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
   <!-- Text Content -->
   <div>
-    <h3 class="text-4xl font-extrabold text-green-700 mb-4">
-      About Infinitrix
+    <h3 class="text-4xl font-extrabold text-green-700 mb-4 drop-shadow-md">
+      | About Infinitrix
     </h3>
     <p class="text-xl text-gray-700 mb-6">
       Speed, reliability, and innovation—Infinitrix leads modern logistics with purpose.
@@ -51,7 +56,7 @@ import visionIcon from '@/assets/visionIcon.png';
   </div>
 
   <!-- Image -->
-  <div>
+  <div v-motion-fade-visible :duration="600">
     <img :src="truck2Image" alt="Infinitrix Overview Image" class="w-full rounded shadow-md object-cover" />
   </div>
 </div>
@@ -59,14 +64,14 @@ import visionIcon from '@/assets/visionIcon.png';
 <!-- Our Story  -->
 <div class="mt-24 mb-24 max-w-7xl mx-auto px-6 md:px-12 lg:px-20 grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
   <!-- Image -->
-  <div>
+  <div v-motion-fade-visible :duration="600">
     <img :src="sack1Image" alt="sack1 Image" class="w-full rounded shadow-md object-cover" />
   </div>
 
   <!-- Text Content -->
   <div>
-    <h3 class="text-4xl font-extrabold text-green-700 mb-4">
-      Our Story
+    <h3 class="text-4xl font-extrabold text-green-700 mb-4 drop-shadow-md">
+      | Our Story
     </h3>
     <p class="text-xl text-gray-700 mb-6">
       Infinitrix Express Cargo began with a simple vision: to create a reliable and efficient solution for moving goods.
@@ -118,21 +123,21 @@ import visionIcon from '@/assets/visionIcon.png';
       v-motion
       :initial="{ rotateY: 0 }"
       :hovered="{ rotateY: 180 }"
-      :transition="{ duration: 600, ease: 'easeInOut' }"
+      :transition="{ duration: 5.0, ease: 'easeInOut' }"
       class="relative w-80 h-[30rem] [transform-style:preserve-3d] cursor-pointer"
     >
       <!-- Front -->
       <div class="absolute inset-0 flex flex-col items-center justify-center bg-white rounded-xl shadow-lg [backface-visibility:hidden]">
-        <img :src="missionIcon" alt="Our Mission Icon" class="h-min" />
-        <h2 class="absolute bottom-16 text-2xl font-semibold text-green-700 drop-shadow-md">OUR MISSION</h2>
+        <img :src="customerfocus" alt="Customer Focus Icon" class="h-min" />
+        <h2 class="absolute bottom-16 text-2xl font-semibold text-green-700 drop-shadow-md">Customer-Centered</h2>
+        <h2 class="absolute bottom-10 text-2xl font-semibold text-green-700 drop-shadow-md">Innovation</h2>
       </div>
 
       <!-- Back -->
       <div
         class="absolute inset-0 flex items-center justify-center bg-green-600 rounded-xl text-white [backface-visibility:hidden] [transform:rotateY(180deg)]"
       >
-        <p class="text-center mx-8">Infinitrix Express Cargo is committed to delivering reliable land freight services that ensure every package reaches its destination safely and on time.
-We aim to simplify logistics through digital solutions, strengthen customer trust through transparency and care, and continuously improve our operations to support the growing needs of our clients.</p>
+        <p class="text-center mx-8">We relentlessly innovate, always with our customers' evolving needs at the forefront, to deliver solutions that simplify and enhance their logistics experience.</p>
       </div>
     </div>
 
@@ -141,20 +146,20 @@ We aim to simplify logistics through digital solutions, strengthen customer trus
       v-motion
       :initial="{ rotateY: 0 }"
       :hovered="{ rotateY: 180 }"
-      :transition="{ duration: 0.8, ease: 'easeInOut' }"
+      :transition="{ duration: 5.0, ease: 'easeInOut' }"
       class="relative w-80 h-[30rem] [transform-style:preserve-3d] cursor-pointer"
     >
       <!-- Front -->
       <div class="absolute inset-0 flex flex-col items-center justify-center bg-white rounded-xl shadow-lg [backface-visibility:hidden]">
-        <img :src="visionIcon" alt="Our Vision Icon" class="h-min" />
-        <h2 class="absolute bottom-16 text-2xl font-semibold text-green-700 drop-shadow-md">OUR VISION</h2>
+        <img :src="operationfocus" alt="Our Vision Icon" class="h-min" />
+        <h2 class="absolute bottom-16 text-2xl font-semibold text-green-700 drop-shadow-md">Operational Excellence</h2>
       </div>
 
       <!-- Back -->
       <div
         class="absolute inset-0 flex items-center justify-center bg-green-600 rounded-xl text-white [backface-visibility:hidden] [transform:rotateY(180deg)]"
       >
-        <p class="text-center mx-8">To become a trusted logistics partner in the Philippines by providing fast, secure, and convenient cargo delivery services that connect communities and businesses through innovation and dedication.</p>
+        <p class="text-center mx-8">We commit to the highest standards in every operation, ensuring efficiency, accuracy, and continuous improvement across our entire network.</p>
     
       </div>
     </div>
@@ -164,20 +169,20 @@ We aim to simplify logistics through digital solutions, strengthen customer trus
       v-motion
       :initial="{ rotateY: 0 }"
       :hovered="{ rotateY: 180 }"
-      :transition="{ duration: 0.8, ease: 'easeInOut' }"
+      :transition="{ duration: 5.0, ease: 'easeInOut' }"
       class="relative w-80 h-[30rem] [transform-style:preserve-3d] cursor-pointer"
     >
       <!-- Front -->
       <div class="absolute inset-0 flex flex-col items-center justify-center bg-white rounded-xl shadow-lg [backface-visibility:hidden]">
-        <img :src="visionIcon" alt="Our Vision Icon" class="h-min" />
-        <h2 class="absolute bottom-16 text-2xl font-semibold text-green-700 drop-shadow-md">OUR VISION</h2>
+        <img :src="trusticon" alt="Our Vision Icon" class="h-min" />
+        <h2 class="absolute bottom-16 text-2xl font-semibold text-green-700 drop-shadow-md">Transparency & Trust</h2>
       </div>
 
       <!-- Back -->
       <div
         class="absolute inset-0 flex items-center justify-center bg-green-600 rounded-xl text-white [backface-visibility:hidden] [transform:rotateY(180deg)]"
       >
-        <p class="text-center mx-8">To become a trusted logistics partner in the Philippines by providing fast, secure, and convenient cargo delivery services that connect communities and businesses through innovation and dedication.</p>
+        <p class="text-center mx-8">Open communication and unwavering integrity are the cornerstones of our relationships, fostering complete trust with every interaction.</p>
     
       </div>
     </div>
@@ -186,20 +191,21 @@ We aim to simplify logistics through digital solutions, strengthen customer trus
       v-motion
       :initial="{ rotateY: 0 }"
       :hovered="{ rotateY: 180 }"
-      :transition="{ duration: 0.8, ease: 'easeInOut' }"
+      :transition="{ duration: 5.0, ease: 'easeInOut' }"
       class="relative w-80 h-[30rem] [transform-style:preserve-3d] cursor-pointer"
     >
       <!-- Front -->
       <div class="absolute inset-0 flex flex-col items-center justify-center bg-white rounded-xl shadow-lg [backface-visibility:hidden]">
-        <img :src="visionIcon" alt="Our Vision Icon" class="h-min" />
-        <h2 class="absolute bottom-16 text-2xl font-semibold text-green-700 drop-shadow-md">OUR VISION</h2>
+        <img :src="peopleicon" alt="Our Vision Icon" class="h-min" />
+        <h2 class="absolute bottom-16 text-2xl font-semibold text-green-700 drop-shadow-md">Team Culture with </h2>
+        <h2 class="absolute bottom-10 text-2xl font-semibold text-green-700 drop-shadow-md">Personality</h2>
       </div>
 
       <!-- Back -->
       <div
         class="absolute inset-0 flex items-center justify-center bg-green-600 rounded-xl text-white [backface-visibility:hidden] [transform:rotateY(180deg)]"
       >
-        <p class="text-center mx-8">To become a trusted logistics partner in the Philippines by providing fast, secure, and convenient cargo delivery services that connect communities and businesses through innovation and dedication.</p>
+        <p class="text-center mx-8">We foster a vibrant and supportive team environment where diverse perspectives are celebrated, encouraging creativity and collaboration.</p>
     
       </div>
     </div>
@@ -232,40 +238,6 @@ We aim to simplify logistics through digital solutions, strengthen customer trus
 
 
 
-<h3 class="text-3xl pt-20 text-center font-bold text-green-700">Our Core Values</h3>
-<div class="mt-16 grid grid-cols-1 md:grid-cols-2 gap-8">
-
-  <!-- Customer-Centered Innovation -->
-  <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-green-700">Customer-Centered Innovation</h3>
-    <p class="mt-4 text-gray-600 max-w-md">
-      We relentlessly innovate, always with our customers' evolving needs at the forefront, to deliver solutions that simplify and enhance their logistics experience.
-    </p>
-  </div>
-
-  <!-- Values -->
-  <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-green-700">Transparency & Trust</h3>
-    <p class="mt-4 text-gray-600 max-w-md">
-      Open communication and unwavering integrity are the cornerstones of our relationships, fostering complete trust with every interaction.
-    </p>
-  </div>
-
-  <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-green-700">Operational Excellence</h3>
-    <p class="mt-4 text-gray-600 max-w-md">
-      We commit to the highest standards in every operation, ensuring efficiency, accuracy, and continuous improvement across our entire network.
-    </p>
-  </div>
-
-  <!-- Values -->
-  <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-green-700">Team Culture with Personality</h3>
-    <p class="mt-4 text-gray-600 max-w-md">
-      We foster a vibrant and supportive team environment where diverse perspectives are celebrated, encouraging creativity and collaboration.
-    </p>
-  </div>
-</div>
 
         <!-- Team Section -->
         <div class="mt-20 text-center">
@@ -286,7 +258,7 @@ We aim to simplify logistics through digital solutions, strengthen customer trus
             <div class="text-center">
               <img :src="deliveryImage" alt="COO" class="mx-auto h-32 w-32 rounded-full shadow-md object-cover" />
               <h4 class="mt-4 text-lg font-semibold text-gray-900">Nesty Teng</h4>
-              <p class="text-sm text-gray-600">Chief Operations Officer</p>
+              <p class="text-sm text-gray-600">Operation Manager</p>
             </div> 
           </div>
         </div>
