@@ -375,7 +375,7 @@ const form = useForm({
   city: '',
   province: '',
   zip_code: '',
-  hire_date: '',
+  hire_date: new Date().toISOString().split('T')[0], // Set to today's date
   region_id: '',
 });
 

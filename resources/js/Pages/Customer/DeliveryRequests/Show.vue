@@ -55,27 +55,106 @@
         <div :class="paymentStatusMessageClass" class="space-y-3">
           <p>{{ paymentStatusMessage }}</p>
           
-      <!-- Show rejection reason if payment was rejected -->
-<div v-if="delivery.payment_status === 'rejected' && delivery.payment?.rejection_reason" 
-     class="bg-white bg-opacity-30 p-3 rounded mt-2">
-  <div class="flex items-center space-x-2">
-    <h4 class="font-medium">📝 Rejection Reason:</h4>
-    <p class="text-sm">{{ delivery.payment.rejection_reason }}</p>
-  </div>
-</div>
+          <!-- Show rejection reason if payment was rejected -->
+          <div v-if="delivery.payment_status === 'rejected' && delivery.payment?.rejection_reason" 
+               class="bg-white bg-opacity-30 p-3 rounded mt-2">
+            <div class="flex justify-between items-center">
+              <div class="flex items-center space-x-2">
+                <h4 class="font-medium">📝 Rejection Reason:</h4>
+                <p class="text-sm">{{ delivery.payment.rejection_reason }}</p>
+              </div>
+              <!-- Resubmit Button for Rejected Payments - MOVED HERE -->
+              <div v-if="delivery.payment_status === 'rejected' && delivery.payment">
+                <Link
+                  :href="route('customer.payments.resubmit', {
+                    delivery: delivery.id,
+                    payment: delivery.payment.id
+                  })"
+                  as="button"
+                >
+                  <PrimaryButton>
+                    Resubmit Payment
+                  </PrimaryButton>
+                </Link>
+              </div>
+            </div>
+          </div>
 
-          
-          <!-- Simple payment method info for GCash/Bank (prepaid only) -->
-          <div v-if="shouldShowSimplePaymentInfo" class="bg-white bg-opacity-30 p-3 rounded mt-2">
-            <h4 class="font-medium mb-1">💳 Online Payment Available</h4>
-            <p class="text-sm">
-              You can pay online now using GCash or bank transfer for faster processing.
-              Click the "Pay Now" button below to proceed with online payment.
-            </p>
+          <!-- Postpaid Completion Instructions - ONLY show for unpaid postpaid -->
+          <div v-if="delivery.payment_type === 'postpaid' && 
+                     ['completed', 'delivered'].includes(delivery.status) && 
+                     delivery.payment_status !== 'paid'" 
+               class="bg-white bg-opacity-30 p-4 rounded-lg mt-4 border border-blue-200">
+            <h4 class="font-medium text-blue-800 mb-2">📋 Payment Instructions</h4>
+            
+            <div class="space-y-3 text-sm text-blue-700">
+              <!-- Due Date Information -->
+              <div v-if="delivery.payment_due_date" class="flex items-start space-x-2">
+                <span class="font-medium">📅 Due Date:</span>
+                <span>Please settle your payment by <strong>{{ formatDate(delivery.payment_due_date) }}</strong></span>
+              </div>
+              
+              <!-- Payment Options -->
+              <div class="flex items-start space-x-2">
+                <span class="font-medium">💳 Payment Methods:</span>
+                <div>
+                  <p><strong>Option 1 - Online:</strong> Pay now using GCash or Bank Transfer</p>
+                  <p><strong>Option 2 - Collector:</strong> Wait for our collector to contact you for cash payment</p>
+                  <p><strong>Option 3 - Branch:</strong> Visit any branch to pay in cash</p>
+                </div>
+              </div>
+              
+              <!-- Late Payment Warning -->
+              <div v-if="delivery.payment_due_date && isPaymentOverdue" class="bg-yellow-50 border border-yellow-200 p-3 rounded">
+                <p class="text-yellow-800 font-medium">⚠️ Payment Overdue</p>
+                <p class="text-yellow-700 text-sm mt-1">Please settle your balance immediately to avoid service interruptions.</p>
+              </div>
+            </div>
           </div>
           
-          <!-- Cash payment information -->
-          <div v-if="delivery.payment_method === 'cash'" class="bg-white bg-opacity-30 p-3 rounded mt-2">
+          <!-- Simple payment method info for GCash/Bank - NOT for pending verification -->
+          <div v-if="shouldShowSimplePaymentInfo && delivery.payment_status !== 'pending_verification'" class="bg-white bg-opacity-30 p-3 rounded mt-2">
+            <div class="flex justify-between items-center">
+              <div class="flex-1">
+                <h4 class="font-medium mb-1">💳 Online Payment Available</h4>
+                <p class="text-sm" v-if="delivery.payment_type === 'postpaid' && !['completed', 'delivered'].includes(delivery.status)">
+                  You can pay online now using GCash or bank transfer. Paying early helps speed up the delivery process.
+                </p>
+                <p class="text-sm" v-else>
+                  You can pay online now using GCash or bank transfer for faster processing.
+                </p>
+              </div>
+              <div class="ml-4 flex-shrink-0">
+                <!-- Pay Now Button - Show for GCash/Bank methods OR postpaid -->
+                <Link
+                  v-if="canMakePayment && delivery.payment_status !== 'rejected' && delivery.payment_status !== 'pending_verification' && (delivery.payment_method === 'gcash' || delivery.payment_method === 'bank' || delivery.payment_type === 'postpaid')"
+                  :href="route('customer.payments.create', delivery.id)"
+                  as="button"
+                >
+                  <PrimaryButton>
+                    {{ payNowButtonText }}
+                  </PrimaryButton>
+                </Link>
+
+                <!-- Optional payment button for cash method - Show ONLY for prepaid cash -->
+                <Link
+                  v-if="delivery.payment_method === 'cash' && canMakePayment && delivery.payment_status !== 'rejected' && delivery.payment_status !== 'pending_verification' && delivery.payment_type === 'prepaid'"
+                  :href="route('customer.payments.create', delivery.id)"
+                  as="button"
+                >
+                  <SecondaryButton>
+                    Pay Online Instead
+                  </SecondaryButton>
+                </Link>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Cash payment information - ONLY show for unpaid prepaid cash -->
+          <div v-if="delivery.payment_method === 'cash' && 
+                     delivery.payment_type === 'prepaid' && 
+                     delivery.payment_status !== 'paid'" 
+               class="bg-white bg-opacity-30 p-3 rounded mt-2">
             <h4 class="font-medium mb-1">💰 Cash Payment Instructions</h4>
             <p class="text-sm">Please pay with cash when you drop off your package at our <strong>{{ delivery.pick_up_region?.name }}</strong> branch. Our staff will assist you with the payment process.</p>
             <p class="text-sm mt-1">You also have the option to pay online now if you prefer.</p>
@@ -92,78 +171,46 @@
             </div>
           </div>
           
-          <!-- Pending verification information -->
-          <div v-if="delivery.payment_status === 'pending_verification'" class="bg-white bg-opacity-30 p-3 rounded mt-2">
-            <h4 class="font-medium mb-1">⏳ What happens next?</h4>
-            <p class="text-sm">Our team will verify your payment within 1-2 business days. You'll receive a notification once it's verified.</p>
-          </div>
-          
-          <!-- Verified payment information -->
-          <div v-if="delivery.payment_status === 'paid' && delivery.payment_verified" class="bg-white bg-opacity-30 p-3 rounded mt-2">
+          <!-- Next Steps - ONLY show when payment verified but delivery not complete AND not prepaid cash -->
+          <div v-if="delivery.payment_status === 'paid' && 
+                     delivery.payment_verified && 
+                     !['completed', 'delivered'].includes(delivery.status) &&
+                     !(delivery.payment_type === 'prepaid' && delivery.payment_method === 'cash')" 
+               class="bg-white bg-opacity-30 p-3 rounded mt-2">
             <h4 class="font-medium mb-1">✅ Next Steps</h4>
             <p class="text-sm">Your payment has been verified. You can now proceed to prepare your package for shipment.</p>
           </div>
           
-         <!-- Rejected payment information -->
-<div v-if="delivery.payment_status === 'rejected'" class="bg-white bg-opacity-30 p-3 rounded mt-2">
-  <h4 class="font-medium mb-1">ℹ️ Need Assistance?</h4>
-  <p class="text-sm">
-    Your payment was not accepted. If you need help, please reach out to our support team or try resubmitting with the correct information.
-  </p>
-</div>
-
+          <!-- Rejected payment information -->
+          <div v-if="delivery.payment_status === 'rejected'" class="bg-white bg-opacity-30 p-3 rounded mt-2">
+            <h4 class="font-medium mb-1">ℹ️ Need Assistance?</h4>
+            <p class="text-sm">
+              Your payment was not accepted. If you need help, please reach out to our support team or try resubmitting with the correct information.
+            </p>
+          </div>
         </div>
 
-        <!-- Action Buttons -->
-        <div v-if="showPaymentAction" class="mt-4 flex flex-wrap gap-3">
-          <!-- Pay Now Button - Show for GCash/Bank prepaid (only when not rejected) -->
-          <Link
-            v-if="canMakePayment && (delivery.payment_method === 'gcash' || delivery.payment_method === 'bank') && delivery.payment_status !== 'rejected'"
-            :href="route('customer.payments.create', delivery.id)"
-            as="button"
-          >
-            <PrimaryButton>
-              {{ payNowButtonText }}
-            </PrimaryButton>
-          </Link>
-
-          <!-- Optional payment button for cash method (only when not rejected) -->
-          <Link
-            v-if="delivery.payment_method === 'cash' && canMakePayment && delivery.payment_status !== 'rejected'"
-            :href="route('customer.payments.create', delivery.id)"
-            as="button"
-          >
-            <SecondaryButton>
-              Pay Online Instead
-            </SecondaryButton>
-          </Link>
-
-          <!-- Resubmit Button for Rejected Payments -->
-          <Link
-            v-if="delivery.payment_status === 'rejected' && delivery.payment"
-            :href="route('customer.payments.resubmit', {
-              delivery: delivery.id,
-              payment: delivery.payment.id
-            })"
-            as="button"
-          >
-            <PrimaryButton>
-              Resubmit Payment
-            </PrimaryButton>
-          </Link>
-
-          <!-- View Payment Details Link -->
-          <Link
-            v-if="delivery.payment && !['awaiting_payment', 'rejected'].includes(delivery.payment_status)"
-            :href="route('customer.payments.show', delivery.payment.id)"
-            class="text-sm text-blue-600 hover:text-blue-800 self-center ml-4"
-          >
-            View Payment Details
-          </Link>
+        <!-- Support Information for Completed & Paid Deliveries -->
+        <div v-if="delivery.payment_status === 'paid' && 
+                   delivery.payment_verified && 
+                   ['completed', 'delivered'].includes(delivery.status)" 
+             class="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <div class="flex items-center">
+            <InformationCircleIcon class="h-5 w-5 text-blue-400 mr-2" />
+            <span class="text-blue-800 text-sm">
+              <strong>Need assistance?</strong> If you have any questions about your delivery, please visit our 
+              <Link :href="route('contact.us')" class="text-blue-600 hover:text-blue-800 underline">Contact Us</Link> 
+              page for support.
+            </span>
+          </div>
         </div>
 
-        <!-- Additional instructions for verified payments -->
-        <div v-if="delivery.payment_status === 'paid' && delivery.payment_verified" class="mt-4 bg-white bg-opacity-20 p-3 rounded">
+        <!-- Package Handover Instructions - ONLY for prepaid that need to drop off -->
+        <div v-if="delivery.payment_status === 'paid' && 
+                   delivery.payment_verified && 
+                   delivery.payment_type === 'prepaid' &&
+                   !['completed', 'delivered'].includes(delivery.status)" 
+             class="mt-4 bg-white bg-opacity-20 p-3 rounded">
           <p class="text-sm font-medium">
             📦 Package Handover Instructions:
           </p>
@@ -180,54 +227,51 @@
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Left Column - Delivery Information -->
         <div class="lg:col-span-2 space-y-6">
-      <!-- Sender & Receiver Information -->
-<div class="bg-white shadow rounded-lg overflow-hidden">
-  <div class="px-6 py-4 border-b border-gray-200">
-    <h3 class="text-lg font-medium text-gray-900">Contact Information</h3>
-  </div>
-  <div class="px-6 py-4">
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Sender & Receiver Information -->
+          <div class="bg-white shadow rounded-lg overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200">
+              <h3 class="text-lg font-medium text-gray-900">Contact Information</h3>
+            </div>
+            <div class="px-6 py-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-      <!-- Sender -->
-      <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
-        <h4 class="font-medium text-gray-700 mb-3 flex items-center">
-          <svg class="h-5 w-5 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-          </svg>
-          Sender
-        </h4>
-        <div class="space-y-2 text-sm">
-          <p><span class="text-gray-500">Name:</span> <span class="text-gray-900 font-medium">{{ delivery.sender?.name || 'N/A' }}</span></p>
-          <p><span class="text-gray-500">Email:</span> <span class="text-gray-900">{{ delivery.sender?.email || 'N/A' }}</span></p>
-          <p><span class="text-gray-500">Mobile:</span> <span class="text-gray-900">{{ delivery.sender?.mobile || 'N/A' }}</span></p>
-          <p><span class="text-gray-500">Address:</span> <span class="text-gray-900">{{ delivery.sender?.address || 'N/A' }}</span></p>
-        </div>
-      </div>
+                <!-- Sender -->
+                <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                  <h4 class="font-medium text-gray-700 mb-3 flex items-center">
+                    <svg class="h-5 w-5 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    Sender
+                  </h4>
+                  <div class="space-y-2 text-sm">
+                    <p><span class="text-gray-500">Name:</span> <span class="text-gray-900 font-medium">{{ delivery.sender?.name || 'N/A' }}</span></p>
+                    <p><span class="text-gray-500">Email:</span> <span class="text-gray-900">{{ delivery.sender?.email || 'N/A' }}</span></p>
+                    <p><span class="text-gray-500">Mobile:</span> <span class="text-gray-900">{{ delivery.sender?.mobile || 'N/A' }}</span></p>
+                    <p><span class="text-gray-500">Address:</span> <span class="text-gray-900">{{ delivery.sender?.address || 'N/A' }}</span></p>
+                  </div>
+                </div>
 
-      <!-- Receiver -->
-      <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
-        <h4 class="font-medium text-gray-700 mb-3 flex items-center">
-          <svg class="h-5 w-5 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-          </svg>
-          Receiver
-        </h4>
-        <div class="space-y-2 text-sm">
-          <p><span class="text-gray-500">Name:</span> <span class="text-gray-900 font-medium">{{ delivery.receiver?.name || 'N/A' }}</span></p>
-          <p><span class="text-gray-500">Email:</span> <span class="text-gray-900">{{ delivery.receiver?.email || 'N/A' }}</span></p>
-          <p><span class="text-gray-500">Mobile:</span> <span class="text-gray-900">{{ delivery.receiver?.mobile || 'N/A' }}</span></p>
-          <p><span class="text-gray-500">Address:</span> <span class="text-gray-900">{{ delivery.receiver?.address || 'N/A' }}</span></p>
-        </div>
-      </div>
+                <!-- Receiver -->
+                <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                  <h4 class="font-medium text-gray-700 mb-3 flex items-center">
+                    <svg class="h-5 w-5 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    Receiver
+                  </h4>
+                  <div class="space-y-2 text-sm">
+                    <p><span class="text-gray-500">Name:</span> <span class="text-gray-900 font-medium">{{ delivery.receiver?.name || 'N/A' }}</span></p>
+                    <p><span class="text-gray-500">Email:</span> <span class="text-gray-900">{{ delivery.receiver?.email || 'N/A' }}</span></p>
+                    <p><span class="text-gray-500">Mobile:</span> <span class="text-gray-900">{{ delivery.receiver?.mobile || 'N/A' }}</span></p>
+                    <p><span class="text-gray-500">Address:</span> <span class="text-gray-900">{{ delivery.receiver?.address || 'N/A' }}</span></p>
+                  </div>
+                </div>
 
-    </div>
-  </div>
-</div>
-
-
-
+              </div>
+            </div>
+          </div>
 
           <!-- Package Details -->
           <div class="bg-white shadow rounded-lg overflow-hidden">
@@ -266,9 +310,6 @@
               </div>
             </div>
           </div>
-
-          <!-- Delivery Route -->
-          
         </div>
 
         <!-- Right Column - Payment & Status Information -->
@@ -352,7 +393,7 @@ import { Link } from '@inertiajs/vue3'
 import GuestLayout from '@/Layouts/GuestLayout.vue'
 import PrimaryButton from '@/Components/PrimaryButton.vue'
 import SecondaryButton from '@/Components/SecondaryButton.vue'
-import { XCircleIcon, ClockIcon } from '@heroicons/vue/24/outline'
+import { XCircleIcon, ClockIcon, InformationCircleIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
   delivery: {
@@ -367,12 +408,43 @@ const props = defineProps({
 
 // Show payment status when delivery is approved or (postpaid and completed/delivered)
 const showPaymentStatus = computed(() => {
-  if (props.delivery.status === 'approved') return true;
-  // For postpaid, show after delivery is completed or delivered
-  if (props.delivery.payment_type === 'postpaid' && ['completed', 'delivered'].includes(props.delivery.status)) {
-    return true;
+  return props.delivery.status === 'approved' || 
+    (props.delivery.payment_type === 'postpaid' && ['completed', 'delivered'].includes(props.delivery.status))
+})
+
+// FIXED: Simplified payment eligibility check
+const canMakePayment = computed(() => {
+  const status = props.delivery.payment_status;
+  
+  // If already paid and verified, cannot pay again
+  if (status === 'paid' && props.delivery.payment_verified) {
+    return false;
   }
+  
+  // Prepaid: only when approved
+  if (props.delivery.payment_type === 'prepaid') {
+    return props.delivery.status === 'approved';
+  }
+  
+  // POSTPAID FIX: Can pay when approved, completed, or delivered
+  if (props.delivery.payment_type === 'postpaid') {
+    return ['approved', 'completed', 'delivered'].includes(props.delivery.status);
+  }
+  
   return false;
+})
+
+// FIXED: Show payment action based on canMakePayment
+const showPaymentAction = computed(() => {
+  return canMakePayment.value;
+})
+
+// Check if payment is overdue
+const isPaymentOverdue = computed(() => {
+  if (!props.delivery.payment_due_date) return false;
+  const dueDate = new Date(props.delivery.payment_due_date);
+  const today = new Date();
+  return dueDate < today;
 })
 
 const statusBadgeClass = computed(() => {
@@ -414,19 +486,36 @@ const paymentStatusMessageClass = computed(() => {
   return 'text-yellow-700'
 })
 
+// FIXED: Better payment status titles
 const paymentStatusTitle = computed(() => {
   const status = props.delivery.payment_status
   if (status === 'paid') return 'Payment Completed'
   if (status === 'rejected') return 'Payment Issue'
   if (status === 'pending_verification') return 'Payment Verification in Progress'
+  
+  // Different message for postpaid vs prepaid
+  if (props.delivery.payment_type === 'postpaid') {
+    // Postpaid: different messages based on delivery status
+    if (['completed', 'delivered'].includes(props.delivery.status)) {
+      return 'Ready for Payment'
+    } else {
+      return 'Payment Available'
+    }
+  }
   return 'Payment Required'
 })
 
+// FIXED: Better payment status messages
 const paymentStatusMessage = computed(() => {
   const status = props.delivery.payment_status
   if (status === 'paid') {
     if (props.delivery.payment_verified) {
-      return 'Your payment has been verified and your delivery is being processed.'
+      // Different message for completed/delivered vs in-progress
+      if (['completed', 'delivered'].includes(props.delivery.status)) {
+        return 'Your delivery has been successfully completed. Thank you for choosing our service!'
+      } else {
+        return 'Your payment has been verified and your delivery is being processed.'
+      }
     }
     return 'Your payment has been received and is awaiting verification.'
   }
@@ -436,6 +525,16 @@ const paymentStatusMessage = computed(() => {
   if (status === 'pending_verification') {
     return 'Your payment is being verified by our team. This usually takes 1-2 business days.'
   }
+  
+  // Different message for postpaid vs prepaid
+  if (props.delivery.payment_type === 'postpaid') {
+    // Postpaid: different messages based on delivery status
+    if (['completed', 'delivered'].includes(props.delivery.status)) {
+      return 'Your delivery is complete. You can now settle your payment.'
+    } else {
+      return 'Your delivery is in progress. You can pay now or wait until delivery is complete.'
+    }
+  }
   return 'Your delivery request has been approved. Please complete your payment to proceed.'
 })
 
@@ -444,46 +543,13 @@ const isPrepaid = computed(() => {
 })
 
 const shouldShowSimplePaymentInfo = computed(() => {
-  // Prepaid logic
-  if (!props.delivery.payment_status && isPrepaid.value && (props.delivery.payment_method === 'gcash' || props.delivery.payment_method === 'bank')) {
-    return true;
-  }
-  // Postpaid logic: show if postpaid, completed/delivered, and payment not yet made
-  if (!props.delivery.payment_status && props.delivery.payment_type === 'postpaid' && ['completed', 'delivered'].includes(props.delivery.status)) {
-    return true;
-  }
-  return false;
-})
-
-const showPaymentAction = computed(() => {
-  const status = props.delivery.payment_status;
-  // Prepaid: approved
-  if (isPrepaid.value && props.delivery.status === 'approved') {
-    return ['pending', 'rejected'].includes(status) || (status === 'paid' && !props.delivery.payment_verified);
-  }
-  // Postpaid: completed/delivered
-  if (props.delivery.payment_type === 'postpaid' && ['completed', 'delivered'].includes(props.delivery.status)) {
-    return ['pending', 'rejected'].includes(status) || (status === 'paid' && !props.delivery.payment_verified);
-  }
-  return false;
-})
-
-const canMakePayment = computed(() => {
-  const status = props.delivery.payment_status;
-  // Prepaid: approved
-  if (isPrepaid.value && props.delivery.status === 'approved') {
-    return ['pending', 'rejected'].includes(status) || (status === 'paid' && !props.delivery.payment_verified);
-  }
-  // Postpaid: completed/delivered
-  if (props.delivery.payment_type === 'postpaid' && ['completed', 'delivered'].includes(props.delivery.status)) {
-    return ['pending', 'rejected'].includes(status) || (status === 'paid' && !props.delivery.payment_verified);
-  }
-  return false;
+  // Show for both prepaid and postpaid when payment is needed, but NOT for pending verification
+  return canMakePayment.value && props.delivery.payment_status !== 'pending_verification';
 })
 
 const payNowButtonText = computed(() => {
   const status = props.delivery.payment_status
-  if (status === 'rejected') return 'Pay Again'
+  if (status === 'rejected') return 'Resubmit Payment'
   if (status === 'paid' && !props.delivery.payment_verified) return 'Update Payment'
   return 'Pay Now'
 })

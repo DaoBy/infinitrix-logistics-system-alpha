@@ -38,9 +38,9 @@ const page = usePage();
               Fast, reliable, and secure logistics services for all your delivery needs.
             </p>
             <div class="text-sm text-gray-600">
-              <p>123 Logistics Street</p>
-              <p>City, Province, ZIP Code</p>
-              <p>Country</p>
+               <p>Camelo Building, Tahao Rd, Barangay</p>
+              <p>Cruzada, Legazpi City, 4500 Albay</p>
+              <p>Philippines</p>
             </div>
           </div>
 
@@ -68,8 +68,8 @@ const page = usePage();
             <h3 class="text-lg font-semibold text-gray-900">Contact Us</h3>
             <div class="text-sm text-gray-600">
               <p>Email: support@infinitrixcargo.com</p>
-              <p>Phone: +1 (123) 456-7890</p>
-              <p>Fax: +1 (123) 456-7891</p>
+                     <p>Phone: +63 912 345 6789</p>
+
             </div>
             <div class="flex space-x-4">
               <a href="#" class="text-gray-600 hover:text-gray-900">

@@ -1,237 +1,238 @@
 <template>
   <EmployeeLayout>
     <template #header>
-      <div class="flex justify-between items-center">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">
-          Customer Details: {{ customer.name || customer.company_name }}
-        </h2>
-        <div class="flex space-x-2">
+      <div class="flex justify-between items-center w-full px-6 md:px-8">
+        <!-- Left: Title & Subtitle -->
+        <div>
+          <h2 class="text-xl font-semibold leading-tight text-gray-800">Customer Details</h2>
+          <p class="mt-1 text-sm text-gray-500">
+            View customer information and delivery history
+          </p>
+        </div>
+
+        <!-- Right: Buttons -->
+        <div class="flex gap-2">
           <SecondaryButton @click="$inertia.visit(route('admin.customers.index'))">
             Back to List
           </SecondaryButton>
           <PrimaryButton @click="editCustomer">
-            Edit
-          </PrimaryButton>
-          <DangerButton 
-            v-if="customer.user?.is_active"
-            @click="archiveCustomer"
-          >
-            Archive
-          </DangerButton>
-          <PrimaryButton 
-            v-else
-            @click="restoreCustomer"
-          >
-            Restore
+            Edit Profile
           </PrimaryButton>
         </div>
       </div>
     </template>
 
-    <div class="py-6 px-6 sm:px-8">
-      <div class="mx-auto max-w-7xl">
-        <!-- Status Messages -->
-        <div v-if="status || success || error" class="mb-6">
-          <div v-if="status" class="p-4 bg-blue-100 text-blue-800 rounded">
-            {{ status }}
-          </div>
-          <div v-if="success" class="p-4 bg-green-100 text-green-800 rounded">
-            {{ success }}
-          </div>
-          <div v-if="error" class="p-4 bg-red-100 text-red-800 rounded">
-            {{ error }}
-          </div>
+    <!-- ZOOM CONTENT WRAPPER -->
+    <div class="zoom-content">
+      <!-- MAIN CONTENT CONTAINER WITH PROPER PADDING -->
+      <div class="px-6 py-4">
+        <div v-if="status || success || error" class="mb-4">
+          <div v-if="status" class="p-3 bg-blue-100 text-blue-800 rounded">{{ status }}</div>
+          <div v-if="success" class="p-3 bg-green-100 text-green-800 rounded">{{ success }}</div>
+          <div v-if="error" class="p-3 bg-red-100 text-red-800 rounded">{{ error }}</div>
         </div>
 
-        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-          <div class="p-5 bg-white border-b border-gray-200">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <!-- Account Information -->
-              <div class="space-y-4">
-                <h3 class="text-lg font-medium text-gray-900">Account Information</h3>
-                <div class="space-y-4">
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Account Email</label>
-                    <p class="mt-1 text-sm text-gray-900">{{ customer.user?.email || 'N/A' }}</p>
+        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg max-w-6xl mx-auto">
+          <div class="p-6 bg-white border-b border-gray-200">
+            <!-- Main Information Cards -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+              <!-- Account Information Card -->
+              <div class="bg-white border border-gray-200 rounded-lg p-4">
+                <h3 class="text-lg font-medium text-gray-900 mb-3">Account Information</h3>
+                <div class="space-y-3">
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[120px]">Account Email</span>
+                    <span class="text-sm text-gray-900 text-right">{{ customer.user?.email || 'N/A' }}</span>
                   </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Account Status</label>
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[120px]">Account Status</span>
                     <span :class="customer.user?.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'" 
                           class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full">
                       {{ customer.user?.is_active ? 'Active' : 'Inactive' }}
                     </span>
                   </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Created At</label>
-                    <p class="mt-1 text-sm text-gray-900">
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[120px]">Created At</span>
+                    <span class="text-sm text-gray-900 text-right">
                       {{ new Date(customer.created_at).toLocaleDateString() }}
-                    </p>
+                    </span>
                   </div>
                 </div>
               </div>
 
-              <!-- Customer Information -->
-              <div class="space-y-4">
-                <h3 class="text-lg font-medium text-gray-900">Customer Information</h3>
-                <div class="space-y-4">
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Type</label>
-                    <p class="mt-1 text-sm text-gray-900 capitalize">
+              <!-- Customer Information Card -->
+              <div class="bg-white border border-gray-200 rounded-lg p-4">
+                <h3 class="text-lg font-medium text-gray-900 mb-3">Customer Information</h3>
+                <div class="space-y-3">
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[120px]">Type</span>
+                    <span class="text-sm text-gray-900 text-right capitalize">
                       {{ customer.customer_category === 'company' ? 'Company' : 'Individual' }}
-                    </p>
+                    </span>
                   </div>
-
-                  <div v-if="customer.name">
-                    <label class="block text-sm font-medium text-gray-500">
+                  <div v-if="customer.name" class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[120px]">
                       {{ customer.customer_category === 'company' ? 'Contact Person' : 'Full Name' }}
-                    </label>
-                    <p class="mt-1 text-sm text-gray-900">{{ customer.name }}</p>
+                    </span>
+                    <span class="text-sm text-gray-900 text-right">{{ customer.name }}</span>
                   </div>
-
-                  <div v-if="customer.company_name">
-                    <label class="block text-sm font-medium text-gray-500">Company Name</label>
-                    <p class="mt-1 text-sm text-gray-900">{{ customer.company_name }}</p>
+                  <div v-if="customer.company_name" class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[120px]">Company Name</span>
+                    <span class="text-sm text-gray-900 text-right">{{ customer.company_name }}</span>
                   </div>
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[120px]">Frequency</span>
+                    <span class="text-sm text-gray-900 text-right capitalize">
+                      {{ customer.frequency_type === 'regular' ? 'Regular' : 'Occasional' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Contact</label>
-                    <p class="mt-1 text-sm text-gray-900">{{ customer.mobile }}</p>
-                    <p v-if="customer.phone" class="mt-1 text-sm text-gray-900">{{ customer.phone }}</p>
-                    <p class="mt-1 text-sm text-gray-900">{{ customer.email }}</p>
+            <!-- Contact & Address Information -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+              <!-- Contact Information Card -->
+              <div class="bg-white border border-gray-200 rounded-lg p-4">
+                <h3 class="text-lg font-medium text-gray-900 mb-3">Contact Information</h3>
+                <div class="space-y-3">
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[120px]">Mobile</span>
+                    <span class="text-sm text-gray-900 text-right">{{ customer.mobile || 'N/A' }}</span>
+                  </div>
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[120px]">Phone</span>
+                    <span class="text-sm text-gray-900 text-right">{{ customer.phone || 'N/A' }}</span>
+                  </div>
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[120px]">Email</span>
+                    <span class="text-sm text-gray-900 text-right">{{ customer.email || 'N/A' }}</span>
                   </div>
                 </div>
               </div>
 
-              <!-- Address Information -->
-              <div class="space-y-4">
-                <h3 class="text-lg font-medium text-gray-900">Address Information</h3>
-                <div>
-                  <label class="block text-sm font-medium text-gray-500">Address</label>
-                  <p class="mt-1 text-sm text-gray-900">
-                    {{ [customer.building_number, customer.street].filter(Boolean).join(' ') }}
-                  </p>
-                  <p class="mt-1 text-sm text-gray-900">
-                    {{ [customer.barangay, customer.city, customer.province, customer.zip_code].filter(Boolean).join(', ') }}
-                  </p>
-                </div>
-
-                <div>
-                  <label class="block text-sm font-medium text-gray-500">Frequency</label>
-                  <p class="mt-1 text-sm text-gray-900 capitalize">
-                    {{ customer.frequency_type === 'regular' ? 'Regular' : 'Occasional' }}
-                  </p>
-                </div>
-
-                <div v-if="customer.notes">
-                  <label class="block text-sm font-medium text-gray-500">Notes</label>
-                  <p class="mt-1 text-sm text-gray-900 whitespace-pre-line">{{ customer.notes }}</p>
+              <!-- Address Information Card -->
+              <div class="bg-white border border-gray-200 rounded-lg p-4">
+                <h3 class="text-lg font-medium text-gray-900 mb-3">Address Information</h3>
+                <div class="space-y-3">
+                  <div class="flex justify-between items-start py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[120px]">Building/Street</span>
+                    <span class="text-sm text-gray-900 text-right max-w-[200px]">
+                      {{ [customer.building_number, customer.street].filter(Boolean).join(' ') || 'N/A' }}
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-start py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[120px]">Barangay/City</span>
+                    <span class="text-sm text-gray-900 text-right max-w-[200px]">
+                      {{ [customer.barangay, customer.city].filter(Boolean).join(', ') || 'N/A' }}
+                    </span>
+                  </div>
+                  <div class="flex justify-between items-start py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[120px]">Province/ZIP</span>
+                    <span class="text-sm text-gray-900 text-right max-w-[200px]">
+                      {{ [customer.province, customer.zip_code].filter(Boolean).join(' ') || 'N/A' }}
+                    </span>
+                  </div>
                 </div>
               </div>
+            </div>
 
-              <!-- Recent Deliveries -->
-              <div class="space-y-4" v-if="recent_sent_deliveries?.length || recent_received_deliveries?.length">
-                <h3 class="text-lg font-medium text-gray-900">Recent Deliveries</h3>
+            <!-- Notes Card -->
+            <div v-if="customer.notes" class="bg-white border border-gray-200 rounded-lg p-4 mb-6">
+              <h3 class="text-lg font-medium text-gray-900 mb-3">Notes</h3>
+              <p class="text-sm text-gray-700 whitespace-pre-line">
+                {{ customer.notes }}
+              </p>
+            </div>
+
+            <!-- Delivery Requests Section -->
+            <div class="mt-6">
+              <h3 class="text-lg font-medium text-gray-900 mb-3">Delivery Requests</h3>
+              <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div class="overflow-x-auto">
+                  <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                      <tr>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/5">Reference #</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/5">Receiver</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/5">Status</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/5">Created</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/5">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                      <tr v-for="request in deliveryRequests.data" :key="request.id">
+                        <td class="px-4 py-2 whitespace-nowrap">
+                          <span class="text-sm font-medium text-green-600 font-mono">
+                            {{ request.reference_number || 'N/A' }}
+                          </span>
+                        </td>
+                        <td class="px-4 py-2 text-sm text-gray-900">
+                          {{ request.receiver?.name || request.receiver?.company_name || 'N/A' }}
+                        </td>
+                        <td class="px-4 py-2 whitespace-nowrap">
+                          <span :class="getStatusClass(request.status)" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full">
+                            {{ request.status ? formatStatus(request.status) : 'N/A' }}
+                          </span>
+                        </td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                          {{ new Date(request.created_at).toLocaleDateString() }}
+                        </td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm font-medium">
+                          <SecondaryButton @click="viewDelivery(request.id)" class="text-xs py-1 px-2">
+                            View
+                          </SecondaryButton>
+                        </td>
+                      </tr>
+                      <tr v-if="!deliveryRequests.data || deliveryRequests.data.length === 0">
+                        <td colspan="5" class="px-4 py-4 text-center text-sm text-gray-500">
+                          No delivery requests found
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
                 
-                <div v-if="recent_sent_deliveries?.length">
-                  <h4 class="text-md font-medium text-gray-700">Sent</h4>
-                  <ul class="mt-2 space-y-2">
-                    <li v-for="delivery in recent_sent_deliveries" :key="delivery.id" class="text-sm text-gray-600">
-                      {{ delivery.tracking_number }} - {{ new Date(delivery.created_at).toLocaleDateString() }}
-                    </li>
-                  </ul>
+                <!-- Pagination for Delivery Requests -->
+                <div v-if="deliveryRequests.links && deliveryRequests.links.length > 3" class="bg-white px-4 py-3 border-t border-gray-200">
+                  <div class="flex justify-between items-center">
+                    <div class="flex items-center">
+                      <p class="text-sm text-gray-700">
+                        Showing
+                        <span class="font-medium">{{ deliveryRequests.from }}</span>
+                        to
+                        <span class="font-medium">{{ deliveryRequests.to }}</span>
+                        of
+                        <span class="font-medium">{{ deliveryRequests.total }}</span>
+                        results
+                      </p>
+                    </div>
+                    <div class="flex space-x-1">
+                      <button 
+                        v-for="(link, index) in deliveryRequests.links" 
+                        :key="index"
+                        @click="handleDeliveryRequestPageChange(link.url)"
+                        class="px-2 py-1 text-xs rounded border"
+                        :class="link.active ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                        v-html="link.label"
+                        :disabled="!link.url"
+                      ></button>
+                    </div>
+                  </div>
                 </div>
+              </div>
+            </div>
 
-                <div v-if="recent_received_deliveries?.length">
-                  <h4 class="text-md font-medium text-gray-700">Received</h4>
-                  <ul class="mt-2 space-y-2">
-                    <li v-for="delivery in recent_received_deliveries" :key="delivery.id" class="text-sm text-gray-600">
-                      {{ delivery.tracking_number }} - {{ new Date(delivery.created_at).toLocaleDateString() }}
-                    </li>
-                  </ul>
+            <!-- Recent Received Deliveries -->
+            <div class="mt-6" v-if="recent_received_deliveries?.length">
+              <div class="bg-white border border-gray-200 rounded-lg p-4">
+                <h3 class="text-lg font-medium text-gray-900 mb-3">Recent Received Deliveries</h3>
+                <div class="space-y-2">
+                  <div v-for="delivery in recent_received_deliveries" :key="delivery.id" class="flex justify-between items-center py-1 border-b border-gray-100">
+                    <span class="text-sm text-gray-700">{{ delivery.reference_number }}</span>
+                    <span class="text-xs text-gray-500">{{ new Date(delivery.created_at).toLocaleDateString() }}</span>
+                  </div>
                 </div>
-              </div>
-            </div>
-
-            <div class="mt-8">
-              <h3 class="text-lg font-medium text-gray-900 mb-4">Delivery Requests</h3>
-              <div class="overflow-x-auto w-full">
-                <PendingRequestsTable 
-                  :requests="deliveryRequests"
-                  @view="viewRequest"
-                  @edit="editRequest"
-                  @cancel="cancelRequest"
-                />
-              </div>
-            </div>
-
-            <div class="mt-8">
-              <h3 class="text-lg font-medium text-gray-900 mb-4">Transaction History</h3>
-              <div class="overflow-x-auto w-full">
-                <TransactionHistoryTable 
-                  :transactions="transactions"
-                  @view="viewTransaction"
-                  @view-request="viewRequestFromTransaction"
-                />
-              </div>
-            </div>
-
-            <div class="mt-8 flex justify-end space-x-4">
-              <SecondaryButton @click="$inertia.visit(route('admin.customers.index'))">
-                Back to List
-              </SecondaryButton>
-              <PrimaryButton @click="editCustomer">
-                Edit Customer
-              </PrimaryButton>
-            </div>
-          </div>
-        </div>
-
-        <!-- Sender and Receiver Information -->
-        <div class="mt-8">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Sender Info -->
-            <div>
-              <h3 class="font-semibold text-lg mb-2">Sender</h3>
-              <div><span class="font-medium">Name:</span> {{ delivery.sender?.name || delivery.sender?.company_name || 'N/A' }}</div>
-              <div><span class="font-medium">Contact:</span> {{ delivery.sender?.mobile || delivery.sender?.phone || 'N/A' }}</div>
-              <div><span class="font-medium">Email:</span> {{ delivery.sender?.email || 'N/A' }}</div>
-              <div>
-                <span class="font-medium">Address:</span>
-                <span>
-                  {{
-                    [
-                      delivery.sender?.building_number,
-                      delivery.sender?.street,
-                      delivery.sender?.barangay,
-                      delivery.sender?.city,
-                      delivery.sender?.province,
-                      delivery.sender?.zip_code
-                    ].filter(Boolean).join(', ') || 'N/A'
-                  }}
-                </span>
-              </div>
-            </div>
-
-            <!-- Receiver Info -->
-            <div>
-              <h3 class="font-semibold text-lg mb-2">Receiver</h3>
-              <div><span class="font-medium">Name:</span> {{ delivery.receiver?.name || delivery.receiver?.company_name || 'N/A' }}</div>
-              <div><span class="font-medium">Contact:</span> {{ delivery.receiver?.mobile || delivery.receiver?.phone || 'N/A' }}</div>
-              <div><span class="font-medium">Email:</span> {{ delivery.receiver?.email || 'N/A' }}</div>
-              <div>
-                <span class="font-medium">Address:</span>
-                <span>
-                  {{
-                    [
-                      delivery.receiver?.building_number,
-                      delivery.receiver?.street,
-                      delivery.receiver?.barangay,
-                      delivery.receiver?.city,
-                      delivery.receiver?.province,
-                      delivery.receiver?.zip_code
-                    ].filter(Boolean).join(', ') || 'N/A'
-                  }}
-                </span>
               </div>
             </div>
           </div>
@@ -246,8 +247,6 @@ import EmployeeLayout from '@/Layouts/EmployeeLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
-import PendingRequestsTable from '@/Components/PendingRequestsTable.vue';
-import TransactionHistoryTable from '@/Components/TransactionHistoryTable.vue';
 import { router } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -261,64 +260,52 @@ const props = defineProps({
   error: String,
 });
 
+// Helper function for status badges
+const getStatusClass = (status) => {
+  const statusClasses = {
+    'pending': 'bg-yellow-100 text-yellow-800',
+    'approved': 'bg-blue-100 text-blue-800',
+    'assigned': 'bg-purple-100 text-purple-800',
+    'in_transit': 'bg-indigo-100 text-indigo-800',
+    'delivered': 'bg-green-100 text-green-800',
+    'cancelled': 'bg-red-100 text-red-800',
+    'completed': 'bg-green-100 text-green-800'
+  };
+  return statusClasses[status] || 'bg-gray-100 text-gray-800';
+};
+
+// Format status for display
+const formatStatus = (status) => {
+  return status ? status.replace(/_/g, ' ').toUpperCase() : 'N/A';
+};
+
 const editCustomer = () => {
   router.get(route('admin.customers.edit', props.customer.id));
 };
 
-const archiveCustomer = () => {
-  if (confirm('Are you sure you want to archive this customer?')) {
-    router.put(route('admin.customers.archive', props.customer.id), {
-      preserveScroll: true,
-      onSuccess: () => {
-        router.reload();
-      }
+const viewDelivery = (id) => {
+  router.get(route('deliveries.show', id));
+};
+
+const handleDeliveryRequestPageChange = (url) => {
+  if (url) {
+    router.visit(url, {
+      preserveState: true,
+      preserveScroll: true
     });
   }
-};
-
-const restoreCustomer = () => {
-  if (confirm('Are you sure you want to restore this customer?')) {
-    router.put(route('admin.customers.restore', props.customer.id), {
-      preserveScroll: true,
-      onSuccess: () => {
-        router.reload();
-      }
-    });
-  }
-};
-
-const viewRequest = (id) => {
-  router.get(route('admin.delivery-requests.show', id));
-};
-
-const editRequest = (id) => {
-  router.get(route('admin.delivery-requests.edit', id));
-};
-
-const cancelRequest = (id) => {
-  if (confirm('Are you sure you want to cancel this request?')) {
-    router.delete(route('admin.delivery-requests.destroy', id), {
-      preserveScroll: true,
-      onSuccess: () => router.reload(),
-    });
-  }
-};
-
-const viewTransaction = (id) => {
-  router.get(route('admin.transactions.show', id));
-};
-
-const viewRequestFromTransaction = (id) => {
-  router.get(route('admin.delivery-requests.show', id));
 };
 </script>
 
 <style scoped>
-/* Make sure parent containers don't force a min-width */
-.bg-white {
-  min-width: 0 !important;
+.zoom-content {
+  zoom: 0.80;
 }
-.p-6 {
-  min-width: 0 !important;
+
+/* Add tighter spacing for desktop */
+@media (min-width: 1024px) {
+  .zoom-content {
+    zoom: 0.90;
+  }
 }
 </style>

@@ -27,11 +27,11 @@ class EmployeeProfile extends Model
         'region_id'
     ];
 
-    protected $casts = [
-        'hire_date' => 'date',
-        'termination_date' => 'date',
-        'archived_at' => 'datetime',
-    ];
+  protected $casts = [
+    'hire_date' => 'date:Y-m-d',
+    'termination_date' => 'date:Y-m-d',
+    'archived_at' => 'datetime',
+];
 
     public function user()
     {

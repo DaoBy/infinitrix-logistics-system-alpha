@@ -1,8 +1,15 @@
 <script setup>
 import GuestLayout from '@/Layouts/GuestLayout.vue';
-import services1Image from '@/assets/services1.jpg';
+import services1Image from '@/assets/services1.png';
 import sack1Image from '@/assets/sack1.png';
 import truck2Image from '@/assets/truck2.jpg';
+import customerfocus from '@/assets/customerfocus.png';
+import missionIcon from '@/assets/missionIcon.png';
+import operationfocus from '@/assets/operationfocus.png';
+import visionIcon from '@/assets/visionIcon.png';
+import trusticon from '@/assets/trusticon.png';
+import peopleicon from '@/assets/peopleicon.png';
+import FounderImage from '@/assets/nesty.jpg';
 
 
 </script>
@@ -11,16 +18,17 @@ import truck2Image from '@/assets/truck2.jpg';
   <GuestLayout>
   <div
       @click="toggleTruckPop"
-      class="relative w-full bg-cover bg-center bg-no-repeat text-white py-32 px-6 md:px-12 lg:px-20 cursor-pointer"
-      :style="`background-image: url(${services1Image})`"
+class="relative w-full bg-cover bg-[position:70%_30%] bg-no-repeat text-white py-32 px-6 md:px-12 lg:px-20 cursor-pointer"      :style="`background-image: url(${services1Image})`"
     >
       <div class="absolute inset-0 bg-black/50"></div>
       <div class="absolute inset-0 from-black/90 to-transparent"></div>
       <div class="relative z-10  max-w-[90%] xl:max-w-[1280px] mx-auto">
       
-        <h1 class="text-8xl md:text-8xl font-extrabold tracking-tight drop-shadow-lg">
+   <motion preset="slideVisibleLeft" :duration="900">
+        <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold tracking-tight drop-shadow-lg">
           We <span class="text-green-500">simplify </span> your logistics.
         </h1>
+        </motion>
         <p class="mt-6 text-xl md:text-2xl font-medium drop-shadow">
           Skip the hassle — let our trucks do the heavy lifting.
         </p>
@@ -34,8 +42,8 @@ import truck2Image from '@/assets/truck2.jpg';
 <div class="mt-24 max-w-7xl mx-auto px-6 md:px-12 lg:px-20 grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
   <!-- Text Content -->
   <div>
-    <h3 class="text-4xl font-extrabold text-gray-900 mb-4">
-      About Infinitrix
+    <h3 class="text-4xl font-extrabold text-green-700 mb-4 drop-shadow-md">
+      | About Infinitrix
     </h3>
     <p class="text-xl font-semibold text-green-700 mb-6">
       Speed, reliability, and innovation—Infinitrix leads modern logistics with purpose.
@@ -66,7 +74,7 @@ import truck2Image from '@/assets/truck2.jpg';
     <h3 class="text-4xl font-extrabold text-gray-900 mb-4">
       Our Story
     </h3>
-    <p class="text-xl font-semibold text-green-700 mb-6">
+    <p class="text-xl text-gray-700 mb-6">
       Infinitrix Express Cargo began with a simple vision: to create a reliable and efficient solution for moving goods.
     </p>
     <p class="text-gray-700 text-base leading-relaxed mb-4">
@@ -141,40 +149,46 @@ import truck2Image from '@/assets/truck2.jpg';
   </div>
 </div>
 
-        <!-- Team Section -->
-        <div class="mt-20 text-center">
-          <h3 class="text-3xl font-bold text-gray-900">Meet the Leadership Team</h3>
-          <p class="mt-4 text-lg text-gray-600 max-w-xl mx-auto">
-            Our team blends industry experience with creative thinking, ensuring your deliveries run on time—and with a touch of personality.
-          </p>
+    <!-- Team Section -->
+  <div class="mt-20 text-center">
+    <h3 class="text-3xl font-bold text-gray-900">Meet the Leadership Team</h3>
+    <p class="mt-4 text-lg text-gray-600 max-w-xl mx-auto">
+      Our team blends industry experience with creative thinking, ensuring your deliveries run on time—and with a touch of personality.
+    </p>
 
-          <div class="mt-10 grid grid-cols-1 md:grid-cols-3 gap-10">
-            <!-- Team Member 1 -->
-            <div class="text-center">
-              <img :src="deliveryImage" alt="CEO" class="mx-auto h-32 w-32 rounded-full shadow-md object-cover" />
-              <h4 class="mt-4 text-lg font-semibold text-gray-900">Samantha Reyes</h4>
-              <p class="text-sm text-gray-600">Chief Executive Officer</p>
-            </div>
-
-            <!-- Team Member 2 -->
-            <div class="text-center">
-              <img :src="deliveryImage" alt="COO" class="mx-auto h-32 w-32 rounded-full shadow-md object-cover" />
-              <h4 class="mt-4 text-lg font-semibold text-gray-900">Marcus Lee</h4>
-              <p class="text-sm text-gray-600">Chief Operations Officer</p>
-            </div>
-
-            <!-- Team Member 3 -->
-            <div class="text-center">
-              <img :src="deliveryImage" alt="CTO" class="mx-auto h-32 w-32 rounded-full shadow-md object-cover" />
-              <h4 class="mt-4 text-lg font-semibold text-gray-900">Dana Villanueva</h4>
-              <p class="text-sm text-gray-600">Chief Technology Officer</p>
-            </div>
-          </div>
+    <!-- CEO - Carlos Teng -->
+    <div class="mt-16 text-center max-w-2xl mx-auto">
+      <div class="relative inline-block">
+        <div class="mx-auto h-48 w-48 rounded-full shadow-xl bg-gray-100 flex items-center justify-center border-4 border-green-500">
+          <svg class="h-20 w-20 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+          </svg>
         </div>
-      
+        <div class="absolute -top-2 -right-2 bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+          CEO
+        </div>
+      </div>
+      <h4 class="mt-6 text-2xl font-bold text-gray-900">Carlos Teng</h4>
+      <p class="text-lg text-green-600 font-semibold">Chief Executive Officer</p>
+      <p class="text-sm text-gray-500 mt-2 max-w-md mx-auto">
+        Leading the strategic vision and overall direction of Infinitrix Logistics
+      </p>
+    </div>
 
-      
-  </GuestLayout>
+    <!-- Operations Manager - Nesty Teng -->
+    <div class="mt-12 text-center max-w-2xl mx-auto">
+      <img 
+        :src="FounderImage" 
+        alt="Operations Manager" 
+        class="mx-auto h-40 w-40 rounded-full shadow-lg object-cover border-4 border-blue-500" 
+      />
+      <h4 class="mt-4 text-xl font-bold text-gray-900">Nesty Teng</h4>
+      <p class="text-md font-semibold text-blue-600">Operations Manager</p>
+     
+    </div>
+  </div>
+
+</GuestLayout>
 </template>
 
 

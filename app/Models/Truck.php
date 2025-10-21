@@ -41,15 +41,16 @@ class Truck extends Model
         'current_weight'
     ];
 
-    // 🚦 Status Constants
-        const STATUS_AVAILABLE = 'available';
-        const STATUS_NEARLY_FULL = 'nearly_full';
-        const STATUS_ASSIGNED = 'assigned';
-        const STATUS_IN_TRANSIT = 'in_transit';
-        const STATUS_RETURNING = 'returning';
-        const STATUS_MAINTENANCE = 'maintenance';
-        const STATUS_UNAVAILABLE = 'unavailable';
-
+    // 🚦 Status Constants - KEEP COOLDOWN STATUS
+    const STATUS_AVAILABLE = 'available';
+    const STATUS_NEARLY_FULL = 'nearly_full';
+    const STATUS_ASSIGNED = 'assigned';
+    const STATUS_IN_TRANSIT = 'in_transit';
+    const STATUS_RETURNING = 'returning';
+    const STATUS_MAINTENANCE = 'maintenance';
+    const STATUS_UNAVAILABLE = 'unavailable';
+    const STATUS_AVAILABLE_FOR_BACKHAUL = 'available_for_backhaul';
+    const STATUS_COOLDOWN = 'cooldown'; // KEEP THIS
 
     public static function statuses(): array
     {
@@ -61,6 +62,8 @@ class Truck extends Model
             self::STATUS_RETURNING     => 'Returning',
             self::STATUS_MAINTENANCE   => 'In Maintenance',
             self::STATUS_UNAVAILABLE   => 'Unavailable',
+            self::STATUS_AVAILABLE_FOR_BACKHAUL => 'Available for Backhaul',
+            self::STATUS_COOLDOWN      => 'In Cooldown', // KEEP THIS
         ];
     }
 
@@ -96,8 +99,8 @@ class Truck extends Model
             });
     }
 
-        public function getHasAssignmentsAttribute()
-        {
+    public function getHasAssignmentsAttribute()
+    {
         return $this->deliveryOrders()
             ->where('status', 'assigned')
             ->exists();
@@ -132,7 +135,7 @@ class Truck extends Model
             && $this->available_weight_capacity >= $requiredWeight;
     }
 
-    // 🔁 Status auto-update based on worst load %
+    // MODIFIED: SIMPLIFIED Status auto-update to mirror assignment status
     public function updateStatus(): void
     {
         if (!$this->is_active) {
@@ -141,6 +144,24 @@ class Truck extends Model
             return;
         }
 
+        // SIMPLIFIED: Check assignment status and mirror it
+        $assignment = $this->currentDriverAssignment;
+        if ($assignment) {
+            // Truck status directly mirrors assignment status
+            $this->status = match($assignment->current_status) {
+                \App\Models\DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE => self::STATUS_AVAILABLE_FOR_BACKHAUL,
+                \App\Models\DriverTruckAssignment::STATUS_IN_TRANSIT => self::STATUS_IN_TRANSIT,
+                \App\Models\DriverTruckAssignment::STATUS_COOLDOWN => self::STATUS_COOLDOWN,
+                \App\Models\DriverTruckAssignment::STATUS_RETURNING => self::STATUS_RETURNING,
+                \App\Models\DriverTruckAssignment::STATUS_ACTIVE => self::STATUS_AVAILABLE,
+                \App\Models\DriverTruckAssignment::STATUS_COMPLETED => self::STATUS_AVAILABLE,
+                default => self::STATUS_AVAILABLE
+            };
+            $this->save();
+            return;
+        }
+
+        // Fallback to capacity-based status for unassigned trucks
         if ($this->volume_capacity <= 0 || $this->weight_capacity <= 0) {
             $this->status = self::STATUS_UNAVAILABLE;
             $this->save();
@@ -162,11 +183,31 @@ class Truck extends Model
         $this->save();
     }
 
+    public function hasActiveDeliveries(): bool
+    {
+        return $this->deliveryOrders()
+            ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
+            ->exists();
+    }
+
+    public function canBeReassigned(): bool
+    {
+        return $this->is_active && 
+               !$this->hasActiveDeliveries() && 
+               in_array($this->status, [Truck::STATUS_AVAILABLE, Truck::STATUS_AVAILABLE_FOR_BACKHAUL]);
+    }
+
+    // UPDATED: Include backhaul and cooldown status in availability check
     public function isAvailable(): bool
     {
-        // Truck is available if active, status is available or nearly full, and has capacity left
+        // Truck is available if active, and status is available, nearly full, available for backhaul, or cooldown
         return ($this->is_active ?? true)
-            && in_array($this->status, [self::STATUS_AVAILABLE, self::STATUS_NEARLY_FULL])
+            && in_array($this->status, [
+                self::STATUS_AVAILABLE, 
+                self::STATUS_NEARLY_FULL,
+                self::STATUS_AVAILABLE_FOR_BACKHAUL,
+                self::STATUS_COOLDOWN
+            ])
             && ($this->available_volume_capacity ?? 1) > 0
             && ($this->available_weight_capacity ?? 1) > 0;
     }
@@ -188,12 +229,12 @@ class Truck extends Model
         return $this->hasMany(DriverTruckAssignment::class, 'truck_id');
     }
 
-    public function currentDriverAssignment()
-    {
-        return $this->hasOne(DriverTruckAssignment::class)
-            ->where('is_active', true)
-            ->latest();
-    }
+   public function currentDriverAssignment()
+{
+    return $this->hasOne(DriverTruckAssignment::class, 'truck_id')
+        ->where('is_active', true)
+        ->notDeleted();
+}
 
     public function getCapacityStatusAttribute(): string
     {
@@ -240,5 +281,23 @@ class Truck extends Model
     public function getCurrentWeightAttribute()
     {
         return $this->calculateCurrentWeight();
+    }
+
+    // NEW: Check if truck is available for backhaul
+    public function isAvailableForBackhaul(): bool
+    {
+        return $this->is_active && $this->status === self::STATUS_AVAILABLE_FOR_BACKHAUL;
+    }
+
+    // NEW: Check if truck is in cooldown
+    public function isInCooldown(): bool
+    {
+        return $this->is_active && $this->status === self::STATUS_COOLDOWN;
+    }
+
+    // NEW: Check if truck is returning
+    public function isReturning(): bool
+    {
+        return $this->is_active && $this->status === self::STATUS_RETURNING;
     }
 }

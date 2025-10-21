@@ -1,28 +1,34 @@
 <template>
   <EmployeeLayout>
     <template #header>
-      <div class="flex justify-between items-center">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">
-          Add Maintenance - {{ truck.make }} {{ truck.model }} ({{ truck.license_plate }})
-        </h2>
-        <SecondaryButton @click="router.get(route('admin.trucks.show', truck.id))">
-          Back to Truck
-        </SecondaryButton>
+      <div class="flex justify-between items-center w-full px-6 md:px-8">
+        <!-- Left: Title & Subtitle -->
+        <div>
+          <h2 class="text-xl font-semibold leading-tight text-gray-800">
+            Add Maintenance - {{ truck.make }} {{ truck.model }} ({{ truck.license_plate }})
+          </h2>
+          <p class="mt-1 text-sm text-gray-500">
+            Record new maintenance for this truck
+          </p>
+        </div>
+
+        <!-- Right: Buttons -->
+        <div class="flex gap-2">
+          <SecondaryButton @click="router.get(route('admin.trucks.show', truck.id))">
+            Back to Truck
+          </SecondaryButton>
+        </div>
       </div>
     </template>
 
-    <div class="py-6">
-      <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
-        <div v-if="status || success || error" class="mb-6">
-          <div v-if="status" class="p-4 bg-blue-100 text-blue-800 rounded">
-            {{ status }}
-          </div>
-          <div v-if="success" class="p-4 bg-green-100 text-green-800 rounded">
-            {{ success }}
-          </div>
-          <div v-if="error" class="p-4 bg-red-100 text-red-800 rounded">
-            {{ error }}
-          </div>
+    <!-- ZOOM CONTENT WRAPPER -->
+    <div class="zoom-content">
+      <!-- MAIN CONTENT CONTAINER WITH PROPER PADDING -->
+      <div class="px-6 py-4">
+        <div v-if="status || success || error" class="mb-4">
+          <div v-if="status" class="p-3 bg-blue-100 text-blue-800 rounded">{{ status }}</div>
+          <div v-if="success" class="p-3 bg-green-100 text-green-800 rounded">{{ success }}</div>
+          <div v-if="error" class="p-3 bg-red-100 text-red-800 rounded">{{ error }}</div>
         </div>
 
         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
@@ -70,15 +76,15 @@
 
                 <div>
                   <InputLabel for="cost" value="Cost *" />
-                 <TextInput
-  id="cost"
-  type="number"
-  step="0.01"
-  min="0"
-  class="mt-1 block w-full"
-  v-model="form.cost"
-  required
-/>
+                  <TextInput
+                    id="cost"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    class="mt-1 block w-full"
+                    v-model="form.cost"
+                    required
+                  />
                   <InputError class="mt-2" :message="form.errors.cost" />
                 </div>
 
@@ -119,12 +125,13 @@
                 </div>
               </div>
 
-              <div class="mt-6 flex justify-end space-x-4">
+              <div class="mt-6 flex justify-end space-x-3">
                 <SecondaryButton type="button" @click="router.get(route('admin.trucks.show', truck.id))">
                   Cancel
                 </SecondaryButton>
                 <PrimaryButton type="submit" :disabled="form.processing">
-                  Save Maintenance
+                  <span v-if="form.processing">Creating...</span>
+                  <span v-else>Save Maintenance</span>
                 </PrimaryButton>
               </div>
             </form>
@@ -191,3 +198,9 @@ const submit = () => {
   });
 };
 </script>
+
+<style scoped>
+.zoom-content {
+  zoom: 0.80;
+}
+</style>

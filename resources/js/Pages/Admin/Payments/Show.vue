@@ -14,7 +14,7 @@
           </p>
         </div>
         <Link 
-          :href="route('staff.payments.index')"
+          :href="route('staff.payments.dashboard')"  
           class="text-sm text-blue-600 hover:text-blue-800"
         >
           <SecondaryButton>
@@ -173,20 +173,20 @@
 
           <!-- Action Buttons -->
           <div v-if="!payment.verified_by && !payment.rejected_by" class="bg-white shadow rounded-lg overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <h3 class="text-lg font-medium text-gray-900">Verification</h3>
-            </div>
-            <div class="px-6 py-4 space-y-3">
-              <Link
-                :href="route('staff.payments.verify-view', payment.id)"
-                class="w-full"
-              >
-                <PrimaryButton class="w-full justify-center">
-                  Verify Payment
-                </PrimaryButton>
-              </Link>
-            </div>
-          </div>
+      <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <h3 class="text-lg font-medium text-gray-900">Verification</h3>
+      </div>
+      <div class="px-6 py-4 space-y-3">
+        <Link
+          :href="route('staff.payments.verify', payment.id)" 
+          class="w-full"
+        >
+          <PrimaryButton class="w-full justify-center">
+            Verify Payment
+          </PrimaryButton>
+        </Link>
+      </div>
+    </div>
         </div>
 
         <!-- No Delivery Request Info -->

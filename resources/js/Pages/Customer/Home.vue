@@ -1,14 +1,31 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue';
-import { usePage, router } from '@inertiajs/vue3'; // Added router import
+import { usePage, router } from '@inertiajs/vue3';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import NavLink from '@/Components/NavLink.vue';
-import homeImage from '@/assets/home.jpg';
+import homeImage1 from '@/assets/homeImage1.jpg';
 import truck2Image from '@/assets/truck2.jpg';
 import transportationImage from '@/assets/transportation.png';
 import packageImage from '@/assets/package.png';
 import weightImage from '@/assets/weight.png';
+import calculatorImage from '@/assets/calculator.png';
+import homeImage2 from '@/assets/homeImage2.jpg';
+import homeImage3 from '@/assets/homeImage3.jpg';
+
+
+
+const homeImages = [homeImage1, homeImage2, homeImage3] 
+const currentHomeIndex = ref(0)
+
+const currentHomeImage = computed(() => homeImages[currentHomeIndex.value])
+
+onMounted(() => {
+  setInterval(() => {
+    currentHomeIndex.value = (currentHomeIndex.value + 1) % homeImages.length
+  }, 2000) // change image every 2 seconds
+})
+
 
 // Add your case study image imports
 import caseStudy1 from '@/assets/caseStudy1.jpg';
@@ -21,7 +38,7 @@ import caseStudy7 from '@/assets/caseStudy7.jpg';
 
 const faqs = ref([
   { question: 'How can I track my package?', answer: 'You can track your package by entering your tracking ID on our tracking page.', open: false },
-  { question: 'What areas do you deliver to?', answer: 'We deliver to all major cities and regions across the country.', open: false },
+  { question: 'What areas do you deliver to?', answer: 'We currently deliver packages from Malabon, Naga, and Legazpi to Manila. Deliveries from Manila to these areas are not yet available.', open: false },
   { question: 'What happens if my package is delayed?', answer: 'We will notify you immediately if there are any delays and work to resolve the issue.', open: false },
   { question: 'How do I request a delivery?', answer: 'Simply visit our delivery request page and provide the necessary information.', open: false },
   { question: 'Is my package insured?', answer: 'Yes, all shipments are insured against damage or loss during transit.', open: false },
@@ -44,25 +61,102 @@ const currentSlide = ref(0);
 const carousel = ref(null);
 let autoSlideInterval = null;
 
-// Updated caseStudies array with your local images
+const newLocal = 'We’ve learned that packing isn’t just about fitting things into boxes — it’s about making sure every item is safe and handled with care. Over time, we’ve developed a way of organizing packages that makes the most out of every bit of space while keeping everything secure and easy to find.';
+// Updated caseStudies array with descriptions
 const caseStudies = ref([
-  { title: 'Box Packing and Organizing', image: caseStudy1 },
-  { title: 'Big Item Loading', image: caseStudy2 },
-  { title: 'Sack Delivery for Relief', image: caseStudy3 },
-  { title: 'Night-Time Cargo Drop', image: caseStudy4 },
-  { title: 'Drum Storage Area', image: caseStudy5 },
-  { title: 'Island Cargo Transfer', image: caseStudy6 },
-  { title: 'Truck Dispatch Operations', image: caseStudy7 },
+  { 
+    title: 'Box Packing and Organizing', 
+    image: caseStudy1,
+    description: newLocal
+  },
+  { 
+    title: 'Big Item Loading', 
+    image: caseStudy2,
+    description: 'There are times when we deal with items that are just too big or too heavy for ordinary transport. That’s where our specialized tools and trained team come in. We’ve handled oversized cargo enough to know how to load, secure, and move them safely — always with the same care as if they were our own.'
+  },
+  { 
+    title: 'Sack Delivery for Relief', 
+    image: caseStudy3,
+    description: 'There are moments when our trucks carry more than just packages — they carry hope. During tough times, our team steps up for relief operations, bringing essential goods to communities that need them most. It’s our way of lending a hand and showing that we’re more than just a delivery service.'
+  },
+  { 
+    title: 'Night-Time Cargo Drop', 
+    image: caseStudy4,
+    description: 'Day or night, our work never really stops. With 24/7 operations, we’re always ready to move — even after hours — making sure time-sensitive shipments reach their destination right when they’re needed most.'
+  },
+  { 
+    title: 'Drum Storage Area', 
+    image: caseStudy5,
+    description: 'We’ve built storage spaces that can handle even the toughest materials — from heavy drums to large barrels. Everything’s kept safe and sound, following the right handling steps to make sure even hazardous materials are treated with care.'
+  },
+  { 
+    title: 'Island Cargo Transfer', 
+    image: caseStudy6,
+    description: 'We also take pride in our inter-island cargo services — reaching even the most remote places through trusted sea and land routes. It’s how we keep connections strong, no matter how far the destination may be.'
+  },
+  { 
+    title: 'Truck Dispatch Operations', 
+    image: caseStudy7,
+    description: 'Our dispatch operations run like clockwork — every departure is tracked in real time, every route carefully planned. It’s all about keeping things smooth, fast, and right on schedule.'
+  },
 ]);
 
+const flippedCards = ref(new Set());
+
 const getVisibleCards = () => {
-  if (window.innerWidth > 1200) return 6;
-  if (window.innerWidth > 768) return 4;
-  if (window.innerWidth > 480) return 2;
-  return 1;
+  if (window.innerWidth >= 1024) return 4; // lg and above: 4 cards
+  if (window.innerWidth >= 768) return 3; // md: 3 cards
+  if (window.innerWidth >= 640) return 2; // sm: 2 cards
+  return 1; // mobile: 1 card
 };
 
+//CALCULATOR
+// Constants
+const base_fee = 500
+const volume_rate = 50
+const weight_rate = 20
+const package_rate = 10
+
+// User inputs
+const height = ref('')
+const width = ref('')
+const length = ref('')
+const weight = ref('')
+const numPackages = ref(1)
+
+// Computed values
+const volumeInMeters = computed(() => {
+  if (!height.value || !width.value || !length.value) return 0
+  return (height.value / 100) * (width.value / 100) * (length.value / 100)
+})
+
+const volumeFee = computed(() => volumeInMeters.value * volume_rate)
+const weightFee = computed(() => (weight.value ? weight.value * weight_rate : 0))
+const packageFee = computed(() => numPackages.value * package_rate)
+
+const totalPrice = computed(() => {
+  if (
+    volumeInMeters.value > 10 ||
+    weight.value > 100
+  ) return '⚠️ Package exceeds limit!'
+
+  const total =
+    base_fee + volumeFee.value + weightFee.value + packageFee.value
+  return total.toFixed(2)
+})
+//END CALCULATOR
+
 const maxSlides = () => Math.max(0, caseStudies.value.length - getVisibleCards());
+
+const toggleFlip = (index) => {
+  if (flippedCards.value.has(index)) {
+    flippedCards.value.delete(index);
+  } else {
+    flippedCards.value.add(index);
+  }
+};
+
+const isFlipped = (index) => flippedCards.value.has(index);
 
 const slideCarousel = (direction) => {
   currentSlide.value += direction;
@@ -160,44 +254,48 @@ const navigateToCompleteProfile = () => {
       </div>
     </div>
 
-    <!-- Hero Section -->
-    <div
-      @click="toggleTruckPop"
-      class="relative w-full bg-cover bg-center bg-no-repeat text-white py-48 px-6 md:px-12 lg:px-20 cursor-pointer"
-      :style="`background-image: url(${homeImage})`"
-    >
-      <div class="absolute inset-0 bg-black/50"></div>
-      <div class="absolute inset-0 bg-gradient-to-b from-black/90 to-transparent"></div>
-      <div class="relative z-10 text-center max-w-[90%] xl:max-w-[1280px] mx-auto">
-        <h1 class="text-8xl md:text-8xl font-extrabold tracking-tight drop-shadow-lg"> 
-          <span class="text-green-600">Sending a package?</span> We've got you covered.
-        </h1>
-        <p class="mt-6 text-xl md:text-2xl font-medium drop-shadow">
-          Shipping made simple for businesses and individuals.
-        </p>
+  <!-- Hero Section -->
+<div
+  class="relative w-full bg-cover bg-center bg-no-repeat text-white py-48 px-6 md:px-12 lg:px-20 cursor-pointer"
+  :style="`background-image: url(${currentHomeImage});`"
+>
+  <div class="absolute inset-0 bg-black/50"></div>
+  <div class="absolute inset-0 bg-gradient-to-b from-black/90 to-transparent"></div>
+  <div class="relative z-10 text-center max-w-[90%] xl:max-w-[1280px] mx-auto">
+    
+      <h1 class="text-6xl sm:text-6xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold tracking-tight drop-shadow-lg text-center"> 
+        <span class="text-green-600 drop-shadow-md">Sending a package?</span> We've got you covered.
+      </h1>
+   
+    <p class="mt-6 text-xl md:text-2xl font-medium drop-shadow">
+      Shipping made simple for businesses and individuals.
+    </p>
 
-        <div class="mt-10 flex flex-col md:flex-row justify-center md:space-x-6 space-y-4 md:space-y-0">
-          <NavLink :href="route('tracking')">
-            <PrimaryButton variant="dark" class="text-lg w-full md:w-auto shadow bg-green-600">
-              Track Package
-            </PrimaryButton>
-          </NavLink>
+    <div class="mt-10 flex flex-col md:flex-row justify-center md:space-x-6 space-y-4 md:space-y-0">
+      <NavLink :href="route('customer.delivery-requests.create')">
+        <PrimaryButton variant="dark" class="text-lg w-full md:w-auto shadow bg-green-600">
+          Request Delivery
+        </PrimaryButton>
+      </NavLink>
 
-          <NavLink :href="route('customer.delivery-requests.create')">
-            <PrimaryButton variant="dark" class="text-lg w-full md:w-auto shadow bg-green-600">
-              Request Delivery
-            </PrimaryButton>
-          </NavLink>
-        </div>
-      </div>
+<NavLink href="/tracking">
+          <PrimaryButton variant="dark" class="text-lg w-full md:w-auto shadow bg-green-600">
+          Track Package
+        </PrimaryButton>
+      </NavLink>
     </div>
+  </div>
+</div>
+
+
+
 
     <!-- Goowell Case Section -->
-    <div class="w-full bg-gradient-to-br from-gray-50 to-gray-100 py-16 px-6 md:px-12 lg:px-20">
+    <div class="w-full bg-gradient-to-br from-gray-50 to-gray-100 py-16 px-6 md:px-12 lg:px-20" >
       <div class="max-w-[90%] xl:max-w-[1280px] mx-auto">
         <!-- Header -->
         <div class="text-center mb-12">
-          <h2 class="text-4xl md:text-5xl font-bold text-green-700 uppercase tracking-wide mb-4">
+          <h2 class="text-4xl md:text-5xl font-bold text-green-700 uppercase tracking-wide mb-4 drop-shadow-md" v-motion-slide-visible-right :duration="600">
             Our Story
           </h2>
           <p class="text-gray-600 text-lg max-w-2xl mx-auto">
@@ -216,21 +314,52 @@ const navigateToCompleteProfile = () => {
             <div
               v-for="(caseStudy, index) in caseStudies"
               :key="index"
-              class="flex-shrink-0 w-full sm:w-1/2 md:w-1/3 lg:w-1/4 xl:w-1/6 bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group"
-              @click="() => console.log('Case study clicked:', caseStudy.title)"
+              class="flip-card flex-shrink-0 w-full sm:w-1/2 md:w-1/3 lg:w-1/4 h-96"
+              @click="toggleFlip(index)"
             >
-              <div class="relative h-48 overflow-hidden">
-                <img 
-                  :src="caseStudy.image" 
-                  :alt="caseStudy.title"
-                  class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+              <div 
+                class="flip-card-inner relative w-full h-full transition-transform duration-700"
+                :class="{ 'rotate-y-180': isFlipped(index) }"
+                style="transform-style: preserve-3d;"
+              >
+                <!-- Front of card -->
+                <div 
+                  class="flip-card-front absolute inset-0 bg-white rounded-xl overflow-hidden shadow-lg cursor-pointer"
+                  style="backface-visibility: hidden;"
                 >
-                <div class="absolute inset-0 bg-gradient-to-t from-green-600/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-              </div>
-              <div class="p-4">
-                <h3 class="text-sm font-semibold text-gray-800 text-center leading-tight">
-                  {{ caseStudy.title }}
-                </h3>
+                  <div class="relative h-72 overflow-hidden group">
+                    <img 
+                      :src="caseStudy.image" 
+                      :alt="caseStudy.title"
+                      class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                    >
+                    <div class="absolute inset-0 bg-gradient-to-t from-green-600/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  </div>
+                  <div class="p-5">
+                    <h3 class="text-base font-semibold text-gray-800 text-center leading-tight">
+                      {{ caseStudy.title }}
+                    </h3>
+                  </div>
+                  <div class="absolute bottom-2 right-2 text-xs text-gray-500 bg-white/80 px-2 py-1 rounded">
+                    Click to flip
+                  </div>
+                </div>
+
+                <!-- Back of card -->
+                <div 
+                  class="flip-card-back absolute inset-0 bg-gradient-to-br from-green-700 to-green-900 rounded-xl overflow-hidden shadow-lg cursor-pointer p-6 flex flex-col justify-center items-center text-white"
+                  style="backface-visibility: hidden; transform: rotateY(180deg);"
+                >
+                  <h3 class="text-xl font-bold mb-4 text-center">
+                    {{ caseStudy.title }}
+                  </h3>
+                  <p class="text-sm text-center leading-relaxed">
+                    {{ caseStudy.description }}
+                  </p>
+                  <div class="absolute bottom-2 right-2 text-xs text-green-200 bg-white/20 px-2 py-1 rounded">
+                    Click to flip back
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -273,7 +402,7 @@ const navigateToCompleteProfile = () => {
       <div class="max-w-[90%] xl:max-w-[1280px] mx-auto space-y-12">
         <div class="space-y-6">
           <div class="text-center mb-12">
-          <h2 class="text-4xl md:text-5xl font-bold text-green-700 uppercase tracking-wide mb-4">
+          <h2 class="text-4xl md:text-5xl font-bold text-green-700 uppercase tracking-wide mb-4 drop-shadow-md" v-motion-slide-visible-right :duration="600">
             Services
           </h2>
             <p class="text-gray-700 text-lg leading-relaxed mt-4">
@@ -281,13 +410,13 @@ const navigateToCompleteProfile = () => {
           </div>
 
           <div
+            v-motion-fade-visible :duration="600"
             @click="toggleTruckPop"
             class="relative w-full bg-cover bg-center bg-no-repeat text-white py-80 px-6 md:px-12 lg:px-20 cursor-pointer"
             :style="`background-image: url(${truck2Image})`"
           >
             <div class="absolute inset-0 bg-black/50"></div>
             <div class="absolute inset-0 from-black/90 to-transparent"></div>
-            <!-- Removed button from here -->
           </div>
 
           <!-- Button moved here, outside the image container -->
@@ -302,10 +431,78 @@ const navigateToCompleteProfile = () => {
       </div>
     </div>
 
+    <div class="w-full bg-gradient-to-br from-gray-50 to-gray-100 py-16 px-6 md:px-12 lg:px-20">
+  <div class="flex flex-col lg:flex-row items-center justify-center gap-10">
+    
+    <!-- Image (smaller size) -->
+    <Motion preset="slideVisibleLeft" :duration="600">
+      <div class="flex justify-center">
+      <img
+        :src="calculatorImage"
+        alt="Delivery Cost Calculator"
+        class="w-64 h-auto md:w-80 lg:w-96 object-contain"
+      />
+    </div>
+    </Motion>
+
+    <!-- Calculator Card -->
+    <div class="max-w-md bg-white shadow-lg rounded-2xl p-6">
+      <h2 class="text-2xl font-bold text-green-700 text-center mb-2 drop-shadow-md">
+        Delivery Cost Calculator
+      </h2>
+      <p class="text-gray-700 text-sm leading-relaxed text-center mb-4">
+        Calculate the estimated delivery cost based on your package dimensions and weight.
+      </p>
+
+      <div class="grid gap-4">
+        <div>
+          <label class="block font-medium">Height (cm)</label>
+          <input v-model.number="height" type="number" class="w-full p-2 border rounded-md" placeholder="Enter height" />
+        </div>
+
+        <div>
+          <label class="block font-medium">Width (cm)</label>
+          <input v-model.number="width" type="number" class="w-full p-2 border rounded-md" placeholder="Enter width" />
+        </div>
+
+        <div>
+          <label class="block font-medium">Length (cm)</label>
+          <input v-model.number="length" type="number" class="w-full p-2 border rounded-md" placeholder="Enter length" />
+        </div>
+
+        <div>
+          <label class="block font-medium">Weight (kg)</label>
+          <input v-model.number="weight" type="number" class="w-full p-2 border rounded-md" placeholder="Enter weight" />
+        </div>
+
+        <div>
+          <label class="block font-medium">Number of Packages</label>
+          <input v-model.number="numPackages" type="number" min="1" class="w-full p-2 border rounded-md" />
+        </div>
+      </div>
+
+      <div class="mt-6 bg-green-50 p-4 rounded-xl text-center">
+        <p class="text-lg font-semibold text-gray-700">
+          Volume: {{ volumeInMeters.toFixed(3) }} m³
+        </p>
+        <p class="text-lg font-semibold text-gray-700">
+          Total Price:
+          <span class="text-green-700 font-bold text-xl">
+            {{ totalPrice }}
+          </span>
+        </p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+    
+
     <!-- What Our Logistics Service Means Section -->
      
     <div class="pt-4 pb-14 px-6 md:px-12 lg:px-20 text-center"> 
-      <h2 class="leading-normal font-semibold text-5xl md:text-md text-green-700 pb-3 text-center mt-15">
+      <h2 class="leading-normal font-semibold text-5xl md:text-md text-green-700 pb-3 text-center mt-15 drop-shadow-md" v-motion-slide-visible-right :duration="600">
         What Our Logistics Service Means for Your Business
       </h2>
       <p class="text-gray-700 max-w-4xl mx-auto mb-12 text-xl">
@@ -315,7 +512,11 @@ const navigateToCompleteProfile = () => {
       <div class="grid grid-cols-1 md:grid-cols-3 gap-10 text-center">
         <!-- Item 1 -->
         <div class="flex flex-col items-center space-y-4">
-          <img :src="packageImage" alt="Warehouse and Truck" class="w-50 h-50 object-contain" />
+          <img :src="packageImage" alt="Warehouse and Truck" class="w-50 h-50 object-contain cursor-pointer"  
+          v-motion
+            :initial="{ scale: 1, rotate: 0 }"
+            :hovered="{ scale: 1.1, rotate: 10 }"
+            :transition="{ type: 'spring', stiffness: 200, damping: 100 }"/>
           <h3 class="font-bold text-4xl text-green-700 text-md mb-2">Transportation</h3>
           <p class="text-gray-700 max-w-4xl mx-auto mb-12 text-xl">
            We handle the critical early stages of the logistics process—from pick-up to delivery at our central warehouse—ensuring your goods move efficiently and securely.
@@ -324,7 +525,11 @@ const navigateToCompleteProfile = () => {
 
         <!-- Item 2 -->
         <div class="flex flex-col items-center space-y-4">
-          <img :src="transportationImage" alt="Boxes and Ninja" class="w-50 h-50 object-contain" />
+          <img :src="transportationImage" alt="Boxes and Ninja" class="w-50 h-50 object-contain cursor-pointer" 
+          v-motion
+            :initial="{ scale: 1, rotate: 0 }"
+            :hovered="{ scale: 1.1, rotate: 10 }"
+            :transition="{ type: 'spring', stiffness: 200, damping: 100 }"/>
           <h3 class="font-bold text-4xl text-green-700 text-md mb-2">Lightweight package delivery</h3>
           <p class="text-gray-700 max-w-4xl mx-auto mb-12 text-xl">
             Our fleet includes a range of trucks, each designed for different load capacities. If your package is lightweight, 
@@ -334,7 +539,11 @@ const navigateToCompleteProfile = () => {
 
         <!-- Item 3 -->
         <div class="flex flex-col items-center space-y-4">
-          <img :src="weightImage" alt="Nationwide Map" class="w-50 h-50 object-contain" />
+          <img :src="weightImage" alt="Nationwide Map" class="w-50 h-50 object-contain cursor-pointer" 
+          v-motion
+            :initial="{ scale: 1, rotate: 0 }"
+            :hovered="{ scale: 1.1, rotate: 10 }"
+            :transition="{ type: 'spring', stiffness: 200, damping: 100 }"/>
           <h3 class="font-bold text-4xl text-green-700 text-md mb-2">Heavyweight</h3>
           <p class="text-gray-700 max-w-4xl mx-auto mb-12 text-xl">
             Our fleet also includes trucks built to handle large and heavy loads. No matter how bulky your package is, 
@@ -379,3 +588,13 @@ const navigateToCompleteProfile = () => {
     </div>
   </GuestLayout>
 </template>
+
+<style scoped>
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+.flip-card {
+  perspective: 1000px;
+}
+</style>

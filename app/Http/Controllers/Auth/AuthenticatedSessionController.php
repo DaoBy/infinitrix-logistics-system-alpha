@@ -60,7 +60,7 @@ class AuthenticatedSessionController extends Controller
             'admin'     => redirect()->intended(route('admin.dashboard')),
             'staff'     => redirect()->intended(route('staff.dashboard')),
             'driver'    => redirect()->intended(route('driver.dashboard')),
-            'collector' => redirect()->intended(route('collector.dashboard')),
+            'collector' => redirect()->intended(route('collector.payments.dashboard')),
             default     => redirect()->route('login'),
         };
     }

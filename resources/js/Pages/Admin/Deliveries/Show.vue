@@ -1,11 +1,17 @@
 <template>
   <EmployeeLayout>
     <template #header>
-      <div class="flex justify-between items-center">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">
-          Delivery Request: {{ delivery.reference_number || delivery.order_number || '#' + delivery.id }}
-        </h2>
-        <div class="flex space-x-2">
+      <div class="flex justify-between items-center w-full px-6 md:px-8">
+        <!-- Left: Title & Subtitle -->
+        <div>
+          <h2 class="text-xl font-semibold leading-tight text-gray-800">Delivery Request Details</h2>
+          <p class="mt-1 text-sm text-gray-500">
+            View delivery request information
+          </p>
+        </div>
+
+        <!-- Right: Buttons -->
+        <div class="flex gap-2">
           <SecondaryButton @click="goBack">
             Back
           </SecondaryButton>
@@ -25,211 +31,346 @@
       </div>
     </template>
 
-    <div class="py-4">
-      <!-- Make the main container more compact by reducing max-width and padding -->
-      <div class="max-w-4xl mx-auto px-2 lg:px-4 space-y-4">
-        <!-- Status / Success / Error Alerts -->
-        <div v-if="status || success || error" class="mb-4 space-y-2">
-          <div v-if="status" class="p-3 bg-blue-100 text-blue-800 rounded">{{ status }}</div>
-          <div v-if="success" class="p-3 bg-green-100 text-green-800 rounded">{{ success }}</div>
-          <div v-if="error" class="p-3 bg-red-100 text-red-800 rounded">{{ error }}</div>
-        </div>
-
-        <!-- Delivery Information Card -->
-        <div class="bg-white shadow-sm rounded-lg border border-gray-200 mb-2">
-          <div class="p-3 bg-indigo-50 border-b border-gray-200 flex flex-col md:flex-row md:items-center md:justify-between">
-            <div>
-              <div class="flex items-center gap-2">
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800">
-                  Reference #
-                </span>
-                <span class="text-base font-bold text-indigo-900 tracking-wide">
-                  {{ delivery.reference_number || delivery.order_number || ('DR-' + String(delivery.id).padStart(6, '0')) }}
-                </span>
-              </div>
-              <div class="mt-1 text-xs text-gray-500">
-                Delivery ID: DO-{{ String(delivery.id).padStart(6, '0') }}
-                <span v-if="delivery.created_at">&nbsp;|&nbsp;Created: {{ formatDate(delivery.created_at) }}</span>
-              </div>
-            </div>
-            <div class="mt-2 md:mt-0 flex items-center gap-2">
-              <span class="font-medium text-gray-900">
-                ₱{{ Number(delivery.total_price).toFixed(2) }}
-              </span>
-              <span class="text-xs text-gray-500">Total Amount</span>
-            </div>
+    <!-- MAIN CONTENT AREA - This should scroll independently -->
+    <div class="flex-1 overflow-auto">
+      <!-- ZOOM CONTENT WRAPPER -->
+      <div class="zoom-content">
+        <!-- MAIN CONTENT CONTAINER WITH PROPER PADDING -->
+        <div class="px-6 py-4">
+          <div v-if="status || success || error" class="mb-4">
+            <div v-if="status" class="p-3 bg-blue-100 text-blue-800 rounded">{{ status }}</div>
+            <div v-if="success" class="p-3 bg-green-100 text-green-800 rounded">{{ success }}</div>
+            <div v-if="error" class="p-3 bg-red-100 text-red-800 rounded">{{ error }}</div>
           </div>
-          <div class="p-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-            <!-- Delivery Info -->
-            <section class="space-y-2">
-              <h3 class="text-base font-medium text-gray-900">Delivery Information</h3>
-              <div>
-                <label class="block text-xs font-medium text-gray-500">Status</label>
-                <span
-                  class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
-                  :class="deliveryStatusBadgeClass(delivery.status)"
-                >
-                  {{ deliveryStatusBadgeText(delivery.status) }}
-                </span>
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-500">Reference Number</label>
-                <p class="mt-0.5 text-sm text-gray-900">
-                  {{ delivery.reference_number || delivery.order_number || ('DR-' + String(delivery.id).padStart(6, '0')) }}
-                </p>
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-500">Order Number</label>
-                <p class="mt-0.5 text-sm text-gray-900">{{ delivery.order_number || 'N/A' }}</p>
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-500">Request Date</label>
-                <p class="mt-0.5 text-sm text-gray-900">{{ formatDate(delivery.created_at) }}</p>
-              </div>
-              <div v-if="delivery.approved_at">
-                <label class="block text-xs font-medium text-gray-500">Approved Date</label>
-                <p class="mt-0.5 text-sm text-gray-900">{{ formatDate(delivery.approved_at) }}</p>
-              </div>
-              <div v-if="delivery.approved_by">
-                <label class="block text-xs font-medium text-gray-500">Approved By</label>
-                <p class="mt-0.5 text-sm text-gray-900">{{ delivery.approved_by }}</p>
-              </div>
-              <div v-if="delivery.rejected_at">
-                <label class="block text-xs font-medium text-gray-500">Rejected Date</label>
-                <p class="mt-0.5 text-sm text-gray-900">{{ formatDate(delivery.rejected_at) }}</p>
-              </div>
-              <div v-if="delivery.rejected_by">
-                <label class="block text-xs font-medium text-gray-500">Rejected By</label>
-                <p class="mt-0.5 text-sm text-gray-900">{{ delivery.rejected_by }}</p>
-              </div>
-              <div v-if="delivery.rejection_reason">
-                <label class="block text-xs font-medium text-gray-500">Rejection Reason</label>
-                <p class="mt-0.5 text-sm text-gray-900 whitespace-pre-wrap">{{ delivery.rejection_reason }}</p>
-              </div>
-            </section>
 
-            <!-- Payment Info -->
-            <section class="space-y-2">
-              <h3 class="text-base font-medium text-gray-900">Payment</h3>
-              <div>
-                <label class="block text-xs font-medium text-gray-500">Total Amount</label>
-                <p class="mt-0.5 text-sm text-gray-900">₱{{ delivery.total_price || '0.00' }}</p>
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-500">Payment Method</label>
-                <p class="mt-0.5 text-sm text-gray-900 capitalize">{{ delivery.payment_method || 'N/A' }}</p>
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-500">Payment Status</label>
-                <div class="mt-0.5">
-                  <span
-                    class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
-                    :class="paymentStatusBadgeClass(delivery.payment_status)"
-                  >
-                    {{ paymentStatusBadgeText(delivery.payment_status) }}
-                  </span>
+          <!-- Data Table Container - 20% NARROWER -->
+          <div class="justify-center flex items-center">
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg w-full max-w-[75vw]">
+              <div class="p-4 bg-white border-b border-gray-200">
+                
+                <!-- Header Card with Delivery ID and Status -->
+                <div class="bg-white shadow-sm rounded-lg border border-gray-200 mb-6">
+                  <div class="p-6">
+                    <div class="flex flex-col">
+                      <div class="flex items-center gap-2">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                          Delivery ID:
+                        </span>
+                        <span class="font-bold text-green-700 tracking-wide">
+                         DR-{{ String(delivery.id).padStart(6, '0') }}
+                        </span>
+                      </div>
+                      <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                        <span>
+                          Reference # {{ delivery.status === 'pending' ? 'N/A' : (delivery.reference_number || delivery.order_number || ('DR-' + String(delivery.id).padStart(6, '0'))) }}
+                        </span>
+                        <span v-if="delivery.created_at"> | Created: {{ formatDate(delivery.created_at) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Main Information Grid - 3 Columns -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                  <!-- Column 1: Sender Information -->
+                  <div class="bg-white shadow-sm rounded-lg border border-gray-200">
+                    <div class="p-4 border-b border-gray-200">
+                      <h3 class="text-lg font-medium text-gray-900">Sender Information</h3>
+                    </div>
+                    <div class="p-4 space-y-4">
+                      <div class="grid grid-cols-1 gap-3">
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">Name</label>
+                          <p class="mt-1 text-sm text-gray-900">
+                            {{ delivery.sender?.name || delivery.sender?.company_name || 'N/A' }}
+                          </p>
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">Contact</label>
+                          <p class="mt-1 text-sm text-gray-900">
+                            {{ delivery.sender?.phone || delivery.sender?.mobile || 'N/A' }}
+                          </p>
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">Email</label>
+                          <p class="mt-1 text-sm text-gray-900">
+                            {{ delivery.sender?.email || 'N/A' }}
+                          </p>
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">Address</label>
+                          <p class="mt-1 text-sm text-gray-900">
+                            {{ formatAddress(delivery.sender) }}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Column 2: Receiver Information -->
+                  <div class="bg-white shadow-sm rounded-lg border border-gray-200">
+                    <div class="p-4 border-b border-gray-200">
+                      <h3 class="text-lg font-medium text-gray-900">Receiver Information</h3>
+                    </div>
+                    <div class="p-4 space-y-4">
+                      <div class="grid grid-cols-1 gap-3">
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">Name</label>
+                          <p class="mt-1 text-sm text-gray-900">
+                            {{ delivery.receiver?.name || delivery.receiver?.company_name || 'N/A' }}
+                          </p>
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">Contact</label>
+                          <p class="mt-1 text-sm text-gray-900">
+                            {{ delivery.receiver?.phone || delivery.receiver?.mobile || 'N/A' }}
+                          </p>
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">Email</label>
+                          <p class="mt-1 text-sm text-gray-900">
+                            {{ delivery.receiver?.email || 'N/A' }}
+                          </p>
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">Address</label>
+                          <p class="mt-1 text-sm text-gray-900">
+                            {{ formatAddress(delivery.receiver) }}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Column 3: Delivery Information -->
+                  <div class="bg-white shadow-sm rounded-lg border border-gray-200">
+                    <div class="p-4 border-b border-gray-200">
+                      <h3 class="text-lg font-medium text-gray-900">Delivery Information</h3>
+                    </div>
+                    <div class="p-4 space-y-4">
+                      <div class="grid grid-cols-1 gap-3">
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">Reference Number</label>
+                          <div class="mt-1">
+                            <span
+                              v-if="delivery.reference_number"
+                              class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800"
+                            >
+                              {{ delivery.reference_number }}
+                            </span>
+                            <span
+                              v-else
+                              class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-700"
+                            >
+                              N/A
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">Order Number</label>
+                          <p class="mt-1 text-sm text-gray-900">{{ delivery.order_number || 'N/A' }}</p>
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">Request Date</label>
+                          <p class="mt-1 text-sm text-gray-900">{{ formatDate(delivery.created_at) }}</p>
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">Pick Up Region</label>
+                          <p class="mt-1 text-sm text-gray-900">{{ delivery.pick_up_region || 'N/A' }}</p>
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">Drop Off Region</label>
+                          <p class="mt-1 text-sm text-gray-900">{{ delivery.drop_off_region || 'N/A' }}</p>
+                        </div>
+                        <div v-if="delivery.approved_at">
+                          <label class="block text-sm font-medium text-gray-700">Approved Date</label>
+                          <p class="mt-1 text-sm text-gray-900">{{ formatDate(delivery.approved_at) }}</p>
+                        </div>
+                        <div v-if="delivery.approved_by">
+                          <label class="block text-sm font-medium text-gray-700">Approved By</label>
+                          <p class="mt-1 text-sm text-gray-900">{{ delivery.approved_by }}</p>
+                        </div>
+                        <div v-if="delivery.rejected_at">
+                          <label class="block text-sm font-medium text-gray-700">Rejected Date</label>
+                          <p class="mt-1 text-sm text-gray-900">{{ formatDate(delivery.rejected_at) }}</p>
+                        </div>
+                        <div v-if="delivery.rejected_by">
+                          <label class="block text-sm font-medium text-gray-700">Rejected By</label>
+                          <p class="mt-1 text-sm text-gray-900">{{ delivery.rejected_by }}</p>
+                        </div>
+                        <div v-if="delivery.rejection_reason">
+                          <label class="block text-sm font-medium text-gray-700">Rejection Reason</label>
+                          <p class="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{{ delivery.rejection_reason }}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Second Row: Payment Information (spans Sender + Receiver width) -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                  <!-- Payment Information Card - spans 2 columns (same as Sender + Receiver) -->
+                  <div class="lg:col-span-2 bg-white shadow-sm rounded-lg border border-gray-200">
+                    <div class="p-4 border-b border-gray-200">
+                      <h3 class="text-lg font-medium text-gray-900">Payment Information</h3>
+                    </div>
+                    <div class="p-4">
+                      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">Total Amount</label>
+                          <p class="mt-1 text-lg font-semibold text-gray-900">₱{{ formatCurrency(delivery.total_price) }}</p>
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">Payment Method</label>
+                          <p class="mt-1 text-sm text-gray-900 capitalize">{{ delivery.payment_method || 'N/A' }}</p>
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">Payment Status</label>
+                          <div class="mt-1">
+                            <span
+                              class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold"
+                              :class="paymentStatusBadgeClass(delivery.payment_status)"
+                            >
+                              {{ paymentStatusBadgeText(delivery.payment_status) }}
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-gray-700">Payment Terms</label>
+                          <div class="mt-1">
+                            <span
+                              v-if="delivery.payment_terms"
+                              class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800"
+                            >
+                              {{ formatPaymentTerms(delivery.payment_terms) }}
+                            </span>
+                            <span
+                              v-else
+                              class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-700"
+                            >
+                              N/A
+                            </span>
+                          </div>
+                        </div>
+                        <div v-if="delivery.payment_due_date" class="md:col-span-2">
+                          <label class="block text-sm font-medium text-gray-700">Payment Due Date</label>
+                          <p class="mt-1 text-sm text-gray-900">{{ formatDate(delivery.payment_due_date) }}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Packages Section - Full Width matching Sender + Receiver -->
+                <div class="bg-white shadow-sm rounded-lg border border-gray-200">
+                  <div class="p-4 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-900">Packages ({{ delivery.packages?.length || 0 }})</h3>
+                  </div>
+                  <div class="p-4">
+                    <DataTable 
+                      v-if="delivery.packages && delivery.packages.length"
+                      :columns="packageColumns" 
+                      :data="sortedPackages" 
+                      :sort-field="packageSortField" 
+                      :sort-direction="packageSortDirection" 
+                      @sort="handlePackageSort"
+                      class="compact-table"
+                    >
+                      <template #item_code="{ row }">
+                        <span class="font-mono text-xs text-gray-600">{{ row.item_code || 'N/A' }}</span>
+                      </template>
+                      <template #category="{ row }">
+                        <span
+                          class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold"
+                          :class="categoryBadgeClass(row.category)"
+                        >
+                          {{ formatCategory(row.category) }}
+                        </span>
+                      </template>
+                      <template #dimensions="{ row }">
+                        {{ formatDimension(row.height) }} × {{ formatDimension(row.width) }} × {{ formatDimension(row.length) }} cm
+                      </template>
+                      <template #volume="{ row }">
+                        {{ formatVolume(row.volume) }} m³
+                      </template>
+                      <template #weight="{ row }">
+                        {{ formatWeight(row.weight) }} kg
+                      </template>
+                      <template #value="{ row }">
+                        ₱{{ formatCurrency(row.value) }}
+                      </template>
+                      <template #photo="{ row }">
+                        <div class="flex flex-col gap-1 max-w-[80px]">
+                          <template v-if="row.photo_path && Array.isArray(row.photo_path) && row.photo_path.length">
+                            <!-- First row of 2 images -->
+                            <div class="flex gap-1">
+                              <img 
+                                v-for="(photo, index) in row.photo_path.slice(0, 2)" 
+                                :key="index"
+                                :src="getPhotoUrl(photo)" 
+                                :alt="`Package photo ${index + 1}`" 
+                                class="h-8 w-8 object-cover rounded cursor-pointer border border-gray-300"
+                                @click="openImageModal(getPhotoUrl(photo))"
+                              />
+                            </div>
+                            <!-- Second row of 2 images -->
+                            <div v-if="row.photo_path.length > 2" class="flex gap-1">
+                              <img 
+                                v-for="(photo, index) in row.photo_path.slice(2, 4)" 
+                                :key="index + 2"
+                                :src="getPhotoUrl(photo)" 
+                                :alt="`Package photo ${index + 3}`" 
+                                class="h-8 w-8 object-cover rounded cursor-pointer border border-gray-300"
+                                @click="openImageModal(getPhotoUrl(photo))"
+                              />
+                            </div>
+                            <!-- Third row of 2 images -->
+                            <div v-if="row.photo_path.length > 4" class="flex gap-1">
+                              <img 
+                                v-for="(photo, index) in row.photo_path.slice(4, 6)" 
+                                :key="index + 4"
+                                :src="getPhotoUrl(photo)" 
+                                :alt="`Package photo ${index + 5}`" 
+                                class="h-8 w-8 object-cover rounded cursor-pointer border border-gray-300"
+                                @click="openImageModal(getPhotoUrl(photo))"
+                              />
+                            </div>
+                          </template>
+                          <template v-else-if="row.photo_path && typeof row.photo_path === 'string'">
+                            <img 
+                              :src="getPhotoUrl(row.photo_path)" 
+                              alt="Package photo" 
+                              class="h-8 w-8 object-cover rounded cursor-pointer border border-gray-300"
+                              @click="openImageModal(getPhotoUrl(row.photo_path))"
+                            />
+                          </template>
+                          <span v-else class="text-gray-400 text-xs">No photos</span>
+                        </div>
+                      </template>
+                      <template #status="{ row }">
+                        <span
+                          class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold"
+                          :class="packageStatusBadgeClass(row.status)"
+                        >
+                          {{ formatPackageStatus(row.status) }}
+                        </span>
+                      </template>
+                      <template #status_history="{ row }">
+                        <SecondaryButton
+                          class="!px-2 !py-1 !text-xs !font-normal"
+                          @click="() => router.visit(route('packages.track', row.id))"
+                        >
+                          Track Package
+                        </SecondaryButton>
+                      </template>
+                    </DataTable>
+                    <div v-else class="text-center py-8 text-gray-500">
+                      No packages found for this delivery.
+                    </div>
+                  </div>
                 </div>
               </div>
-            </section>
-          </div>
-        </div>
-
-        <!-- Sender/Receiver Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
-          <div class="bg-white shadow-sm rounded-lg border border-gray-200 p-3">
-            <h3 class="text-base font-medium text-gray-900 mb-1">Sender</h3>
-            <div>
-              <label class="block text-xs font-medium text-gray-500">Name</label>
-              <p class="mt-0.5 text-sm text-gray-900">
-                {{ delivery.sender?.name || delivery.sender?.company_name || 'N/A' }}
-              </p>
             </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-500">Contact</label>
-              <p class="mt-0.5 text-sm text-gray-900">
-                {{ delivery.sender?.phone || delivery.sender?.mobile || 'N/A' }}
-              </p>
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-500">Email</label>
-              <p class="mt-0.5 text-sm text-gray-900">
-                {{ delivery.sender?.email || 'N/A' }}
-              </p>
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-500">Address</label>
-              <p class="mt-0.5 text-sm text-gray-900">
-                {{ formatAddress(delivery.sender) }}
-              </p>
-            </div>
-          </div>
-          <div class="bg-white shadow-sm rounded-lg border border-gray-200 p-3">
-            <h3 class="text-base font-medium text-gray-900 mb-1">Receiver</h3>
-            <div>
-              <label class="block text-xs font-medium text-gray-500">Name</label>
-              <p class="mt-0.5 text-sm text-gray-900">
-                {{ delivery.receiver?.name || delivery.receiver?.company_name || 'N/A' }}
-              </p>
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-500">Contact</label>
-              <p class="mt-0.5 text-sm text-gray-900">
-                {{ delivery.receiver?.phone || delivery.receiver?.mobile || 'N/A' }}
-              </p>
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-500">Email</label>
-              <p class="mt-0.5 text-sm text-gray-900">
-                {{ delivery.receiver?.email || 'N/A' }}
-              </p>
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-500">Address</label>
-              <p class="mt-0.5 text-sm text-gray-900">
-                {{ formatAddress(delivery.receiver) }}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Packages Section -->
-        <div class="bg-white shadow-sm rounded-lg border border-gray-200 p-3 mb-2">
-          <h3 class="text-base font-medium text-gray-900 mb-2">Packages ({{ delivery.packages?.length || 0 }})</h3>
-          <DataTable 
-            v-if="delivery.packages && delivery.packages.length"
-            :columns="packageColumns" 
-            :data="sortedPackages" 
-            :sort-field="packageSortField" 
-            :sort-direction="packageSortDirection" 
-            @sort="handlePackageSort"
-          >
-            <template #dimensions="{ row }">
-              {{ row.height }} × {{ row.width }} × {{ row.length }} cm
-            </template>
-            <template #value="{ row }">
-              ₱{{ formatCurrency(row.value) }}
-            </template>
-            <template #photo="{ row }">
-              <img 
-                v-if="row.photo_path" 
-                :src="`/storage/${row.photo_path}`" 
-                alt="Package photo" 
-                class="h-10 w-10 object-cover rounded cursor-pointer"
-                @click="openImageModal(`/storage/${row.photo_path}`)"
-              />
-              <span v-else>No photo</span>
-            </template>
-            <template #status_history="{ row }">
-              <SecondaryButton
-                class="!px-2 !py-1 !text-xs !font-normal"
-                @click="showStatusHistory(row)"
-              >
-                View History
-              </SecondaryButton>
-            </template>
-          </DataTable>
-          <div v-else class="text-gray-500">
-            No packages found for this delivery.
           </div>
         </div>
       </div>
@@ -291,10 +432,55 @@
       </div>
     </Modal>
 
-    <!-- Image Preview Modal -->
-    <Modal :show="showImageModal" @close="closeImageModal" max-width="4xl">
+    <!-- Image Preview Modal - Optimized Size -->
+    <Modal :show="showImageModal" @close="closeImageModal" max-width="2xl">
       <div class="p-4">
-        <img :src="currentImage" alt="Package photo preview" class="max-h-[80vh] mx-auto" />
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-medium text-gray-900">Package Photo</h3>
+          <button @click="closeImageModal" class="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="flex justify-center items-center bg-gray-50 rounded-lg p-3">
+          <img 
+            :src="currentImage" 
+            alt="Package photo preview" 
+            class="max-h-[65vh] max-w-[90%] rounded-lg shadow-md object-contain"
+          />
+        </div>
+      </div>
+    </Modal>
+
+    <!-- Image Gallery Modal - Optimized Size -->
+    <Modal :show="showImageGalleryModal" @close="closeImageGalleryModal" max-width="5xl">
+      <div class="p-4">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-medium text-gray-900">Package Photos ({{ currentGalleryImages.length }})</h3>
+          <button @click="closeImageGalleryModal" class="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div 
+            v-for="(photo, index) in currentGalleryImages" 
+            :key="index"
+            class="cursor-pointer group"
+            @click="openImageModal(getPhotoUrl(photo))"
+          >
+            <div class="bg-gray-50 rounded-lg p-3 flex justify-center items-center h-40">
+              <img 
+                :src="getPhotoUrl(photo)" 
+                :alt="`Package photo ${index + 1}`" 
+                class="max-h-32 max-w-full object-contain rounded-lg border border-gray-200 group-hover:border-blue-400 transition-colors"
+              />
+            </div>
+            <p class="text-center text-xs text-gray-600 mt-1">Photo {{ index + 1 }}</p>
+          </div>
+        </div>
       </div>
     </Modal>
   </EmployeeLayout>
@@ -309,10 +495,8 @@ import InputLabel from '@/Components/InputLabel.vue';
 import TextArea from '@/Components/TextArea.vue';
 import Modal from '@/Components/Modal.vue';
 import DataTable from '@/Components/DataTable.vue';
-import StatusBadge from '@/Components/StatusBadge.vue';
 import { router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-
 
 // --- Props ---
 const props = defineProps({
@@ -332,6 +516,10 @@ const props = defineProps({
       total_price: 0,
       payment_method: null,
       payment_status: null,
+      payment_terms: null,
+      payment_due_date: null,
+      pick_up_region: null,
+      drop_off_region: null,
       sender: null,
       receiver: null,
       packages: [],
@@ -346,7 +534,6 @@ const props = defineProps({
   error: String,
 });
 
-
 // --- Modal State ---
 const showRejectModal = ref(false);
 const rejectionReason = ref('');
@@ -355,21 +542,26 @@ const isProcessing = ref(false);
 const showImageModal = ref(false);
 const currentImage = ref('');
 
+const showImageGalleryModal = ref(false);
+const currentGalleryImages = ref([]);
+
 const showStatusHistoryModal = ref(false);
 const currentStatusHistory = ref([]);
 
-
 // --- Table Sorting ---
 const packageColumns = [
-  { field: 'item_name', header: 'Item', sortable: true },
+  { field: 'item_code', header: 'Item Code', sortable: true },
+  { field: 'item_name', header: 'Item Name', sortable: true },
   { field: 'category', header: 'Category', sortable: true },
   { field: 'dimensions', header: 'Dimensions', sortable: false },
-  { field: 'weight', header: 'Weight (kg)', sortable: true },
+  { field: 'volume', header: 'Volume', sortable: true },
+  { field: 'weight', header: 'Weight', sortable: true },
   { field: 'value', header: 'Value', sortable: true },
-  { field: 'photo', header: 'Photo', sortable: false },
-  { field: 'status_history', header: 'Status History', sortable: false },
+  { field: 'status', header: 'Status', sortable: true },
+  { field: 'photo', header: 'Photos', sortable: false, width: '150px' },
+  { field: 'status_history', header: 'Actions', sortable: false, width: '120px' },
 ];
-const packageSortField = ref('item_name');
+const packageSortField = ref('item_code');
 const packageSortDirection = ref('asc');
 
 const sortedPackages = computed(() => {
@@ -384,20 +576,32 @@ const sortedPackages = computed(() => {
     return 0;
   });
 });
+
 function getNestedValue(obj, path) {
   return path.split('.').reduce((o, p) => o?.[p], obj);
 }
 
-
 // --- Formatting Helpers ---
-function getStatusClass(status) {
-  switch (status) {
-    case 'pending': return 'bg-yellow-100 text-yellow-800';
-    case 'approved': return 'bg-green-100 text-green-800';
-    case 'rejected': return 'bg-red-100 text-red-800';
-    default: return 'bg-gray-100 text-gray-800';
-  }
+function formatCurrency(value) {
+  const num = Number(value) || 0;
+  return num.toFixed(2);
 }
+
+function formatDimension(value) {
+  const num = Number(value) || 0;
+  return num.toFixed(1);
+}
+
+function formatVolume(value) {
+  const num = Number(value) || 0;
+  return num.toFixed(3);
+}
+
+function formatWeight(value) {
+  const num = Number(value) || 0;
+  return num.toFixed(1);
+}
+
 function formatDate(dateString) {
   if (!dateString) return 'N/A';
   return new Date(dateString).toLocaleDateString('en-US', { 
@@ -408,6 +612,7 @@ function formatDate(dateString) {
     minute: '2-digit'
   });
 }
+
 function formatDateTime(dateString) {
   if (!dateString) return 'N/A';
   return new Date(dateString).toLocaleString('en-US', { 
@@ -418,6 +623,7 @@ function formatDateTime(dateString) {
     minute: '2-digit'
   });
 }
+
 function formatAddress(customer) {
   if (!customer) return 'N/A';
   const addressParts = [
@@ -431,45 +637,221 @@ function formatAddress(customer) {
   return addressParts.join(', ') || 'Address not specified';
 }
 
-// Add this helper function to safely format currency
-function formatCurrency(value) {
-  const num = Number(value) || 0;
-  return num.toFixed(2);
+function formatCategory(category) {
+  if (!category) return 'N/A';
+  const categoryMap = {
+    'piece': 'Piece',
+    'carton': 'Carton',
+    'sack': 'Sack',
+    'bundle': 'Bundle',
+    'roll': 'Roll',
+    'B/R': 'B/R',
+    'C/S': 'C/S'
+  };
+  return categoryMap[category] || category.charAt(0).toUpperCase() + category.slice(1);
 }
 
+function formatPackageStatus(status) {
+  if (!status) return 'N/A';
+  const statusMap = {
+    'preparing': 'Preparing',
+    'ready_for_pickup': 'Ready for Pickup',
+    'loaded': 'Loaded',
+    'in_transit': 'In Transit',
+    'delivered': 'Delivered',
+    'completed': 'Completed',
+    'returned': 'Returned',
+    'rejected': 'Rejected',
+    'damaged_in_transit': 'Damaged in Transit',
+    'lost_in_transit': 'Lost in Transit'
+  };
+  return statusMap[status] || status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+function formatPaymentTerms(terms) {
+  if (!terms) return 'N/A';
+  const termsMap = {
+    'net_7': 'Net 7 Days',
+    'net_15': 'Net 15 Days',
+    'net_30': 'Net 30 Days',
+    'cnd': 'Cash on Delivery'
+  };
+  return termsMap[terms] || terms.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+// --- Badge Classes ---
+function categoryBadgeClass(category) {
+  if (!category) return 'bg-gray-100 text-gray-800';
+  
+  const normalizedCategory = String(category).toLowerCase();
+  switch(normalizedCategory) {
+    case 'piece': return 'bg-blue-100 text-blue-800';
+    case 'carton': return 'bg-green-100 text-green-800';
+    case 'sack': return 'bg-amber-100 text-amber-800';
+    case 'bundle': return 'bg-purple-100 text-purple-800';
+    case 'roll': return 'bg-red-100 text-red-800';
+    case 'b/r': return 'bg-indigo-100 text-indigo-800';
+    case 'c/s': return 'bg-pink-100 text-pink-800';
+    default: return 'bg-gray-100 text-gray-800';
+  }
+}
+
+function packageStatusBadgeClass(status) {
+  if (!status) return 'bg-gray-100 text-gray-800';
+  
+  switch(status) {
+    case 'delivered':
+    case 'completed':
+      return 'bg-green-100 text-green-800';
+    case 'approved':
+    case 'ready_for_pickup':
+      return 'bg-blue-100 text-blue-800';
+    case 'pending':
+    case 'preparing':
+      return 'bg-yellow-100 text-yellow-800';
+    case 'rejected':
+    case 'cancelled':
+    case 'damaged_in_transit':
+    case 'lost_in_transit':
+      return 'bg-red-100 text-red-800';
+    case 'in_transit':
+    case 'loaded':
+      return 'bg-purple-100 text-purple-800';
+    case 'returned':
+      return 'bg-orange-100 text-orange-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+}
+
+function paymentStatusBadgeClass(status) {
+  if (!status || status === 'N/A') return 'bg-gray-200 text-gray-700';
+  const s = String(status).toLowerCase().trim();
+  if (s === 'completed' || s === 'complete' || s === 'paid') return 'bg-green-100 text-green-800';
+  if (s === 'pending' || s === 'pending_payment') return 'bg-yellow-100 text-yellow-800';
+  if (s === 'unpaid' || s === 'uncollectible') return 'bg-red-100 text-red-800';
+  return 'bg-gray-200 text-gray-700';
+}
+
+function paymentStatusBadgeText(status) {
+  if (!status || status === '' || status === 'N/A') return 'N/A';
+  const s = String(status).toLowerCase().trim();
+  if (s === 'paid') return 'Paid';
+  if (s === 'complete') return 'Complete';
+  if (s === 'completed') return 'Completed';
+  if (s === 'pending') return 'Pending';
+  if (s === 'pending_payment') return 'Pending Payment';
+  if (s === 'unpaid') return 'Unpaid';
+  if (s === 'uncollectible') return 'Uncollectible';
+  // Capitalize first letter, rest as is
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function deliveryStatusBadgeClass(status) {
+  if (!status || status === 'N/A') return 'bg-gray-200 text-gray-700';
+  const s = String(status).toLowerCase().trim();
+  
+  switch(s) {
+    case 'completed':
+    case 'complete':
+    case 'delivered':
+      return 'bg-green-100 text-green-800';
+    case 'approved':
+    case 'accepted':
+      return 'bg-blue-100 text-blue-800';
+    case 'pending':
+    case 'pending_approval':
+      return 'bg-yellow-100 text-yellow-800';
+    case 'rejected':
+    case 'cancelled':
+    case 'canceled':
+      return 'bg-red-100 text-red-800';
+    case 'in_transit':
+    case 'in_progress':
+      return 'bg-purple-100 text-purple-800';
+    case 'ready_for_pickup':
+    case 'preparing':
+      return 'bg-orange-100 text-orange-800';
+    case 'returned':
+    case 'failed':
+      return 'bg-red-100 text-red-800';
+    default:
+      return 'bg-gray-200 text-gray-700';
+  }
+}
+
+function deliveryStatusBadgeText(status) {
+  if (!status || status === 'N/A') return 'N/A';
+  const s = String(status).toLowerCase().trim();
+  
+  switch(s) {
+    case 'completed': return 'Completed';
+    case 'complete': return 'Complete';
+    case 'delivered': return 'Delivered';
+    case 'approved': return 'Approved';
+    case 'accepted': return 'Accepted';
+    case 'pending': return 'Pending';
+    case 'pending_approval': return 'Pending Approval';
+    case 'rejected': return 'Rejected';
+    case 'cancelled': return 'Cancelled';
+    case 'canceled': return 'Canceled';
+    case 'in_transit': return 'In Transit';
+    case 'in_progress': return 'In Progress';
+    case 'ready_for_pickup': return 'Ready for Pickup';
+    case 'preparing': return 'Preparing';
+    case 'returned': return 'Returned';
+    case 'failed': return 'Failed';
+    default: 
+      // Capitalize first letter, rest as is
+      return status.charAt(0).toUpperCase() + status.slice(1);
+  }
+}
 
 // --- Modal Logic ---
 function openRejectModal() {
   showRejectModal.value = true;
 }
+
 function closeRejectModal() {
   showRejectModal.value = false;
   rejectionReason.value = '';
 }
+
 function openImageModal(imageUrl) {
   currentImage.value = imageUrl;
   showImageModal.value = true;
 }
+
 function closeImageModal() {
   showImageModal.value = false;
   currentImage.value = '';
 }
+
+function openImageGallery(images) {
+  currentGalleryImages.value = images;
+  showImageGalleryModal.value = true;
+}
+
+function closeImageGalleryModal() {
+  showImageGalleryModal.value = false;
+  currentGalleryImages.value = [];
+}
+
 function showStatusHistory(pkg) {
   currentStatusHistory.value = pkg.status_history || [];
   showStatusHistoryModal.value = true;
 }
+
 function closeStatusHistoryModal() {
   showStatusHistoryModal.value = false;
   currentStatusHistory.value = [];
 }
-
 
 // --- Table Sorting Handler ---
 function handlePackageSort({ field, direction }) {
   packageSortField.value = field;
   packageSortDirection.value = direction;
 }
-
 
 // --- Actions ---
 async function handleApprove() {
@@ -489,6 +871,20 @@ async function handleApprove() {
     }
   }
 }
+
+// --- Photo Helper ---
+function getPhotoUrl(photoPath) {
+  if (!photoPath) return '';
+  // If it's already a full URL, return as is
+  if (photoPath.startsWith('http')) return photoPath;
+  // If it's a storage path, convert to URL
+  if (photoPath.startsWith('package-photos/')) {
+    return `/storage/${photoPath}`;
+  }
+  // Default case
+  return `/storage/${photoPath}`;
+}
+
 async function handleReject() {
   if (!rejectionReason.value.trim()) return;
   isProcessing.value = true;
@@ -509,55 +905,10 @@ async function handleReject() {
   }
 }
 
-
-function paymentStatusBadgeClass(status) {
-  if (!status) return 'bg-gray-200 text-gray-700';
-  const s = String(status).toLowerCase().trim();
-  if (s === 'completed' || s === 'complete' || s === 'paid') return 'bg-green-100 text-green-800';
-  if (s === 'pending' || s === 'pending_payment') return 'bg-yellow-100 text-yellow-800';
-  if (s === 'unpaid' || s === 'uncollectible') return 'bg-red-100 text-red-800';
-  return 'bg-gray-200 text-gray-700';
-}
-function paymentStatusBadgeText(status) {
-  if (!status || status === '' || status === 'N/A') return 'N/A';
-  const s = String(status).toLowerCase().trim();
-  if (s === 'paid') return 'Paid';
-  if (s === 'complete') return 'Complete';
-  if (s === 'completed') return 'Completed';
-  if (s === 'pending') return 'Pending';
-  if (s === 'pending_payment') return 'Pending Payment';
-  if (s === 'unpaid') return 'Unpaid';
-  if (s === 'uncollectible') return 'Uncollectible';
-  // Capitalize first letter, rest as is
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
-
-function deliveryStatusBadgeClass(status) {
-  if (!status) return 'bg-gray-200 text-gray-700';
-  const s = String(status).toLowerCase().trim();
-  // Use the same green as paymentStatusBadgeClass for "completed"/"complete"
-  if (s === 'completed' || s === 'complete') return 'bg-green-100 text-green-800';
-  if (s === 'approved') return 'bg-blue-100 text-blue-800';
-  if (s === 'pending') return 'bg-yellow-100 text-yellow-800';
-  if (s === 'rejected') return 'bg-red-100 text-red-800';
-  return 'bg-gray-200 text-gray-700';
-}
-function deliveryStatusBadgeText(status) {
-  if (!status) return 'N/A';
-  const s = String(status).toLowerCase().trim();
-  if (s === 'completed') return 'Completed';
-  if (s === 'complete') return 'Complete';
-  if (s === 'approved') return 'Approved';
-  if (s === 'pending') return 'Pending';
-  if (s === 'rejected') return 'Rejected';
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
-
 // --- Navigation ---
 const page = usePage();
 const previousUrl = ref(document.referrer);
+
 function goBack() {
   if (window.history.length > 1) {
     window.history.back();
@@ -566,3 +917,50 @@ function goBack() {
   }
 }
 </script>
+
+<style scoped>
+.zoom-content {
+  zoom: 0.90;
+}
+
+.compact-table :deep(table) {
+  @apply text-xs;
+}
+
+.compact-table :deep(th),
+.compact-table :deep(td) {
+  @apply px-2 py-2;
+}
+
+.compact-table :deep(th) {
+  @apply text-xs font-medium text-gray-500 uppercase tracking-wider;
+}
+
+/* Override DataTable's left padding if needed */
+:deep(.datatable) {
+  margin-left: 2rem;
+}
+
+:deep(.datatable-table) {
+  width: 100%;
+}
+
+/* Further reduce table row padding for more compact rows */
+:deep(.datatable-table td) {
+  padding-top: 0.375rem !important;
+  padding-bottom: 0.375rem !important;
+}
+
+/* Further reduce table header padding */
+:deep(.datatable-table th) {
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+  font-size: 0.875rem !important;
+}
+
+/* Reduce button sizes in the table */
+:deep(.datatable-table .btn) {
+  padding: 0.25rem 0.5rem !important;
+  font-size: 0.75rem !important;
+}
+</style>

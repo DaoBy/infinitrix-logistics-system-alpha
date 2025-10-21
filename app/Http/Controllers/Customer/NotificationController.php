@@ -1,7 +1,4 @@
 <?php
-
-// app/Http/Controllers/Customer/NotificationController.php
-
 namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
@@ -19,7 +16,11 @@ class NotificationController extends Controller
 
     public function markAsRead(Notification $notification)
     {
-        $this->authorize('view', $notification);
+        // Remove authorization or replace with simple ownership check
+        if ($notification->user_id !== auth()->id()) {
+            abort(403, 'Unauthorized action.');
+        }
+        
         $notification->update(['read' => true]);
 
         return back();

@@ -1,11 +1,19 @@
 <template>
   <EmployeeLayout>
     <template #header>
-      <div class="flex justify-between items-center">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">
-          Component Details - {{ component.name }}
-        </h2>
-        <div class="flex space-x-2">
+      <div class="flex justify-between items-center w-full px-6 md:px-8">
+        <!-- Left: Title & Subtitle -->
+        <div>
+          <h2 class="text-xl font-semibold leading-tight text-gray-800">
+            Component Details - {{ component.name }}
+          </h2>
+          <p class="mt-1 text-sm text-gray-500">
+            View component information and maintenance history
+          </p>
+        </div>
+
+        <!-- Right: Buttons -->
+        <div class="flex gap-2">
           <SecondaryButton @click="router.get(route('admin.trucks.components.index', truck.id))">
             Back to Components
           </SecondaryButton>
@@ -19,36 +27,34 @@
       </div>
     </template>
 
-    <div class="py-6">
-      <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
-        <div v-if="status || success || error" class="mb-6">
-          <div v-if="status" class="p-4 bg-blue-100 text-blue-800 rounded">
-            {{ status }}
-          </div>
-          <div v-if="success" class="p-4 bg-green-100 text-green-800 rounded">
-            {{ success }}
-          </div>
-          <div v-if="error" class="p-4 bg-red-100 text-red-800 rounded">
-            {{ error }}
-          </div>
+    <!-- ZOOM CONTENT WRAPPER -->
+    <div class="zoom-content">
+      <!-- MAIN CONTENT CONTAINER WITH PROPER PADDING -->
+      <div class="px-6 py-4">
+        <div v-if="status || success || error" class="mb-4">
+          <div v-if="status" class="p-3 bg-blue-100 text-blue-800 rounded">{{ status }}</div>
+          <div v-if="success" class="p-3 bg-green-100 text-green-800 rounded">{{ success }}</div>
+          <div v-if="error" class="p-3 bg-red-100 text-red-800 rounded">{{ error }}</div>
         </div>
 
         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
           <div class="p-6 bg-white border-b border-gray-200">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div class="space-y-4">
-                <h3 class="text-lg font-medium text-gray-900">Component Information</h3>
+            <!-- Main Information Cards -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              <!-- Component Information Card -->
+              <div class="bg-white border border-gray-200 rounded-lg p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Component Information</h3>
                 <div class="space-y-4">
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Name</label>
-                    <p class="mt-1 text-sm text-gray-900">{{ component.name }}</p>
+                  <div class="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span class="text-sm font-medium text-gray-500">Name</span>
+                    <span class="text-sm text-gray-900 font-semibold">{{ component.name }}</span>
                   </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Type</label>
-                    <p class="mt-1 text-sm text-gray-900 capitalize">{{ component.type.replace('_', ' ') }}</p>
+                  <div class="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span class="text-sm font-medium text-gray-500">Type</span>
+                    <span class="text-sm text-gray-900 capitalize">{{ component.type.replace('_', ' ') }}</span>
                   </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Condition</label>
+                  <div class="flex justify-between items-center py-2">
+                    <span class="text-sm font-medium text-gray-500">Condition</span>
                     <span :class="`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getConditionColor(component.condition)}`">
                       {{ conditionLabels[component.condition] }}
                     </span>
@@ -56,61 +62,64 @@
                 </div>
               </div>
 
-              <div class="space-y-4">
-                <h3 class="text-lg font-medium text-gray-900">Technical Details</h3>
+              <!-- Technical Details Card -->
+              <div class="bg-white border border-gray-200 rounded-lg p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Technical Details</h3>
                 <div class="space-y-4">
-                  <div v-if="component.serial_number">
-                    <label class="block text-sm font-medium text-gray-500">Serial Number</label>
-                    <p class="mt-1 text-sm text-gray-900">{{ component.serial_number }}</p>
+                  <div v-if="component.serial_number" class="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span class="text-sm font-medium text-gray-500">Serial Number</span>
+                    <span class="text-sm text-gray-900 font-mono">{{ component.serial_number }}</span>
                   </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Installation Date</label>
-                    <p class="mt-1 text-sm text-gray-900">{{ formatDate(component.installation_date) }}</p>
+                  <div class="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span class="text-sm font-medium text-gray-500">Installation Date</span>
+                    <span class="text-sm text-gray-900">{{ formatDate(component.installation_date) }}</span>
                   </div>
-                  <div v-if="component.last_maintenance_date">
-                    <label class="block text-sm font-medium text-gray-500">Last Maintenance</label>
-                    <p class="mt-1 text-sm text-gray-900">{{ formatDate(component.last_maintenance_date) }}</p>
+                  <div v-if="component.last_maintenance_date" class="flex justify-between items-center py-2">
+                    <span class="text-sm font-medium text-gray-500">Last Maintenance</span>
+                    <span class="text-sm text-gray-900">{{ formatDate(component.last_maintenance_date) }}</span>
                   </div>
-                </div>
-              </div>
-
-              <div class="md:col-span-2 space-y-4" v-if="component.notes">
-                <h3 class="text-lg font-medium text-gray-900">Notes</h3>
-                <p class="mt-1 text-sm text-gray-900 whitespace-pre-line">{{ component.notes }}</p>
-              </div>
-
-              <div class="md:col-span-2 space-y-4">
-                <div class="flex justify-between items-center">
-                  <h3 class="text-lg font-medium text-gray-900">Maintenance History</h3>
-                </div>
-                
-                <DataTable
-                  v-if="component.maintenance_records && component.maintenance_records.length"
-                  :columns="maintenanceColumns"
-                  :data="component.maintenance_records"
-                >
-                  <template #maintenance_date="{ row }">
-                    {{ formatDate(row.maintenance_date) }}
-                  </template>
-                  <template #cost="{ row }">
-                    ${{ Number(row.cost).toFixed(2) }}
-                  </template>
-                  <template #actions="{ row }">
-                    <button 
-                      @click="viewMaintenance(row)"
-                      class="text-blue-600 hover:text-blue-900 mr-3"
-                    >
-                      View
-                    </button>
-                  </template>
-                </DataTable>
-                <div v-else class="text-gray-500">
-                  No maintenance records found for this component.
                 </div>
               </div>
             </div>
 
-            <div class="mt-6 flex justify-end space-x-4">
+            <!-- Notes Card -->
+            <div v-if="component.notes" class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+              <h3 class="text-lg font-medium text-gray-900 mb-4">Notes</h3>
+              <p class="text-sm text-gray-700 whitespace-pre-line">{{ component.notes }}</p>
+            </div>
+
+            <!-- Maintenance History -->
+            <div class="bg-white border border-gray-200 rounded-lg p-6">
+              <h3 class="text-lg font-medium text-gray-900 mb-4">Maintenance History</h3>
+              
+              <DataTable
+                v-if="component.maintenance_records && component.maintenance_records.length"
+                :columns="maintenanceColumns"
+                :data="component.maintenance_records"
+                class="w-full"
+              >
+                <template #maintenance_date="{ row }">
+                  {{ formatDate(row.maintenance_date) }}
+                </template>
+                <template #cost="{ row }">
+                  ${{ Number(row.cost).toFixed(2) }}
+                </template>
+                <template #actions="{ row }">
+                  <SecondaryButton @click="viewMaintenance(row)" class="text-xs py-1 px-2">View</SecondaryButton>
+                </template>
+                
+                <template #empty>
+                  <div class="text-center py-4 text-gray-500">
+                    No maintenance records found for this component.
+                  </div>
+                </template>
+              </DataTable>
+              <div v-else class="text-center py-4 text-gray-500">
+                No maintenance records found for this component.
+              </div>
+            </div>
+
+            <div class="mt-6 flex justify-end space-x-3">
               <SecondaryButton @click="router.get(route('admin.trucks.components.index', truck.id))">
                 Back to Components
               </SecondaryButton>
@@ -123,19 +132,18 @@
       </div>
     </div>
 
-    <Modal :show="showDeleteModal" @close="showDeleteModal = false">
-      <div class="p-6">
+    <!-- Delete Confirmation Modal -->
+    <Modal :show="showDeleteModal" @close="closeDeleteModal">
+      <div class="p-5">
         <h2 class="text-lg font-medium text-gray-900">Delete Component?</h2>
         <p class="mt-1 text-sm text-gray-600">
           Are you sure you want to delete <strong>{{ component.name }}</strong>?
           This action cannot be undone.
         </p>
-        <div class="mt-6 flex justify-end space-x-4">
-          <SecondaryButton @click="showDeleteModal = false">
-            Cancel
-          </SecondaryButton>
+        <div class="mt-4 flex justify-end space-x-3">
+          <SecondaryButton @click="closeDeleteModal">Cancel</SecondaryButton>
           <DangerButton @click="deleteComponent" :disabled="isDeleting">
-            <span v-if="isDeleting">Deleting...</span>
+            <span v-if="isDeleting">Processing...</span>
             <span v-else>Delete</span>
           </DangerButton>
         </div>
@@ -163,23 +171,16 @@ const props = defineProps({
     type: Object,
     required: true
   },
-  status: {
-    type: String,
-    default: ''
-  },
-  success: {
-    type: String,
-    default: ''
-  },
-  error: {
-    type: String,
-    default: ''
-  },
+  status: String,
+  success: String,
+  error: String,
 });
 
+// State
 const showDeleteModal = ref(false);
 const isDeleting = ref(false);
 
+// Constants
 const conditionLabels = {
   new: 'New',
   good: 'Good',
@@ -189,13 +190,14 @@ const conditionLabels = {
 };
 
 const maintenanceColumns = [
-  { field: 'maintenance_date', header: 'Date' },
-  { field: 'service_provider', header: 'Provider' },
-  { field: 'service_details', header: 'Details' },
-  { field: 'cost', header: 'Cost' },
-  { field: 'actions', header: 'Actions' },
+  { field: 'maintenance_date', header: 'Date', sortable: true },
+  { field: 'service_provider', header: 'Provider', sortable: true },
+  { field: 'service_details', header: 'Details', sortable: false },
+  { field: 'cost', header: 'Cost', sortable: true },
+  { field: 'actions', header: 'Actions', sortable: false },
 ];
 
+// Methods
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A';
   return new Date(dateString).toLocaleDateString();
@@ -230,6 +232,11 @@ const confirmDeleteComponent = () => {
   showDeleteModal.value = true;
 };
 
+const closeDeleteModal = () => {
+  showDeleteModal.value = false;
+  isDeleting.value = false;
+};
+
 const deleteComponent = () => {
   isDeleting.value = true;
   
@@ -238,12 +245,38 @@ const deleteComponent = () => {
     component: props.component.id
   }), {
     preserveScroll: true,
-    onSuccess: () => {
-      showDeleteModal.value = false;
-    },
-    onFinish: () => {
-      isDeleting.value = false;
-    }
+    onSuccess: () => closeDeleteModal(),
+    onFinish: () => isDeleting.value = false
   }); 
 };
 </script>
+
+<style scoped>
+.zoom-content {
+  zoom: 0.80;
+}
+
+/* DataTable styling adjustments */
+:deep(.datatable-table) {
+  width: 100%;
+}
+
+/* Reduce table row padding for more compact rows */
+:deep(.datatable-table td) {
+  padding-top: 0.375rem !important;
+  padding-bottom: 0.375rem !important;
+}
+
+/* Reduce table header padding */
+:deep(.datatable-table th) {
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+  font-size: 0.875rem !important;
+}
+
+/* Reduce button sizes in the table */
+:deep(.datatable-table .btn) {
+  padding: 0.25rem 0.5rem !important;
+  font-size: 0.75rem !important;
+}
+</style>

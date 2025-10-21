@@ -2,103 +2,347 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DriverStatusLog; 
 use App\Models\DeliveryOrder;
 use App\Models\Package;
 use App\Models\Region;
 use App\Models\User;
 use App\Models\DriverRegionLog;
 use App\Models\PackageTransfer;
+use App\Models\DriverTruckAssignment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use App\Helpers\RouteHelper;
 use App\Services\RouteOptimizerService;
 
 class DriverController extends Controller
 {
-    /**
-     * Display the driver dashboard
-     */
     public function dashboard()
     {
         $driver = auth()->user();
         
+        $assignment = $driver->currentTruckAssignment;
+        if ($assignment) {
+            $assignment->processAutomaticTransitions();
+        }
+        
         return Inertia::render('Driver/Dashboard', [
-            'stats' => $this->getDriverStats($driver),
+            'stats' => array_merge($this->getDriverStats($driver), [
+                'backhaul_eligible' => $driver->isEligibleForBackhaul() ?? false
+            ]),
             'activeDeliveries' => $this->getActiveDeliveries($driver),
             'recentDeliveries' => $this->getRecentDeliveries($driver),
             'currentTruck' => $this->getCurrentTruck($driver),
             'user' => $driver->only(['name', 'email']),
+            'backhaul_available' => $this->isBackhaulAvailable($driver),
+            'cooldown_info' => $assignment ? [
+                'in_cooldown' => $assignment->current_status === DriverTruckAssignment::STATUS_COOLDOWN,
+                'cooldown_ends_at' => $assignment->cooldown_ends_at,
+                'cooldown_finished' => $assignment->isCooldownFinished(),
+                'is_final_cooldown' => $assignment->is_final_cooldown,
+            ] : null,
         ]);
     }
 
-    /**
-     * View for updating package statuses
-     */
     public function statusUpdateView()
     {
         $driver = auth()->user();
+        
+        $assignment = $driver->currentTruckAssignment;
+        if ($assignment) {
+            $assignment->processAutomaticTransitions();
+        }
+        
         $activeAssignmentId = $driver->truckAssignments()
             ->where('is_active', true)
             ->latest()
             ->value('id');
         $activeAssignment = $activeAssignmentId
-            ? \App\Models\DriverTruckAssignment::find($activeAssignmentId)
+            ? DriverTruckAssignment::with(['region', 'currentRegion'])->find($activeAssignmentId)
             : null;
-
-        // Scope to current active delivery order for this assignment
-        $hasPendingReturn = false;
-        $canReturnToBase = false;
-        if ($activeAssignment) {
-            // Get the current active delivery order for this assignment
-            $activeOrder = $driver->deliveryOrders()
-                ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
-                ->latest()
-                ->first();
-
-            $deliveryOrderId = $activeOrder?->id;
-
-            // Only consider logs for the current delivery order
-            $recentReturnLog = null;
-            if ($deliveryOrderId) {
-                $recentReturnLog = $driver->regionLogs()
-                    ->where('region_id', $activeAssignment->region_id)
-                    ->where('delivery_order_id', $deliveryOrderId)
-                    ->where('type', 'driver_returned')
-                    ->latest()
-                    ->first();
-            }
-            $hasPendingReturn = $recentReturnLog !== null;
-            $canReturnToBase = !$hasPendingReturn;
-        }
-
-        // Get all packages assigned to the driver (across all active orders)
-        $allDriverPackages = Package::whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
-            $query->where('driver_id', $driver->id);
-        })->get();
-
-        $finalStatuses = ['delivered', 'completed', 'returned'];
-        $allPackagesFinal = $allDriverPackages->count() > 0
-            && $allDriverPackages->whereNotIn('status', $finalStatuses)->count() === 0;
-
-        // Get route data for the map
-        $routeData = $this->getRouteData($driver);
 
         return Inertia::render('Driver/UpdateStatus', [
             'packages' => $this->getDriverPackages($driver),
             'regions' => $this->getAvailableRegions($driver),
             'statusOptions' => $this->getStatusOptions(),
-            'canReturnToBase' => $canReturnToBase,
-            'hasPendingReturn' => $hasPendingReturn,
             'activeAssignmentId' => $activeAssignmentId,
-            'allPackagesFinal' => $allPackagesFinal,
-            'routeData' => $routeData,
+            'allPackagesFinal' => $this->allPackagesFinal($driver),
+            'routeData' => $this->getRouteData($driver),
+            'backhaulAvailable' => $activeAssignment ? $activeAssignment->current_status === DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE : false,
+            'currentAssignment' => $activeAssignment ? [
+                'available_for_backhaul' => $activeAssignment->available_for_backhaul,
+                'current_region_name' => $activeAssignment->currentRegion?->name,
+                'home_region_name' => $activeAssignment->region?->name,
+                'current_status' => $activeAssignment->current_status,
+                'in_cooldown' => $assignment->current_status === DriverTruckAssignment::STATUS_COOLDOWN,
+                'is_returning' => $assignment->current_status === DriverTruckAssignment::STATUS_RETURNING,
+                'cooldown_ends_at' => $assignment->cooldown_ends_at,
+                'backhaul_eligible_at' => $assignment->backhaul_eligible_at,
+                'cooldown_finished' => $assignment->isCooldownFinished(),
+                'is_final_cooldown' => $assignment->is_final_cooldown,
+                'can_skip_cooldown' => $assignment->current_status === DriverTruckAssignment::STATUS_COOLDOWN && !$assignment->is_final_cooldown,
+                'can_return_without_backhaul' => in_array($assignment->current_status, [
+                    DriverTruckAssignment::STATUS_ACTIVE,
+                    DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE,
+                    DriverTruckAssignment::STATUS_COOLDOWN
+                ]),
+            ] : null,
+            'currentLocation' => $driver->currentRegion?->name ?? 'Unknown',
+            'currentRegionId' => $driver->current_region_id,
         ]);
     }
 
-    /**
-     * Get route data for the driver's current assignments
-     */
+    public function skipCooldown()
+    {
+        $driver = auth()->user();
+        $assignment = $driver->currentTruckAssignment;
+
+        if (!$assignment || $assignment->current_status !== DriverTruckAssignment::STATUS_COOLDOWN) {
+            \Log::warning('Driver attempted to skip cooldown from invalid status', [
+                'driver_id' => $driver->id,
+                'assignment_id' => $assignment?->id,
+                'current_status' => $assignment?->current_status
+            ]);
+            return back()->with('error', 'Cannot skip cooldown from current status');
+        }
+
+        if ($assignment->is_final_cooldown) {
+            \Log::warning('Driver attempted to skip final cooldown', [
+                'driver_id' => $driver->id,
+                'assignment_id' => $assignment->id
+            ]);
+            return back()->with('error', 'Cannot skip final cooldown. Please complete the assignment.');
+        }
+
+        try {
+            $previousStatus = $assignment->current_status;
+            $success = $assignment->skipCooldown();
+            
+            if ($success) {
+                DriverStatusLog::create([
+                    'driver_truck_assignment_id' => $assignment->id,
+                    'previous_status' => $previousStatus,
+                    'new_status' => $assignment->current_status,
+                    'remarks' => "COOLDOWN SKIPPED: Driver opted to skip regular cooldown period. Status changed from {$previousStatus} to {$assignment->current_status}. Now eligible for backhaul assignments.",
+                    'changed_at' => now()
+                ]);
+
+                \Log::info('Driver skipped cooldown successfully', [
+                    'driver_id' => $driver->id,
+                    'assignment_id' => $assignment->id,
+                    'previous_status' => $previousStatus,
+                    'new_status' => $assignment->current_status
+                ]);
+                
+                return back()->with('success', 'Cooldown skipped! You are now eligible for backhaul assignments.');
+            } else {
+                \Log::warning('Driver failed to skip cooldown', [
+                    'driver_id' => $driver->id,
+                    'assignment_id' => $assignment->id
+                ]);
+                return back()->with('error', 'Cannot skip cooldown at this time.');
+            }
+        } catch (\Exception $e) {
+            \Log::error('Failed to skip cooldown: ' . $e->getMessage(), [
+                'driver_id' => $driver->id,
+                'assignment_id' => $assignment->id
+            ]);
+            return back()->with('error', 'Failed to skip cooldown: ' . $e->getMessage());
+        }
+    }
+
+    public function returnWithoutBackhaul(Request $request)
+    {
+        $validated = $request->validate([
+            'reason' => 'required|string|max:255'
+        ]);
+        
+        $reason = $validated['reason'];
+        $driver = auth()->user();
+        $assignment = $driver->currentTruckAssignment;
+
+        if (!$assignment) {
+            \Log::error('Driver attempted return without backhaul but has no active assignment', [
+                'driver_id' => $driver->id
+            ]);
+            throw new \Exception('No active assignment found');
+        }
+
+        $previousStatus = $assignment->current_status;
+        
+        if (!in_array($assignment->current_status, [
+            DriverTruckAssignment::STATUS_ACTIVE, 
+            DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE,
+            DriverTruckAssignment::STATUS_COOLDOWN
+        ])) {
+            \Log::warning('Driver attempted return without backhaul from invalid status', [
+                'driver_id' => $driver->id,
+                'assignment_id' => $assignment->id,
+                'current_status' => $assignment->current_status
+            ]);
+            throw new \Exception('Cannot return without backhaul from current status: ' . $assignment->current_status);
+        }
+        
+        if ($driver->current_region_id == $assignment->region_id) {
+            $assignment->updateStatus(DriverTruckAssignment::STATUS_COOLDOWN, 'Driver already in home region - starting final cooldown (Option B)');
+            $assignment->cooldown_ends_at = now()->addHour();
+            $assignment->is_final_cooldown = true;
+            $assignment->save();
+            
+            DriverStatusLog::create([
+                'driver_truck_assignment_id' => $assignment->id,
+                'previous_status' => $previousStatus,
+                'new_status' => DriverTruckAssignment::STATUS_COOLDOWN,
+                'remarks' => "RETURN WITHOUT BACKHAUL - FINAL COOLDOWN: Driver already in home region. Starting FINAL cooldown period ending at " . $assignment->cooldown_ends_at->format('Y-m-d H:i:s') . ". Reason: {$reason}",
+                'changed_at' => now()
+            ]);
+
+            \Log::info('Driver initiated return without backhaul but already in home region - started final cooldown', [
+                'driver_id' => $driver->id,
+                'assignment_id' => $assignment->id,
+                'reason' => $reason
+            ]);
+            
+            return;
+        }
+
+        $assignment->updateStatus(DriverTruckAssignment::STATUS_RETURNING, $reason . ' (Option B - No Backhaul)');
+        
+        DriverStatusLog::create([
+            'driver_truck_assignment_id' => $assignment->id,
+            'previous_status' => $previousStatus,
+            'new_status' => DriverTruckAssignment::STATUS_RETURNING,
+            'remarks' => "RETURN WITHOUT BACKHAUL INITIATED: Status changed from {$previousStatus} to RETURNING. Reason: {$reason}. Driver will return to home region without taking backhaul assignments.",
+            'changed_at' => now()
+        ]);
+
+        DriverRegionLog::create([
+            'driver_id' => $driver->id,
+            'region_id' => $assignment->current_region_id,
+            'type' => 'driver_returned',
+            'remarks' => $reason . ' - Option B Return Initiated',
+            'logged_at' => now()
+        ]);
+
+        if ($assignment->truck) {
+            $assignment->truck->update(['status' => \App\Models\Truck::STATUS_RETURNING]);
+            $assignment->truck->updateStatus();
+        }
+
+        \Log::info('Driver initiated return without backhaul', [
+            'driver_id' => $driver->id,
+            'assignment_id' => $assignment->id,
+            'reason' => $reason,
+            'previous_status' => $previousStatus
+        ]);
+    }
+
+    public function confirmArrivalAtHome()
+    {
+        $driver = auth()->user();
+        $assignment = $driver->currentTruckAssignment;
+
+        if (!$assignment || $assignment->current_status !== DriverTruckAssignment::STATUS_RETURNING) {
+            \Log::warning('Driver attempted to confirm arrival from invalid status', [
+                'driver_id' => $driver->id,
+                'assignment_id' => $assignment?->id,
+                'current_status' => $assignment?->current_status
+            ]);
+            return back()->with('error', 'Cannot confirm arrival from current status');
+        }
+
+        try {
+            $driver->current_region_id = $assignment->region_id;
+            $driver->save();
+
+            $assignment->current_region_id = $assignment->region_id;
+            $assignment->save();
+
+            DriverRegionLog::create([
+                'driver_id' => $driver->id,
+                'region_id' => $assignment->region_id,
+                'type' => 'arrival',
+                'remarks' => 'Driver confirmed arrival at home region (Option B)',
+                'logged_at' => now()
+            ]);
+
+            $assignment->completeAssignment();
+
+            \Log::info('Driver confirmed arrival at home region', [
+                'driver_id' => $driver->id,
+                'assignment_id' => $assignment->id,
+                'home_region_id' => $assignment->region_id
+            ]);
+
+            return back()->with('success', 'Arrival confirmed! Final cooldown period started. Complete cooldown when ready.');
+        } catch (\Exception $e) {
+            \Log::error('Failed to confirm arrival: ' . $e->getMessage(), [
+                'driver_id' => $driver->id,
+                'assignment_id' => $assignment->id
+            ]);
+            return back()->with('error', 'Failed to confirm arrival: ' . $e->getMessage());
+        }
+    }
+
+    public function completeCooldown()
+    {
+        $driver = auth()->user();
+        $assignment = $driver->currentTruckAssignment;
+
+        if (!$assignment) {
+            \Log::warning('Driver attempted to complete cooldown but has no active assignment', [
+                'driver_id' => $driver->id
+            ]);
+            return back()->with('error', 'No active assignment found');
+        }
+
+        if ($assignment->current_status !== DriverTruckAssignment::STATUS_COOLDOWN) {
+            \Log::warning('Driver attempted to complete cooldown from invalid status', [
+                'driver_id' => $driver->id,
+                'assignment_id' => $assignment->id,
+                'current_status' => $assignment->current_status
+            ]);
+            return back()->with('error', 'Assignment is not in cooldown period');
+        }
+
+        if (!$assignment->is_final_cooldown) {
+            \Log::warning('Driver attempted to complete regular cooldown', [
+                'driver_id' => $driver->id,
+                'assignment_id' => $assignment->id
+            ]);
+            return back()->with('error', 'Cannot complete regular cooldown. Please skip cooldown for backhaul or wait for automatic transition.');
+        }
+
+        try {
+            $previousStatus = $assignment->current_status;
+            $assignment->completeCooldown();
+            
+            DriverStatusLog::create([
+                'driver_truck_assignment_id' => $assignment->id,
+                'previous_status' => $previousStatus,
+                'new_status' => DriverTruckAssignment::STATUS_COMPLETED,
+                'remarks' => "ASSIGNMENT COMPLETED: Final cooldown period finished. Driver {$driver->name} and Truck {$assignment->truck->license_plate} assignment has been completed successfully. Both are now available for new assignments.",
+                'changed_at' => now()
+            ]);
+
+            \Log::info('Driver completed final cooldown and assignment', [
+                'driver_id' => $driver->id,
+                'assignment_id' => $assignment->id,
+                'previous_status' => $previousStatus
+            ]);
+            
+            return back()->with('success', 'Cooldown completed! Assignment finished. You are now available for new assignments.');
+        } catch (\Exception $e) {
+            \Log::error('Failed to complete cooldown: ' . $e->getMessage(), [
+                'driver_id' => $driver->id,
+                'assignment_id' => $assignment->id
+            ]);
+            return back()->with('error', 'Failed to complete cooldown: ' . $e->getMessage());
+        }
+    }
+
     private function getRouteData(User $driver): array
     {
         $currentRegionId = $driver->current_region_id;
@@ -114,10 +358,8 @@ class DriverController extends Controller
         $optimizer = new RouteOptimizerService();
         $route = $optimizer->findOptimalRoute($currentRegionId, $destinationRegionIds);
 
-        // Ensure current region is always first in the route
         $orderedRoute = array_unique(array_merge([$currentRegionId], $route));
 
-        // Get full region details
         $regions = Region::whereIn('id', $orderedRoute)
             ->get(['id', 'name', 'latitude', 'longitude'])
             ->keyBy('id');
@@ -152,9 +394,6 @@ class DriverController extends Controller
         ];
     }
 
-    /**
-     * Get optimized route for driver
-     */
     public function getOptimizedRoute(Request $request)
     {
         $driver = auth()->user();
@@ -185,9 +424,6 @@ class DriverController extends Controller
         }
     }
 
-    /**
-     * Get route with status for tracking
-     */
     public function getRouteWithStatus()
     {
         $driver = auth()->user();
@@ -277,79 +513,134 @@ class DriverController extends Controller
         }
     }
 
-    /**
-     * View for assigned deliveries
-     */
     public function assignedDeliveries()
     {
         $driver = auth()->user();
         
+        $readyForStatusUpdate = $this->getPackagesReadyForStatusUpdate($driver);
+        
         return Inertia::render('Driver/AssignedDeliveries', [
             'deliveries' => $this->getActiveDeliveries($driver),
+            'readyForStatusUpdate' => $readyForStatusUpdate,
         ]);
     }
 
-    /**
-     * Track a specific package
-     */
-    public function trackPackage(Package $package)
+    private function getPackagesReadyForStatusUpdate(User $driver)
     {
-        $package->load([
-            'deliveryRequest.sender',
-            'deliveryRequest.receiver',
-            'deliveryRequest.dropOffRegion',
-            'currentRegion',
-            'statusHistory' => function($query) {
-                $query->with('updatedBy')->latest();
-            },
-            'transfers' => function($query) {
-                $query->with(['fromRegion', 'toRegion', 'processor'])->latest();
-            }
-        ]);
-
-        return Inertia::render('Driver/PackageTracking', [
-            'package' => [
-                'id' => $package->id,
-                'item_code' => $package->item_code,
-                'item_name' => $package->item_name,
-                'description' => $package->description,
-                'photo_url' => $package->photo_url,
-                'status' => $package->status,
-                'sender' => $package->deliveryRequest->sender->name,
-                'receiver' => $package->deliveryRequest->receiver->name,
-                'destination' => $package->deliveryRequest->dropOffRegion->name,
-                'current_region' => $package->currentRegion->name,
-                'weight' => $package->weight,
-                'value' => $package->value,
-                'height' => $package->height,
-                'width' => $package->width,
-                'length' => $package->length,
-                'volume' => $package->volume,
-                'category' => $package->category,
-            ],
-            'statusHistory' => $package->statusHistory->map(function($history) {
+        return Package::with([
+                'currentRegion',
+                'deliveryRequest.dropOffRegion',
+                'deliveryRequest.deliveryOrder'
+            ])
+            ->whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
+                $query->where('driver_id', $driver->id)
+                    ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
+            })
+            ->where('status', 'in_transit')
+            ->whereHas('deliveryRequest', function($query) use ($driver) {
+                $query->where('drop_off_region_id', $driver->current_region_id);
+            })
+            ->get()
+            ->map(function ($package) {
                 return [
-                    'status' => $this->getStatusOptions()[$history->status] ?? $history->status,
-                    'remarks' => $history->remarks,
-                    'updated_at' => $history->updated_at->format('M d, Y H:i'),
-                    'updated_by' => $history->updatedBy->name,
+                    'id' => $package->id,
+                    'item_code' => $package->item_code,
+                    'item_name' => $package->item_name,
+                    'status' => $package->status,
+                    'current_region' => [
+                        'id' => $package->current_region_id,
+                        'name' => $package->currentRegion->name,
+                    ],
+                    'deliveryRequest' => $package->deliveryRequest ? [
+                        'drop_off_region_id' => $package->deliveryRequest->drop_off_region_id,
+                        'dropOffRegion' => $package->deliveryRequest->dropOffRegion->name,
+                        'reference_number' => $package->deliveryRequest->reference_number,
+                    ] : null,
+                    'deliveryOrder' => $package->deliveryRequest->deliveryOrder ? [
+                        'id' => $package->deliveryRequest->deliveryOrder->id,
+                    ] : null
                 ];
-            }),
-            'transfers' => $package->transfers->map(function($transfer) {
-                return [
-                    'from' => $transfer->fromRegion->name,
-                    'to' => $transfer->toRegion->name,
-                    'processed_at' => $transfer->transferred_at->format('M d, Y H:i'),
-                    'processor' => $transfer->processor->name,
-                    'remarks' => $transfer->remarks,
-                ];
-            }),
-        ]);
+            });
     }
 
-    /**
-     * Bulk update status for multiple packages
-     */
+    public function updateDestinationPackagesStatus(Request $request)
+    {
+        $validated = $request->validate([
+            'package_updates' => 'required|array',
+            'package_updates.*.package_id' => 'required|exists:packages,id',
+            'package_updates.*.status' => 'required|in:delivered,damaged_in_transit,lost_in_transit',
+            'package_updates.*.remarks' => 'nullable|string|max:500',
+            'package_updates.*.evidence' => 'nullable|array',
+            'package_updates.*.evidence.*' => 'nullable|file|image|max:10240',
+        ]);
+
+        $driver = auth()->user();
+        
+        DB::transaction(function () use ($validated, $driver, $request) {
+            foreach ($validated['package_updates'] as $index => $update) {
+                $package = Package::find($update['package_id']);
+                
+                if (!$this->isValidDriverPackage($package, $driver)) {
+                    continue;
+                }
+                
+                $evidencePaths = [];
+                if ($request->hasFile("package_updates.{$index}.evidence")) {
+                    foreach ($request->file("package_updates.{$index}.evidence") as $evidenceFile) {
+                        $path = $evidenceFile->store(
+                            "drivers/{$driver->id}/evidence", 
+                            'public'
+                        );
+                        $evidencePaths[] = $path;
+                    }
+                }
+                
+                if (in_array($update['status'], ['damaged_in_transit', 'lost_in_transit'])) {
+                    $package->reportIncident(
+                        $update['status'],
+                        $driver,
+                        $update['remarks'] ?? 'Incident reported at destination',
+                        $evidencePaths
+                    );
+                } else {
+                    $package->updateStatus(
+                        $update['status'], 
+                        $driver, 
+                        $update['remarks'] ?? 'Status updated at destination'
+                    );
+                }
+            }
+            
+            $assignment = $driver->currentTruckAssignment;
+            if ($assignment) {
+                $assignment->processAutomaticTransitions();
+            }
+        });
+
+        return back()->with('success', 'Package statuses updated successfully!');
+    }
+
+    private function isValidDriverPackage(?Package $package, User $driver): bool
+    {
+        if (!$package) return false;
+        
+        $isDriverPackage = Package::where('id', $package->id)
+            ->whereHas('deliveryRequest.deliveryOrder', function($query) use ($driver) {
+                $query->where('driver_id', $driver->id)
+                      ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
+            })
+            ->exists();
+            
+        if (!$isDriverPackage) return false;
+        
+        $isAtDestination = $package->deliveryRequest && 
+                          $package->deliveryRequest->drop_off_region_id == $driver->current_region_id;
+                          
+        if (!$isAtDestination) return false;
+        
+        return $package->status === 'in_transit';
+    }
+
     public function bulkUpdateStatus(Request $request)
     {
         $validated = $request->validate([
@@ -367,10 +658,11 @@ class DriverController extends Controller
             return back()->with('error', 'No valid packages selected');
         }
 
-        $result = \DB::transaction(function () use ($packages, $validated, $driver) {
+        $result = DB::transaction(function () use ($packages, $validated, $driver) {
             $updatedDeliveryOrderIds = [];
             $autoDeliveredCount = 0;
             $autoReturnedCount = 0;
+            $cooldownStarted = false;
             
             foreach ($packages as $package) {
                 $originalRegionId = $package->current_region_id;
@@ -398,17 +690,22 @@ class DriverController extends Controller
                 }
             }
             
-            if ($this->allPackagesDelivered($driver)) {
-                $driver->update(['all_packages_delivered' => true]);
+            $assignment = $driver->currentTruckAssignment;
+            if ($assignment) {
+                if ($this->allPackagesFinal($driver)) {
+                    $assignment->completeDeliveries();
+                    $cooldownStarted = ($assignment->current_status === DriverTruckAssignment::STATUS_COOLDOWN);
+                }
             }
             
-            $this->checkAndUpdateDeliveryOrders($updatedDeliveryOrderIds);
+            $this->checkAndUpdateAllDeliveryOrders($driver);
             
             return [
                 'total' => $packages->count(),
                 'auto_delivered' => $autoDeliveredCount,
                 'auto_returned' => $autoReturnedCount,
-                'manual_updates' => $packages->count() - $autoDeliveredCount - $autoReturnedCount
+                'manual_updates' => $packages->count() - $autoDeliveredCount - $autoReturnedCount,
+                'cooldown_started' => $cooldownStarted
             ];
         });
 
@@ -419,13 +716,20 @@ class DriverController extends Controller
         if ($result['auto_returned'] > 0) {
             $message .= " ({$result['auto_returned']} auto-returned to sender)";
         }
+        if ($result['cooldown_started']) {
+            $assignment = $driver->currentTruckAssignment;
+            $isFinal = $assignment ? $assignment->is_final_cooldown : false;
+            
+            if ($isFinal) {
+                $message .= ". All packages delivered! Final cooldown period started. Complete cooldown to finish assignment.";
+            } else {
+                $message .= ". All packages delivered! Cooldown period started. Choose your next action during cooldown.";
+            }
+        }
 
         return back()->with('success', $message);
     }
 
-    /**
-     * Update driver's current region with optional package updates
-     */
     public function updateDriverRegion(Request $request)
     {
         $validated = $request->validate([
@@ -436,152 +740,98 @@ class DriverController extends Controller
 
         $driver = auth()->user();
         $newRegionId = $validated['region_id'];
-        
-        return DB::transaction(function () use ($driver, $newRegionId, $validated, $request) {
+        $assignment = $driver->currentTruckAssignment;
+
+        try {
+            $oldRegionId = $driver->current_region_id;
+            $oldRegionName = $driver->currentRegion->name ?? 'Unknown';
+            $newRegionName = Region::find($newRegionId)->name ?? 'Unknown';
+            
             $this->logDriverRegion($driver, $newRegionId);
 
-            $response = ['message' => 'Location updated successfully'];
-            $shouldSetTruckReturning = false;
+            if ($assignment && $oldRegionId != $newRegionId) {
+                DriverStatusLog::create([
+                    'driver_truck_assignment_id' => $assignment->id,
+                    'previous_status' => $assignment->current_status,
+                    'new_status' => $assignment->current_status,
+                    'remarks' => "LOCATION CHANGE: Driver moved from {$oldRegionName} (Region ID: {$oldRegionId}) to {$newRegionName} (Region ID: {$newRegionId}). All associated packages and delivery orders updated to new region.",
+                    'changed_at' => now()
+                ]);
+            }
 
-            if ($request->update_packages) {
-                $query = $driver->deliveryOrders()
-                    ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
-                    ->with(['packages' => function($query) {
-                        $query->with('deliveryRequest');
-                    }]);
-                    
-                if ($validated['only_in_transit']) {
+            if ($assignment && 
+                $assignment->current_status === DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE && 
+                $newRegionId == $assignment->region_id && 
+                $assignment->allPackagesDelivered()) {
+
+                $assignment->updateStatus(
+                    DriverTruckAssignment::STATUS_COOLDOWN,
+                    'Backhaul driver arrived at home region - FINAL cooldown'
+                );
+                $assignment->cooldown_ends_at = now()->addMinutes(30);
+                $assignment->is_final_cooldown = true;
+                $assignment->save();
+                
+                DriverStatusLog::create([
+                    'driver_truck_assignment_id' => $assignment->id,
+                    'previous_status' => DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE,
+                    'new_status' => DriverTruckAssignment::STATUS_COOLDOWN,
+                    'remarks' => "FINAL COOLDOWN TRIGGERED: Backhaul driver arrived at home region {$newRegionName}. All packages delivered. Starting FINAL cooldown period ending at " . $assignment->cooldown_ends_at->format('Y-m-d H:i:s'),
+                    'changed_at' => now()
+                ]);
+            }
+
+            $response = ['message' => 'Location updated successfully'];
+            if ($validated['update_packages'] ?? true) {
+                $this->updatePackagesWithDriver($driver, $newRegionId, $validated);
+            }
+
+            if ($assignment) {
+                $assignment->processAutomaticTransitions();
+            }
+
+            return back()->with($response);
+
+        } catch (\Exception $e) {
+            return back()->with('error', 'Location update failed: ' . $e->getMessage());
+        }
+    }
+
+    private function updatePackagesWithDriver($driver, $newRegionId, $validated)
+    {
+        $orders = $driver->deliveryOrders()
+            ->whereIn('status', ['assigned', 'dispatched', 'in_transit', 'needs_review'])
+            ->with(['packages' => function($query) use ($validated) {
+                $query->with(['deliveryRequest', 'currentRegion']);
+                if ($validated['only_in_transit'] ?? false) {
                     $query->where('status', 'in_transit');
                 }
-                
-                $orders = $query->get();
-                $updatedPackages = 0;
-                $deliveredPackages = 0;
-                
-                foreach ($orders as $order) {
-                    $order->current_region_id = $newRegionId;
-                    $order->save();
-                    
-                    foreach ($order->packages as $package) {
-                        if (!$validated['only_in_transit'] || $package->status === 'in_transit') {
-                            if ($package->deliveryRequest->drop_off_region_id == $newRegionId) {
-                                $package->current_region_id = $newRegionId;
-                                $package->save();
-                                
-                                $package->updateStatus('delivered', $driver, 'Auto-delivered at destination via location update');
-                                $package->confirmDelivery($driver, 'Auto-delivered at destination via location update');
-                                $deliveredPackages++;
-                            } else {
-                                $fromRegionId = $package->current_region_id;
-                                $package->current_region_id = $newRegionId;
-                                $package->save();
-                                $updatedPackages++;
-                                
-                                $package->transfers()->create([
-                                    'from_region_id' => $fromRegionId,
-                                    'to_region_id' => $newRegionId,
-                                    'processed_by' => $driver->id,
-                                    'remarks' => 'Updated with driver location change',
-                                    'is_return' => $package->shouldMarkAsReturn($newRegionId)
-                                ]);
-                            }
-                        }
-                    }
-                }
-                
-                $undeliveredPackages = Package::whereHas('deliveryRequest.deliveryOrder', function($q) use ($driver) {
-                        $q->where('driver_id', $driver->id)
-                          ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
-                    })
-                    ->whereNotIn('status', ['delivered', 'completed', 'returned'])
-                    ->count();
-                
-                $shouldSetTruckReturning = ($undeliveredPackages === 0);
-                
-                $response['updated_packages'] = $updatedPackages;
-                $response['delivered_packages'] = $deliveredPackages;
-            }
-            
-            if ($shouldSetTruckReturning) {
-                $assignment = $driver->currentTruckAssignment;
-                if ($assignment && $assignment->truck) {
-                    $assignment->truck->update(['status' => 'returning']);
-                }
-            }
-            
-            return back()->with($response);
-        });
-    }
-
-    /**
-     * Show tracking for a delivery order (DeliveryTracking)
-     */
-    public function deliveryTracking(DeliveryOrder $deliveryOrder)
-    {
-        $deliveryOrder->load([
-            'deliveryRequest.sender',
-            'deliveryRequest.receiver',
-            'deliveryRequest.dropOffRegion',
-            'currentRegion',
-            'deliveryRequest.packages.currentRegion',
-            'regionLogs.fromRegion',
-            'regionLogs.driver',
-        ]);
-
-        $statusHistory = $deliveryOrder->deliveryRequest->statusHistory()
-            ->with('updatedBy')
-            ->orderByDesc('updated_at')
+            }])
             ->get();
 
-        return Inertia::render('Driver/DeliveryTracking', [
-            'delivery' => [
-                'id' => $deliveryOrder->id,
-                'reference_number' => $deliveryOrder->deliveryRequest->reference_number,
-                'status' => $deliveryOrder->status,
-                'sender' => $deliveryOrder->deliveryRequest->sender->name,
-                'receiver' => $deliveryOrder->deliveryRequest->receiver->name,
-                'destination' => $deliveryOrder->deliveryRequest->dropOffRegion->name,
-                'current_region' => $deliveryOrder->currentRegion->name,
-                'estimated_arrival' => $deliveryOrder->estimated_arrival,
-                'actual_arrival' => $deliveryOrder->actual_arrival,
-                'package_count' => $deliveryOrder->deliveryRequest->packages->count(),
-            ],
-            'statusHistory' => $statusHistory->map(function($history) {
-                return [
-                    'status' => $history->status,
-                    'remarks' => $history->remarks,
-                    'updated_at' => $history->updated_at,
-                    'updated_by' => $history->updatedBy->name ?? 'System',
-                ];
-            }),
-            'transfers' => $deliveryOrder->regionLogs->map(function($log) {
-                return [
-                    'from' => $log->fromRegion->name,
-                    'to' => $log->fromRegion->name,
-                    'processed_at' => $log->created_at,
-                    'processor' => $log->driver->name,
-                    'remarks' => $log->remarks,
-                ];
-            }),
-            'packages' => $deliveryOrder->deliveryRequest->packages->map(function($package) {
-                return [
-                    'id' => $package->id,
-                    'item_code' => $package->item_code,
-                    'item_name' => $package->item_name,
-                    'description' => $package->description,
-                    'status' => $package->status,
-                    'weight' => $package->weight,
-                    'value' => $package->value,
-                    'dimensions' => $package->height ? "{$package->height} × {$package->width} × {$package->length} cm" : null,
-                    'current_region' => $package->currentRegion->name,
-                ];
-            }),
-        ]);
+        foreach ($orders as $order) {
+            $oldRegionId = $order->current_region_id;
+            $order->current_region_id = $newRegionId;
+            $order->save();
+            
+            foreach ($order->packages as $package) {
+                $oldPackageRegionId = $package->current_region_id;
+                $package->current_region_id = $newRegionId;
+                $package->save();
+                
+                if ($oldPackageRegionId != $newRegionId && 
+                    !in_array($package->status, ['delivered', 'completed', 'returned', 'damaged_in_transit', 'lost_in_transit'])) {
+                    
+                    $package->updateStatus('in_transit', $driver, "Moving from " . 
+                        ($package->currentRegion->name ?? 'Unknown') . " to " . 
+                        (Region::find($newRegionId)->name ?? 'Unknown'));
+                }
+            }
+        }
     }
 
-    /**
-     * Mark arrival at a region
-     */
+   
+
     public function markArrival(Request $request)
     {
         $validated = $request->validate([
@@ -593,23 +843,33 @@ class DriverController extends Controller
 
         $this->logDriverRegion($driver, $regionId);
 
+        $assignment = $driver->currentTruckAssignment;
+        if ($assignment) {
+            $assignment->processAutomaticTransitions();
+        }
+
         return response()->json(['message' => 'Arrival recorded successfully']);
     }
 
-    // ====================
-    // HELPER METHODS
-    // ====================
+    private function allPackagesFinal(User $driver): bool
+    {
+        $undeliveredPackages = Package::whereHas('deliveryRequest.deliveryOrder', function($q) use ($driver) {
+                $q->where('driver_id', $driver->id)
+                  ->whereIn('status', ['assigned', 'dispatched', 'in_transit', 'needs_review']);
+            })
+            ->whereNotIn('status', ['delivered', 'completed', 'returned', 'damaged_in_transit', 'lost_in_transit'])
+            ->count();
 
-    /**
-     * Get driver's destination regions from active packages
-     */
+        return $undeliveredPackages === 0;
+    }
+
     private function getDriverDestinationRegions(User $driver): array
     {
         $packages = Package::whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
                 $query->where('driver_id', $driver->id)
-                    ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
+                    ->whereIn('status', ['assigned', 'dispatched', 'in_transit', 'needs_review']);
             })
-            ->whereNotIn('status', ['delivered', 'completed', 'returned'])
+            ->whereNotIn('status', ['delivered', 'completed', 'returned', 'damaged_in_transit', 'lost_in_transit'])
             ->with('deliveryRequest.dropOffRegion')
             ->get();
 
@@ -626,9 +886,6 @@ class DriverController extends Controller
         return array_unique(array_merge($destinations, $pickups));
     }
 
-    /**
-     * Only regions relevant to the driver's current route
-     */
     private function getAvailableRegions(User $driver = null)
     {
         if ($driver) {
@@ -663,9 +920,6 @@ class DriverController extends Controller
             ->toArray();
     }
 
-    /**
-     * Packages with all necessary route information
-     */
     private function getDriverPackages(User $driver)
     {
         return Package::with([
@@ -676,257 +930,292 @@ class DriverController extends Controller
             ])
             ->whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
                 $query->where('driver_id', $driver->id)
-                    ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
+                    ->whereIn('status', ['assigned', 'dispatched', 'in_transit', 'needs_review']);
             })
+            ->whereNotIn('status', ['delivered', 'completed', 'returned', 'damaged_in_transit', 'lost_in_transit'])
             ->get()
             ->map(function ($package) {
-                $currentStatus = $package->status;
-                $isFinalStatus = in_array($currentStatus, ['delivered', 'returned', 'completed']);
-                
-                return [
-                    'id' => $package->id,
-                    'item_code' => $package->item_code,
-                    'item_name' => $package->item_name,
-                    'status' => $currentStatus,
-                    'is_final_status' => $isFinalStatus,
-                    'current_region' => [
-                        'id' => $package->current_region_id,
-                        'name' => $package->currentRegion->name,
-                    ],
-                    'deliveryRequest' => $package->deliveryRequest ? [
-                        'drop_off_region_id' => $package->deliveryRequest->drop_off_region_id,
-                        'pick_up_region_id' => $package->deliveryRequest->pick_up_region_id,
-                        'dropOffRegion' => $package->deliveryRequest->dropOffRegion->name,
-                        'pickUpRegion' => $package->deliveryRequest->pickUpRegion->name
-                    ] : null
-                ];
-            });
-    }
-
-    /**
-     * Handle all region change logic
-     */
-    private function handleRegionChange(Package $package, int $fromRegionId, int $toRegionId, User $driver, ?string $remarks = null): void
-    {
-        $transfer = $package->transfers()->create([
-            'from_region_id' => $fromRegionId,
-            'to_region_id' => $toRegionId,
-            'processed_by' => $driver->id,
-            'transferred_at' => now(),
-            'is_return' => $package->shouldMarkAsReturn($toRegionId),
-            'remarks' => $remarks
-        ]);
-
-        $package->current_region_id = $toRegionId;
-        $package->save();
-
-        $deliveryOrder = $package->deliveryRequest->deliveryOrder;
-        if ($deliveryOrder && !$deliveryOrder->current_region_id) {
-            $deliveryOrder->current_region_id = $toRegionId;
-            $deliveryOrder->save();
+                    $currentStatus = $package->status;
+                    $isFinalStatus = in_array($currentStatus, ['delivered', 'returned', 'completed', 'damaged_in_transit', 'lost_in_transit']);
+                    
+                    return [
+                        'id' => $package->id,
+                        'item_code' => $package->item_code,
+                        'item_name' => $package->item_name,
+                        'status' => $currentStatus,
+                        'is_final_status' => $isFinalStatus,
+                        'verified_at' => $package->verified_at,
+                        'verification_status' => $package->verification_status,
+                        'current_region' => [
+                            'id' => $package->current_region_id,
+                            'name' => $package->currentRegion->name,
+                        ],
+                        'deliveryRequest' => $package->deliveryRequest ? [
+                            'drop_off_region_id' => $package->deliveryRequest->drop_off_region_id,
+                            'pick_up_region_id' => $package->deliveryRequest->pick_up_region_id,
+                            'dropOffRegion' => $package->deliveryRequest->dropOffRegion->name,
+                            'pickUpRegion' => $package->deliveryRequest->pickUpRegion->name
+                        ] : null
+                    ];
+                });
         }
 
-        $this->logDriverRegion($driver, $toRegionId, $deliveryOrder);
-    }
-
-    /**
-     * Log driver's region change
-     */
-    private function logDriverRegion(User $driver, int $regionId, ?DeliveryOrder $deliveryOrder = null): void
-    {
-        $logData = [
-            'driver_id' => $driver->id,
-            'region_id' => $regionId,
-            'type' => 'arrival',
-            'logged_at' => now()
-        ];
-
-        if ($deliveryOrder) {
-            $logData['delivery_order_id'] = $deliveryOrder->id;
-        }
-
-        DriverRegionLog::create($logData);
-
-        $driver->current_region_id = $regionId;
-        $driver->last_region_update = now();
-        $driver->save();
-    }
-
-    /**
-     * Get packages that the driver is authorized to update
-     */
-    private function getValidPackages(array $packageIds, User $driver)
-    {
-        return Package::whereIn('id', $packageIds)
-            ->whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
-                $query->where('driver_id', $driver->id)
-                    ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
-            })
-            ->get();
-    }
-
-    /**
-     * Update package status and create history record
-     */
-    private function updatePackageStatus(Package $package, array $data): void
-    {
-        $package->updateStatus(
-            $data['status'],
-            auth()->user(),
-            $data['remarks'] ?? null
-        );
-    }
-
-    /**
-     * Confirm delivery for a package
-     */
-    private function confirmDelivery(Package $package, ?string $remarks = null): void
-    {
-        $package->confirmDelivery(auth()->user(), $remarks);
-    }
-
-    /**
-     * Check if all packages are delivered
-     */
-    private function allPackagesDelivered(User $driver): bool
-    {
-        return Package::whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
-                $query->where('driver_id', $driver->id)
-                    ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
-            })
-            ->whereNotIn('status', ['delivered', 'completed'])
-            ->doesntExist();
-    }
-
-    /**
-     * Check and update delivery orders where all packages are delivered
-     */
-    private function checkAndUpdateDeliveryOrders(array $deliveryOrderIds): void
-    {
-        $uniqueOrderIds = array_unique($deliveryOrderIds);
-
-        foreach ($uniqueOrderIds as $orderId) {
-            $deliveryOrder = DeliveryOrder::with(['packages'])->find($orderId);
-
-            if ($deliveryOrder && $deliveryOrder->packages->every(fn($pkg) => $pkg->status === 'delivered')) {
-                $deliveryOrder->update([
-                    'status' => 'delivered',
-                    'actual_arrival' => now(),
-                ]);
-            }
-        }
-    }
-
-    /**
-     * Get driver statistics
-     */
     private function getDriverStats(User $driver)
     {
-        return [
-            'active_deliveries' => DeliveryOrder::where('driver_id', $driver->id)
-                ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
-                ->count(),
-            'packages_in_transit' => Package::whereHas('deliveryRequest.deliveryOrder', function ($q) use ($driver) {
-                    $q->where('driver_id', $driver->id)
-                        ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
-                })
-                ->count(),
-        ];
-    }
+        $activeDeliveries = $driver->deliveryOrders()
+            ->whereIn('status', ['assigned', 'dispatched', 'in_transit', 'needs_review'])
+            ->whereHas('deliveryRequest.packages', function($query) {
+                $query->whereNotIn('status', ['delivered', 'completed', 'returned', 'damaged_in_transit', 'lost_in_transit']);
+            })
+            ->count();
 
-    /**
-     * Get active deliveries for driver
-     */
+        $totalPackages = Package::whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
+                $query->where('driver_id', $driver->id)
+                    ->whereIn('status', ['assigned', 'dispatched', 'in_transit', 'needs_review']);
+            })
+            ->whereNotIn('status', ['delivered', 'completed', 'returned', 'damaged_in_transit', 'lost_in_transit'])
+            ->count();
+
+            $deliveredPackages = Package::whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
+                    $query->where('driver_id', $driver->id);
+                })
+                ->where('status', 'delivered')
+                ->count();
+
+            $pendingVerification = Package::whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
+                    $query->where('driver_id', $driver->id);
+                })
+                ->where('verification_status', 'pending')
+                ->count();
+
+            return [
+                'active_deliveries' => $activeDeliveries,
+                'total_packages' => $totalPackages,
+                'delivered_packages' => $deliveredPackages,
+                'pending_verification' => $pendingVerification,
+            ];
+        }
+
     private function getActiveDeliveries(User $driver)
     {
-        return DeliveryOrder::with([
-                'deliveryRequest.packages' => function($query) {
-                    $query->select(['id', 'item_code', 'delivery_request_id']);
-                },
+        return $driver->deliveryOrders()
+            ->with([
                 'deliveryRequest.receiver',
-                'truck'
+                'deliveryRequest.packages' => function($query) {
+                    $query->whereNotIn('status', ['delivered', 'completed', 'returned', 'damaged_in_transit', 'lost_in_transit']);
+                },
+                'truck',
+                'currentRegion'
             ])
-            ->where('driver_id', $driver->id)
             ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
+            ->whereHas('deliveryRequest.packages', function($query) {
+                $query->whereNotIn('status', ['delivered', 'completed', 'returned', 'damaged_in_transit', 'lost_in_transit']);
+            })
             ->get()
-            ->map(function ($order) {
-                return $this->formatDeliveryOrder($order);
-            });
+            ->map(function ($deliveryOrder) {
+                    $packages = $deliveryOrder->deliveryRequest->packages ?? collect([]);
+                    
+                    return [
+                        'id' => $deliveryOrder->id,
+                        'reference_number' => $deliveryOrder->deliveryRequest->reference_number,
+                        'status' => $deliveryOrder->status,
+                        'receiver' => $deliveryOrder->deliveryRequest->receiver->name,
+                        'destination' => $deliveryOrder->deliveryRequest->dropOffRegion->name ?? 'Unknown',
+                        'truck' => $deliveryOrder->truck ? [
+                            'make' => $deliveryOrder->truck->make,
+                            'model' => $deliveryOrder->truck->model,
+                            'license_plate' => $deliveryOrder->truck->license_plate,
+                        ] : null,
+                        'packages' => $packages->take(2)->map(function ($package) {
+                            return [
+                                'id' => $package->id,
+                                'item_code' => $package->item_code,
+                            ];
+                        }),
+                        'package_count' => $packages->count(),
+                        'verified_packages' => $packages->whereNotNull('verified_at')->count(),
+                        'current_region' => $deliveryOrder->currentRegion->name ?? 'Unknown',
+                        'is_backhaul' => $deliveryOrder->isBackhaulAssignment(),
+                        'estimated_arrival' => $deliveryOrder->estimated_arrival?->format('M d, Y H:i'),
+                        'actual_arrival' => $deliveryOrder->actual_arrival?->format('M d, Y H:i'),
+                        'dispatched_at' => $deliveryOrder->dispatched_at?->format('M d, Y H:i'),
+                    ];
+                });
     }
 
-    /**
-     * Get recent deliveries for driver
-     */
     private function getRecentDeliveries(User $driver)
     {
-        $paginator = DeliveryOrder::with(['deliveryRequest.packages', 'deliveryRequest.receiver'])
-            ->where('driver_id', $driver->id)
-            ->where('status', 'completed')
+        return $driver->deliveryOrders()
+            ->with([
+                'deliveryRequest.receiver',
+                'deliveryRequest.dropOffRegion',
+                'deliveryRequest.packages'
+            ])
+            ->whereIn('status', ['completed', 'delivered', 'needs_review'])
+            ->whereHas('deliveryRequest.packages', function($query) {
+                $query->whereIn('status', ['delivered', 'completed', 'damaged_in_transit', 'lost_in_transit']);
+            })
             ->latest()
-            ->paginate(5);
-
-        $paginator->getCollection()->transform(function ($order) {
-            return $this->formatDeliveryOrder($order);
-        });
-
-        return $paginator;
+            ->take(5)
+            ->get()
+            ->map(function ($order) {
+                    return [
+                        'id' => $order->id,
+                        'reference_number' => $order->deliveryRequest->reference_number,
+                        'sender' => $order->deliveryRequest->sender->name ?? 'Unknown',
+                        'receiver' => $order->deliveryRequest->receiver->name,
+                        'destination' => $order->deliveryRequest->dropOffRegion->name,
+                        'status' => $order->status,
+                        'estimated_arrival' => $order->estimated_arrival?->format('M d, Y H:i'),
+                        'actual_arrival' => $order->actual_arrival?->format('M d, Y H:i'),
+                        'package_count' => $order->deliveryRequest->packages->count(),
+                    ];
+                });
     }
 
-    /**
-     * Get current truck assignment
-     */
     private function getCurrentTruck(User $driver)
     {
-        $order = DeliveryOrder::with('truck')
-            ->where('driver_id', $driver->id)
-            ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
-            ->first();
+        $assignment = $driver->currentTruckAssignment;
+        
+        if (!$assignment || !$assignment->truck) {
+            return null;
+        }
 
-        return $order?->truck ? [
-            'make' => $order->truck->make,
-            'model' => $order->truck->model,
-            'license_plate' => $order->truck->license_plate,
-            'status' => $order->truck->status,
-        ] : null;
-    }
-
-    /**
-     * Format delivery order for response
-     */
-    private function formatDeliveryOrder(DeliveryOrder $order)
-    {
         return [
-            'id' => $order->id,
-            'status' => $order->status,
-            'estimated_arrival' => $order->estimated_arrival?->format('M d, Y H:i'),
-            'package_count' => $order->deliveryRequest->packages->count(),
-            'receiver' => $order->deliveryRequest->receiver->name,
-            'reference_number' => $order->deliveryRequest->reference_number,
-            'delivered_at' => $order->actual_arrival ? $order->actual_arrival->format('M d, Y H:i') : null,
-            'packages' => $order->deliveryRequest->packages->take(2)->map(function ($package) {
-                return [
-                    'id' => $package->id,
-                    'item_code' => $package->item_code,
-                ];
-            }),
-            'truck' => $order->truck ? [
-                'make' => $order->truck->make,
-                'model' => $order->truck->model,
-                'license_plate' => $order->truck->license_plate,
-            ] : null,
+            'make' => $assignment->truck->make ?? 'Unknown',
+            'model' => $assignment->truck->model ?? 'Unknown', 
+            'license_plate' => $assignment->truck->license_plate ?? 'Unknown',
+            'status' => $assignment->truck->status ?? 'unknown',
         ];
     }
 
-    /**
-     * Returns available status options for package updates
-     */
+    private function isBackhaulAvailable(User $driver)
+    {
+        $assignment = $driver->currentTruckAssignment;
+        return $assignment && $assignment->current_status === DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE;
+    }
+
     private function getStatusOptions()
     {
         return [
             'loaded' => 'Loaded',
             'in_transit' => 'In Transit',
             'delivered' => 'Delivered',
-            'returned' => 'Returned to Sender Branch',
+            'returned' => 'Returned',
         ];
+    }
+
+    private function getValidPackages(array $packageIds, User $driver)
+    {
+        return Package::whereIn('id', $packageIds)
+            ->whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
+                $query->where('driver_id', $driver->id)
+                    ->whereIn('status', ['assigned', 'dispatched', 'in_transit', 'needs_review']);
+            })
+            ->get();
+    }
+
+    private function updatePackageStatus(Package $package, array $data)
+    {
+        $package->updateStatus($data['status'], auth()->user(), $data['remarks'] ?? null);
+        
+        if (isset($data['region_id'])) {
+            $package->current_region_id = $data['region_id'];
+            $package->save();
+        }
+    }
+
+    private function handleRegionChange(Package $package, $fromRegionId, $toRegionId, User $driver, $remarks = null)
+    {
+        PackageTransfer::create([
+            'package_id' => $package->id,
+            'from_region_id' => $fromRegionId,
+            'to_region_id' => $toRegionId,
+            'processed_by' => $driver->id,
+            'remarks' => $remarks ?? 'Region transfer via status update',
+            'is_return' => $package->shouldMarkAsReturn($toRegionId)
+        ]);
+    }
+
+    private function confirmDelivery(Package $package, $remarks = null)
+    {
+        $package->confirmDelivery(auth()->user(), $remarks);
+    }
+
+    private function checkAndUpdateAllDeliveryOrders(User $driver): void
+    {
+        $orders = $driver->deliveryOrders()
+            ->whereIn('status', ['assigned', 'dispatched', 'in_transit', 'needs_review'])
+            ->with(['deliveryRequest.packages'])
+            ->get();
+
+        foreach ($orders as $order) {
+            $this->checkAndUpdateDeliveryOrder($order);
+        }
+
+        $assignment = $driver->currentTruckAssignment;
+        if ($assignment) {
+            $assignment->processAutomaticTransitions();
+        }
+    }
+
+    private function checkAndUpdateDeliveryOrder(DeliveryOrder $order): void
+    {
+        $undeliveredPackages = $order->deliveryRequest->packages()
+            ->whereNotIn('status', ['delivered', 'completed', 'returned', 'damaged_in_transit', 'lost_in_transit'])
+            ->count();
+
+        if ($undeliveredPackages === 0 && in_array($order->status, ['assigned', 'dispatched', 'in_transit'])) {
+            $packages = $order->deliveryRequest->packages;
+            $deliveredCount = $packages->where('status', 'delivered')->count();
+            $totalPackages = $packages->count();
+            
+            $newOrderStatus = ($deliveredCount === $totalPackages) ? 'delivered' : 'needs_review';
+            
+            $order->update(['status' => $newOrderStatus]);
+        }
+    }
+
+    private function checkAndEnableBackhaul(User $driver): bool
+    {
+        $assignment = $driver->currentTruckAssignment;
+        
+        if (!$assignment) {
+            return false;
+        }
+
+        try {
+            $assignment->processAutomaticTransitions();
+            
+            $eligible = $assignment->current_status === DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE;
+            
+            return $eligible;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    private function logDriverRegion(User $driver, int $regionId): void
+    {
+        $oldRegionId = $driver->current_region_id;
+        
+        $driver->current_region_id = $regionId;
+        $driver->save();
+
+        DriverRegionLog::create([
+            'driver_id' => $driver->id,
+            'region_id' => $regionId,
+            'type' => 'arrival',
+            'remarks' => 'Driver arrived at region via location update',
+            'logged_at' => now()
+        ]);
+
+        $assignment = $driver->currentTruckAssignment;
+        if ($assignment) {
+            $assignment->current_region_id = $regionId;
+            $assignment->save();
+
+            $assignment->processAutomaticTransitions();
+        }
     }
 }

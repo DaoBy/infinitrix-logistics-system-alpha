@@ -28,6 +28,7 @@ class CustomerUpdateRequest extends Model
         'status',
         'reviewed_by',
         'reviewed_at',
+        'admin_notes',
     ];
 
     protected $casts = [
@@ -44,8 +45,8 @@ class CustomerUpdateRequest extends Model
         return $this->belongsTo(User::class, 'reviewed_by');
     }
 
-    // Check if any profile field has been changed
-    public function hasChanges($changes = null, $attributes = null): bool
+    // RENAMED: Use a different method name to avoid conflict with parent Model
+    public function hasProfileChanges(): bool
     {
         $profileFields = [
             'first_name', 'middle_name', 'last_name', 'email', 'mobile', 'phone',

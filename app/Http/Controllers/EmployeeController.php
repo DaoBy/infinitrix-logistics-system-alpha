@@ -16,12 +16,12 @@ class EmployeeController extends Controller
     public function index(Request $request)
     {
         // Base query with relationships
-        $query = User::with(['employeeProfile' => function($query) {
-                $query->select(['id', 'user_id', 'employee_id', 'region_id'])
-                    ->with(['region:id,name']);
-            }])
-            ->whereIn('role', ['admin', 'staff', 'driver', 'collector'])
-            ->where('is_active', true);
+    $query = User::with(['employeeProfile' => function($query) {
+        $query->select(['id', 'user_id', 'employee_id', 'region_id'])
+              ->with(['region:id,name,color_hex']); // Add color_hex here
+    }])
+    ->whereIn('role', ['admin', 'staff', 'driver', 'collector'])
+    ->where('is_active', true);
 
         // Search filter
         if ($request->filled('search')) {
@@ -83,13 +83,14 @@ class EmployeeController extends Controller
                 'role' => $user->role,
                 'is_active' => $user->is_active,
                 'created_at' => $user->created_at->format('Y-m-d H:i:s'),
-                'employee_profile' => $user->employeeProfile ? [
-                    'employee_id' => $user->employeeProfile->employee_id,
-                    'region' => $user->employeeProfile->region ? [
-                        'id' => $user->employeeProfile->region->id,
-                        'name' => $user->employeeProfile->region->name
-                    ] : null
-                ] : null
+              'employee_profile' => $user->employeeProfile ? [
+    'employee_id' => $user->employeeProfile->employee_id,
+    'region' => $user->employeeProfile->region ? [
+        'id' => $user->employeeProfile->region->id,
+        'name' => $user->employeeProfile->region->name,
+        'color_hex' => $user->employeeProfile->region->color_hex // Add this line
+    ] : null
+] : null
             ];
         });
 
@@ -176,7 +177,7 @@ class EmployeeController extends Controller
                 'city' => $validated['city'] ?? null,
                 'province' => $validated['province'] ?? null,
                 'zip_code' => $validated['zip_code'] ?? null,
-                'hire_date' => $validated['hire_date'] ?? now(),
+                'hire_date' => $validated['hire_date'] ? date('Y-m-d', strtotime($validated['hire_date'])) : now()->format('Y-m-d'),
                 'region_id' => $validated['region_id'] ?? null,
             ]);
 
@@ -194,51 +195,73 @@ class EmployeeController extends Controller
     }
 
     public function show($id)
-    {
-        $employee = User::with(['employeeProfile' => function($query) {
-            $query->select([
-                'user_id',
-                'employee_id',
-                'phone',
-                'mobile',
-                'building_number',
-                'street',
-                'barangay',
-                'city',
-                'province',
-                'zip_code',
-                'hire_date',
-                'termination_date',
-                'archived_at',
-                'notes',
-                'region_id'
-            ])->with('region:id,name');
-        }])
-        ->whereIn('role', ['admin', 'staff', 'driver', 'collector'])
-        ->findOrFail($id);
-    
-        return Inertia::render('Admin/Employees/Show', [
-            'employee' => $employee->makeVisible('employee_profile'),
-            'status' => session('status'),
-        ]);
+{
+    $employee = User::with(['employeeProfile' => function($query) {
+        $query->select([
+            'user_id',
+            'employee_id',
+            'phone',
+            'mobile',
+            'building_number',
+            'street',
+            'barangay',
+            'city',
+            'province',
+            'zip_code',
+            'hire_date',
+            'termination_date',
+            'archived_at',
+            'notes',
+            'region_id'
+        ])->with('region:id,name');
+    }])
+    ->whereIn('role', ['admin', 'staff', 'driver', 'collector'])
+    ->findOrFail($id);
+
+    // Format dates for the frontend
+    if ($employee->employeeProfile) {
+        $employee->employeeProfile->hire_date = $employee->employeeProfile->hire_date 
+            ? $employee->employeeProfile->hire_date->format('Y-m-d') 
+            : null;
+            
+        $employee->employeeProfile->termination_date = $employee->employeeProfile->termination_date 
+            ? $employee->employeeProfile->termination_date->format('Y-m-d') 
+            : null;
     }
 
-    public function edit(User $employee)
-    {
-        if (!in_array($employee->role, ['admin', 'staff', 'driver', 'collector'])) {
-            abort(404);
-        }
+    return Inertia::render('Admin/Employees/Show', [
+        'employee' => $employee->makeVisible('employee_profile'),
+        'status' => session('status'),
+    ]);
+}
 
-        $employee->load(['employeeProfile' => function($query) {
-            $query->with('region:id,name');
-        }]);
-
-        return Inertia::render('Admin/Employees/Edit', [
-            'employee' => $employee,
-            'regions' => Region::where('is_active', true)->get(['id', 'name']),
-            'status' => session('status'),
-        ]);
+public function edit(User $employee)
+{
+    if (!in_array($employee->role, ['admin', 'staff', 'driver', 'collector'])) {
+        abort(404);
     }
+
+    $employee->load(['employeeProfile' => function($query) {
+        $query->with('region:id,name');
+    }]);
+
+    // Format dates for the frontend
+    if ($employee->employeeProfile) {
+        $employee->employeeProfile->hire_date = $employee->employeeProfile->hire_date 
+            ? $employee->employeeProfile->hire_date->format('Y-m-d') 
+            : null;
+            
+        $employee->employeeProfile->termination_date = $employee->employeeProfile->termination_date 
+            ? $employee->employeeProfile->termination_date->format('Y-m-d') 
+            : null;
+    }
+
+    return Inertia::render('Admin/Employees/Edit', [
+        'employee' => $employee,
+        'regions' => Region::where('is_active', true)->get(['id', 'name']),
+        'status' => session('status'),
+    ]);
+}
 
     public function update(Request $request, User $employee)
     {
@@ -383,16 +406,15 @@ class EmployeeController extends Controller
 
  public function archived(Request $request)
 {
-    $query = User::with(['employeeProfile' => function($query) {
-            $query->select(['id', 'user_id', 'employee_id', 'region_id', 'archived_at'])
-                  ->with(['region:id,name']);
-        }])
-        ->whereIn('role', ['admin', 'staff', 'driver', 'collector'])
-        ->where('is_active', false)
-        ->whereHas('employeeProfile', function($query) {
-            $query->whereNotNull('archived_at');
-        });
-
+$query = User::with(['employeeProfile' => function($query) {
+        $query->select(['id', 'user_id', 'employee_id', 'region_id', 'archived_at'])
+              ->with(['region:id,name,color_hex']); // Add color_hex here
+    }])
+    ->whereIn('role', ['admin', 'staff', 'driver', 'collector'])
+    ->where('is_active', false)
+    ->whereHas('employeeProfile', function($query) {
+        $query->whereNotNull('archived_at');
+    });
     // Search filter
     if ($request->filled('search')) {
         $searchTerm = $request->input('search');
@@ -452,16 +474,17 @@ class EmployeeController extends Controller
             'role' => $user->role,
             'is_active' => $user->is_active,
             'created_at' => $user->created_at->format('Y-m-d H:i:s'),
-            'employee_profile' => $user->employeeProfile ? [
-                'employee_id' => $user->employeeProfile->employee_id ?? 'N/A',
-                'archived_at' => $user->employeeProfile->archived_at 
-                    ? \Carbon\Carbon::parse($user->employeeProfile->archived_at)->format('Y-m-d') 
-                    : 'Not archived',
-                'region' => $user->employeeProfile->region ? [
-                    'id' => $user->employeeProfile->region->id,
-                    'name' => $user->employeeProfile->region->name
-                ] : null
-            ] : null
+         'employee_profile' => $user->employeeProfile ? [
+    'employee_id' => $user->employeeProfile->employee_id ?? 'N/A',
+    'archived_at' => $user->employeeProfile->archived_at 
+        ? \Carbon\Carbon::parse($user->employeeProfile->archived_at)->format('Y-m-d') 
+        : 'Not archived',
+    'region' => $user->employeeProfile->region ? [
+        'id' => $user->employeeProfile->region->id,
+        'name' => $user->employeeProfile->region->name,
+        'color_hex' => $user->employeeProfile->region->color_hex // Add this line
+    ] : null
+] : null
         ];
     });
 

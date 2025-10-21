@@ -27,41 +27,34 @@
           <div v-if="error" class="p-3 bg-red-100 text-red-800 rounded">{{ error }}</div>
         </div>
 
-        <!-- Search Bar -->
+        <!-- Search and Filters -->
         <div class="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div class="w-full sm:w-96">
             <SearchInput 
               v-model="search" 
-              placeholder="Search disabled employees..." 
+              placeholder="Search disabled employees by name, email, or employee ID..." 
               class="w-full"
             />
           </div>
-          
-          <!-- Filters and Info Row -->
-          <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
-            <!-- Dropdown Filters -->
-            <div class="flex flex-wrap gap-2">
-              <SelectInput 
-                v-model="roleFilter" 
-                :options="roleOptions" 
-                option-value="value"
-                option-label="text"
-                placeholder="All Roles"
-                class="w-full sm:w-48"
-              />
-              <SelectInput 
-                v-model="regionFilter" 
-                :options="regionOptions" 
-                option-value="value"
-                option-label="text"
-                placeholder="All Regions"
-                class="w-full sm:w-48"
-              />
-            </div>
-            
-            <!-- Info Counter -->
+          <div class="flex items-center gap-3">
+            <SelectInput 
+              v-model="roleFilter" 
+              :options="roleOptions" 
+              option-value="value"
+              option-label="text"
+              placeholder="All Roles"
+              class="w-full sm:w-48"
+            />
+            <SelectInput 
+              v-model="regionFilter" 
+              :options="regionOptions" 
+              option-value="value"
+              option-label="text"
+              placeholder="All Regions"
+              class="w-full sm:w-48"
+            />
             <div class="text-sm text-gray-500 bg-blue-50 px-3 py-1 rounded border border-blue-100 whitespace-nowrap">
-              📋 Showing {{ employees.data?.length || 0 }} of {{ employees.total }} employees
+              📋 Showing {{ employees.data?.length || 0 }} disabled {{ employees.data?.length === 1 ? 'employee' : 'employees' }}
               <span v-if="employees.data && employees.data.length < employees.total" class="ml-1">
                 (Page {{ employees.current_page }} of {{ employees.last_page }})
               </span>
@@ -69,12 +62,12 @@
           </div>
         </div>
 
-        <!-- Data Table Container with proper spacing -->
+        <!-- Data Table Container -->
         <div class="justify-center flex items-center">
           <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg w-full max-w-[95vw]">
             <div class="p-4 bg-white border-b border-gray-200">
-              <DataTable 
-                :columns="columns" 
+              <DataTable
+                :columns="columns"
                 :data="employees.data || []"
                 :sort-field="sortField"
                 :sort-direction="sortDirection"
@@ -90,7 +83,7 @@
                     </div>
                     <div>
                       <span class="font-medium text-gray-900 block">
-                        {{ row.name || 'N/A' }}
+                        {{ capitalizeWords(row.name) || 'N/A' }}
                       </span>
                       <span v-if="row.employee_profile?.employee_id" class="text-xs text-gray-500 block">
                         ID: {{ row.employee_profile.employee_id }}
@@ -102,19 +95,30 @@
                   <span class="text-gray-700">{{ row.email || 'No email' }}</span>
                 </template>
                 <template #role="{ row }">
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" 
-                        :class="getRoleClass(row.role)">
-                    {{ row.role ? row.role.charAt(0).toUpperCase() + row.role.slice(1) : 'N/A' }}
+                  <span 
+                    class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full capitalize"
+                    :class="getRoleClass(row.role)"
+                  >
+                    {{ row.role || 'N/A' }}
                   </span>
                 </template>
-                <template #region="{ row }">
-                  <span class="text-gray-700">{{ row.employee_profile?.region?.name || 'Not assigned' }}</span>
+                <template #region.name="{ row }">
+                  <div class="flex items-center">
+                    <div 
+                      v-if="row.employee_profile?.region && row.employee_profile.region.color_hex"
+                      class="w-3 h-3 rounded-full mr-2 border border-gray-300" 
+                      :style="{ backgroundColor: row.employee_profile.region.color_hex }"
+                    ></div>
+                    <span class="text-gray-700">{{ row.employee_profile?.region?.name || 'Not assigned' }}</span>
+                  </div>
                 </template>
                 <template #archived_at="{ row }">
-                  <span class="text-gray-700">{{ row.archived_at ? new Date(row.archived_at).toLocaleDateString() : 'N/A' }}</span>
+                  <span class="text-gray-600">{{ row.employee_profile?.archived_at ? formatDate(row.employee_profile.archived_at) : 'N/A' }}</span>
                 </template>
                 <template #status="{ row }">
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                  <span 
+                    class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800"
+                  >
                     Disabled
                   </span>
                 </template>
@@ -134,17 +138,17 @@
                       <p class="text-gray-500 mb-3">
                         {{ search ? 'Try adjusting your search terms' : 'All employee accounts are currently active' }}
                       </p>
+                      <SecondaryButton @click="viewActive">View Active Employees</SecondaryButton>
                     </div>
                   </div>
                 </template>
               </DataTable>
 
               <!-- Pagination Component -->
-              <div class="mt-4">
+              <div v-if="employees.links?.length > 3" class="mt-4">
                 <Pagination 
                   :pagination="employees" 
-                  @page-changed="handlePageChange"
-                  :per-page="10"
+                  @page-changed="handlePageChange" 
                 />
               </div>
             </div>
@@ -158,14 +162,16 @@
       <div class="p-5">
         <h2 class="text-lg font-medium text-gray-900">Delete Employee Permanently?</h2>
         <p class="mt-1 text-sm text-gray-600">
-          Are you sure you want to permanently delete 
-          <strong>{{ employeeToDelete?.name }}</strong>? 
+          Are you sure you want to permanently delete <strong>{{ employeeToDelete?.name }}</strong>? 
           This action cannot be undone.
         </p>
         <div class="mt-4 flex justify-end space-x-3">
           <SecondaryButton @click="closeDeleteModal">Cancel</SecondaryButton>
-          <DangerButton @click="handleDelete" :disabled="isDeleting">
-            <span v-if="isDeleting">Deleting...</span>
+          <DangerButton 
+            @click="deleteEmployee" 
+            :disabled="isProcessing"
+          >
+            <span v-if="isProcessing">Processing...</span>
             <span v-else>Delete Permanently</span>
           </DangerButton>
         </div>
@@ -175,6 +181,9 @@
 </template>
 
 <script setup>
+import { ref, onMounted, watch, computed } from 'vue';
+import { router } from '@inertiajs/vue3';
+import axios from 'axios';
 import EmployeeLayout from '@/Layouts/EmployeeLayout.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
@@ -184,9 +193,6 @@ import DataTable from '@/Components/DataTable.vue';
 import Modal from '@/Components/Modal.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { UserGroupIcon } from '@heroicons/vue/24/outline';
-import { ref, onMounted, watch } from 'vue';
-import { router } from '@inertiajs/vue3';
-import axios from 'axios';
 
 const props = defineProps({ 
   employees: Object, 
@@ -198,11 +204,11 @@ const props = defineProps({
 // State
 const showDeleteModal = ref(false);
 const employeeToDelete = ref(null);
-const isDeleting = ref(false);
+const isProcessing = ref(false);
 const search = ref(props.employees.filters?.search || '');
 const roleFilter = ref(props.employees.filters?.role || '');
 const regionFilter = ref(props.employees.filters?.region || '');
-const sortField = ref(props.employees.filters?.sort_field || 'archived_at');
+const sortField = ref(props.employees.filters?.sort_field || 'employee_profile.archived_at');
 const sortDirection = ref(props.employees.filters?.sort_direction || 'desc');
 const regionOptions = ref([{ value: '', text: 'All Regions' }]);
 
@@ -215,15 +221,69 @@ const roleOptions = [
   { value: 'collector', text: 'Collector' }
 ];
 
+const roleClasses = {
+  admin: 'bg-purple-100 text-purple-800',
+  staff: 'bg-blue-100 text-blue-800',
+  driver: 'bg-green-100 text-green-800',
+  collector: 'bg-yellow-100 text-yellow-800'
+};
+
 const columns = [
   { field: 'name', header: 'Employee Name', sortable: true },
   { field: 'email', header: 'Email', sortable: true },
   { field: 'role', header: 'Role', sortable: true },
-  { field: 'region', header: 'Region/Branch', sortable: false },
+  { field: 'region.name', header: 'Region', sortable: true },
   { field: 'archived_at', header: 'Disabled On', sortable: true },
   { field: 'status', header: 'Status', sortable: true },
   { field: 'actions', header: 'Actions', sortable: false }
 ];
+
+// Computed
+const filteredEmployees = computed(() => {
+  const employeesData = props.employees.data || [];
+  
+  return employeesData.filter(employee => {
+    const matchesSearch = search.value === '' || 
+      employee.name?.toLowerCase().includes(search.value.toLowerCase()) ||
+      employee.email?.toLowerCase().includes(search.value.toLowerCase()) ||
+      employee.employee_profile?.employee_id?.toLowerCase().includes(search.value.toLowerCase());
+    
+    const matchesRole = !roleFilter.value || employee.role === roleFilter.value;
+    const matchesRegion = !regionFilter.value || 
+      employee.employee_profile?.region?.id?.toString() === regionFilter.value;
+    
+    return matchesSearch && matchesRole && matchesRegion;
+  }).sort((a, b) => {
+    const modifier = sortDirection.value === 'asc' ? 1 : -1;
+    
+    let aValue = a[sortField.value];
+    let bValue = b[sortField.value];
+    
+    // Handle nested fields for region name
+    if (sortField.value === 'region.name') {
+      aValue = a.employee_profile?.region?.name;
+      bValue = b.employee_profile?.region?.name;
+    }
+    
+    // Handle archived_at field
+    if (sortField.value === 'archived_at') {
+      aValue = a.employee_profile?.archived_at;
+      bValue = b.employee_profile?.archived_at;
+    }
+    
+    // Handle null/undefined values
+    if (aValue == null) aValue = '';
+    if (bValue == null) bValue = '';
+    
+    // Convert to string for case-insensitive comparison
+    aValue = String(aValue).toLowerCase();
+    bValue = String(bValue).toLowerCase();
+
+    if (aValue < bValue) return -1 * modifier;
+    if (aValue > bValue) return 1 * modifier;
+    return 0;
+  });
+});
 
 // Methods
 const getInitials = (name) => {
@@ -235,23 +295,30 @@ const getInitials = (name) => {
   return name.substring(0, 2).toUpperCase();
 };
 
+const capitalizeWords = (str) => {
+  if (!str) return '';
+  return str.replace(/\b\w/g, char => char.toUpperCase());
+};
+
 const getRoleClass = (role) => {
-  switch (role) {
-    case 'admin': return 'bg-purple-100 text-purple-800';
-    case 'staff': return 'bg-blue-100 text-blue-800';
-    case 'driver': return 'bg-green-100 text-green-800';
-    case 'collector': return 'bg-yellow-100 text-yellow-800';
-    default: return 'bg-gray-100 text-gray-800';
+  return roleClasses[role] || 'bg-gray-100 text-gray-800';
+};
+
+const formatDate = (dateString) => {
+  if (!dateString) return 'N/A';
+  try {
+    return new Date(dateString).toLocaleDateString();
+  } catch (e) {
+    return 'Invalid Date';
   }
 };
 
-// Fixed handleSort function to properly handle the sort event
-function handleSort(sortParams) {
+const handleSort = (sortParams) => {
   sortField.value = sortParams.field;
   sortDirection.value = sortParams.direction;
-}
+};
 
-function handlePageChange(page) {
+const handlePageChange = (page) => {
   router.get(route('admin.employees.archived'), { 
     page: page,
     search: search.value,
@@ -264,43 +331,39 @@ function handlePageChange(page) {
     preserveScroll: true,
     replace: true
   });
-}
+};
 
-function confirmDeleteEmployee(employee) {
+const confirmDeleteEmployee = (employee) => {
   employeeToDelete.value = employee;
   showDeleteModal.value = true;
-}
+};
 
-function closeDeleteModal() {
+const closeDeleteModal = () => {
   showDeleteModal.value = false;
-  setTimeout(() => { 
-    employeeToDelete.value = null; 
-    isDeleting.value = false; 
-  }, 300);
-}
+  employeeToDelete.value = null;
+  isProcessing.value = false;
+};
 
-function handleDelete() {
+const deleteEmployee = () => {
   if (!employeeToDelete.value) return;
   
-  isDeleting.value = true;
+  isProcessing.value = true;
   router.delete(route('admin.employees.destroy', employeeToDelete.value.id), {}, {
     preserveScroll: true,
     onSuccess: () => router.reload({ only: ['employees'] }),
     onError: () => alert('Failed to delete employee'),
     onFinish: () => closeDeleteModal()
   });
-}
+};
 
-function restoreEmployee(employee) {
+const restoreEmployee = (employee) => {
   router.put(route('admin.employees.restore', employee.id), {}, {
     preserveScroll: true,
     onSuccess: () => router.reload({ only: ['employees'] })
   });
-}
+};
 
-function viewActive() {
-  router.get(route('admin.employees.index'));
-}
+const viewActive = () => router.get(route('admin.employees.index'));
 
 const fetchRegions = async () => {
   try {
@@ -346,22 +409,18 @@ onMounted(fetchRegions);
   overflow: hidden;
 }
 
-/* Override DataTable's left padding if needed */
-:deep(.datatable) {
-  margin-left: 2rem;
-}
-
+/* DataTable styling adjustments */
 :deep(.datatable-table) {
   width: 100%;
 }
 
-/* Further reduce table row padding for more compact rows */
+/* Reduce table row padding for more compact rows */
 :deep(.datatable-table td) {
   padding-top: 0.375rem !important;
   padding-bottom: 0.375rem !important;
 }
 
-/* Further reduce table header padding */
+/* Reduce table header padding */
 :deep(.datatable-table th) {
   padding-top: 0.5rem !important;
   padding-bottom: 0.5rem !important;
@@ -372,5 +431,11 @@ onMounted(fetchRegions);
 :deep(.datatable-table .btn) {
   padding: 0.25rem 0.5rem !important;
   font-size: 0.75rem !important;
+}
+
+/* Style for disabled disable button */
+:deep(.datatable-table .btn:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

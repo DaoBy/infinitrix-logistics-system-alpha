@@ -1,108 +1,109 @@
 <template>
   <EmployeeLayout>
     <template #header>
-      <div class="flex justify-between items-center px-6">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">Edit Customer: {{ customer.name || customer.company_name }}</h2>
-        <SecondaryButton @click="showCancelModal = true">
-          Back to List
-        </SecondaryButton>
+      <div class="flex justify-between items-center w-full px-6 md:px-8">
+        <!-- Left: Title & Subtitle -->
+        <div>
+          <h2 class="text-xl font-semibold leading-tight text-gray-800">Edit Customer: {{ customer.name || customer.company_name }}</h2>
+          <p class="mt-1 text-sm text-gray-500">
+            Update customer information and profile
+          </p>
+        </div>
+
+        <!-- Right: Buttons -->
+        <div class="flex gap-2">
+          <SecondaryButton @click="showCancelModal = true">
+            Back to List
+          </SecondaryButton>
+        </div>
       </div>
     </template>
 
-    <div class="px-6">
-      <!-- Status Messages -->
-      <div v-if="status || success || error" class="mb-6 max-w-7xl mx-auto">
-        <div v-if="status" class="p-4 bg-blue-100 text-blue-800 rounded">
-          {{ status }}
+    <!-- ZOOM CONTENT WRAPPER -->
+    <div class="zoom-content">
+      <!-- MAIN CONTENT CONTAINER WITH PROPER PADDING -->
+      <div class="px-6 py-4">
+        <div v-if="status || success || error" class="mb-4">
+          <div v-if="status" class="p-3 bg-blue-100 text-blue-800 rounded">{{ status }}</div>
+          <div v-if="success" class="p-3 bg-green-100 text-green-800 rounded">{{ success }}</div>
+          <div v-if="error" class="p-3 bg-red-100 text-red-800 rounded">{{ error }}</div>
         </div>
-        <div v-if="success" class="p-4 bg-green-100 text-green-800 rounded">
-          {{ success }}
-        </div>
-        <div v-if="error" class="p-4 bg-red-100 text-red-800 rounded">
-          {{ error }}
-        </div>
-      </div>
 
-      <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg max-w-7xl mx-auto">
-        <div class="p-6 bg-white border-b border-gray-200">
-          <form @submit.prevent="submit">
-            <!-- Customer Type Section -->
-            <div class="mb-8">
-              <h3 class="text-lg font-medium text-gray-900 mb-4 pb-2 border-b border-gray-200">
-                Customer Type
-              </h3>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <InputLabel for="customer_category" value="Customer Category *" />
-                  <SelectInput
-                    id="customer_category"
-                    v-model="form.customer_category"
-                    :options="customerCategoryOptions"
-                    option-value="value"
-                    option-label="label"
-                    class="mt-1 block w-full"
-                    required
-                  />
-                  <InputError class="mt-2" :message="form.errors.customer_category" />
-                </div>
+        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg max-w-4xl mx-auto">
+          <div class="p-6 bg-white border-b border-gray-200">
+            <form @submit.prevent="submit">
+              <!-- Customer Type Section -->
+              <div class="mb-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Customer Type</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <InputLabel for="customer_category" value="Customer Category *" />
+                    <SelectInput
+                      id="customer_category"
+                      v-model="form.customer_category"
+                      :options="customerCategoryOptions"
+                      option-value="value"
+                      option-label="label"
+                      class="mt-1 block w-full"
+                      required
+                    />
+                    <InputError class="mt-2" :message="form.errors.customer_category" />
+                  </div>
 
-                <div>
-                  <InputLabel for="frequency_type" value="Frequency *" />
-                  <SelectInput
-                    id="frequency_type"
-                    v-model="form.frequency_type"
-                    :options="frequencyTypeOptions"
-                    option-value="value"
-                    option-label="label"
-                    class="mt-1 block w-full"
-                    required
-                  />
-                  <InputError class="mt-2" :message="form.errors.frequency_type" />
+                  <div>
+                    <InputLabel for="frequency_type" value="Frequency *" />
+                    <SelectInput
+                      id="frequency_type"
+                      v-model="form.frequency_type"
+                      :options="frequencyTypeOptions"
+                      option-value="value"
+                      option-label="label"
+                      class="mt-1 block w-full"
+                      required
+                    />
+                    <InputError class="mt-2" :message="form.errors.frequency_type" />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <!-- Basic Information Section -->
-            <div class="mb-8">
-              <h3 class="text-lg font-medium text-gray-900 mb-4 pb-2 border-b border-gray-200">
-                Basic Information
-              </h3>
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <InputLabel for="first_name" value="First Name *" />
-                  <TextInput
-                    id="first_name"
-                    type="text"
-                    class="mt-1 block w-full"
-                    v-model="form.first_name"
-                    required
-                  />
-                  <InputError class="mt-2" :message="form.errors.first_name" />
+              <!-- Basic Information Section -->
+              <div class="mb-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <InputLabel for="first_name" value="First Name *" />
+                    <TextInput
+                      id="first_name"
+                      type="text"
+                      class="mt-1 block w-full"
+                      v-model="form.first_name"
+                      required
+                    />
+                    <InputError class="mt-2" :message="form.errors.first_name" />
+                  </div>
+                  <div>
+                    <InputLabel for="middle_name" value="Middle Name" />
+                    <TextInput
+                      id="middle_name"
+                      type="text"
+                      class="mt-1 block w-full"
+                      v-model="form.middle_name"
+                    />
+                    <InputError class="mt-2" :message="form.errors.middle_name" />
+                  </div>
+                  <div>
+                    <InputLabel for="last_name" value="Last Name *" />
+                    <TextInput
+                      id="last_name"
+                      type="text"
+                      class="mt-1 block w-full"
+                      v-model="form.last_name"
+                      required
+                    />
+                    <InputError class="mt-2" :message="form.errors.last_name" />
+                  </div>
                 </div>
-                <div>
-                  <InputLabel for="middle_name" value="Middle Name" />
-                  <TextInput
-                    id="middle_name"
-                    type="text"
-                    class="mt-1 block w-full"
-                    v-model="form.middle_name"
-                  />
-                  <InputError class="mt-2" :message="form.errors.middle_name" />
-                </div>
-                <div>
-                  <InputLabel for="last_name" value="Last Name *" />
-                  <TextInput
-                    id="last_name"
-                    type="text"
-                    class="mt-1 block w-full"
-                    v-model="form.last_name"
-                    required
-                  />
-                  <InputError class="mt-2" :message="form.errors.last_name" />
-                </div>
-              </div>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                <div v-if="form.customer_category === 'company'">
+                <div class="mt-4" v-if="form.customer_category === 'company'">
                   <InputLabel for="company_name" value="Company Name *" />
                   <TextInput
                     id="company_name"
@@ -114,166 +115,160 @@
                   <InputError class="mt-2" :message="form.errors.company_name" />
                 </div>
               </div>
-            </div>
 
-            <!-- Contact Information Section -->
-            <div class="mb-8">
-              <h3 class="text-lg font-medium text-gray-900 mb-4 pb-2 border-b border-gray-200">
-                Contact Information
-              </h3>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <InputLabel for="email" value="Email *" />
-                  <TextInput
-                    id="email"
-                    type="email"
-                    class="mt-1 block w-full"
-                    v-model="form.email"
-                    required
-                  />
-                  <InputError class="mt-2" :message="form.errors.email" />
-                </div>
+              <!-- Contact Information Section -->
+              <div class="mb-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Contact Information</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <InputLabel for="email" value="Email *" />
+                    <TextInput
+                      id="email"
+                      type="email"
+                      class="mt-1 block w-full"
+                      v-model="form.email"
+                      required
+                    />
+                    <InputError class="mt-2" :message="form.errors.email" />
+                  </div>
 
-                <div>
-                  <InputLabel for="mobile" value="Mobile *" />
-                  <TextInput
-                    id="mobile"
-                    type="tel"
-                    class="mt-1 block w-full"
-                    v-model="form.mobile"
-                    required
-                  />
-                  <InputError class="mt-2" :message="form.errors.mobile" />
-                </div>
+                  <div>
+                    <InputLabel for="mobile" value="Mobile *" />
+                    <TextInput
+                      id="mobile"
+                      type="tel"
+                      class="mt-1 block w-full"
+                      v-model="form.mobile"
+                      required
+                    />
+                    <InputError class="mt-2" :message="form.errors.mobile" />
+                  </div>
 
-                <div>
-                  <InputLabel for="phone" value="Phone (Landline)" />
-                  <TextInput
-                    id="phone"
-                    type="tel"
-                    class="mt-1 block w-full"
-                    v-model="form.phone"
-                  />
-                  <InputError class="mt-2" :message="form.errors.phone" />
+                  <div>
+                    <InputLabel for="phone" value="Phone (Landline)" />
+                    <TextInput
+                      id="phone"
+                      type="tel"
+                      class="mt-1 block w-full"
+                      v-model="form.phone"
+                    />
+                    <InputError class="mt-2" :message="form.errors.phone" />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <!-- Address Information Section -->
-            <div class="mb-8">
-              <h3 class="text-lg font-medium text-gray-900 mb-4 pb-2 border-b border-gray-200">
-                Address Information
-              </h3>
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <InputLabel for="building_number" value="Building Number" />
-                  <TextInput
-                    id="building_number"
-                    type="text"
-                    class="mt-1 block w-full"
-                    v-model="form.building_number"
-                  />
-                  <InputError class="mt-2" :message="form.errors.building_number" />
-                </div>
+              <!-- Address Information Section -->
+              <div class="mb-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Address Information</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <InputLabel for="building_number" value="Building Number" />
+                    <TextInput
+                      id="building_number"
+                      type="text"
+                      class="mt-1 block w-full"
+                      v-model="form.building_number"
+                    />
+                    <InputError class="mt-2" :message="form.errors.building_number" />
+                  </div>
 
-                <div>
-                  <InputLabel for="street" value="Street" />
-                  <TextInput
-                    id="street"
-                    type="text"
-                    class="mt-1 block w-full"
-                    v-model="form.street"
-                  />
-                  <InputError class="mt-2" :message="form.errors.street" />
-                </div>
+                  <div>
+                    <InputLabel for="street" value="Street" />
+                    <TextInput
+                      id="street"
+                      type="text"
+                      class="mt-1 block w-full"
+                      v-model="form.street"
+                    />
+                    <InputError class="mt-2" :message="form.errors.street" />
+                  </div>
 
-                <div>
-                  <InputLabel for="barangay" value="Barangay" />
-                  <TextInput
-                    id="barangay"
-                    type="text"
-                    class="mt-1 block w-full"
-                    v-model="form.barangay"
-                  />
-                  <InputError class="mt-2" :message="form.errors.barangay" />
-                </div>
+                  <div>
+                    <InputLabel for="barangay" value="Barangay" />
+                    <TextInput
+                      id="barangay"
+                      type="text"
+                      class="mt-1 block w-full"
+                      v-model="form.barangay"
+                    />
+                    <InputError class="mt-2" :message="form.errors.barangay" />
+                  </div>
 
-                <div>
-                  <InputLabel for="city" value="City/Municipality" />
-                  <TextInput
-                    id="city"
-                    type="text"
-                    class="mt-1 block w-full"
-                    v-model="form.city"
-                  />
-                  <InputError class="mt-2" :message="form.errors.city" />
-                </div>
+                  <div>
+                    <InputLabel for="city" value="City/Municipality" />
+                    <TextInput
+                      id="city"
+                      type="text"
+                      class="mt-1 block w-full"
+                      v-model="form.city"
+                    />
+                    <InputError class="mt-2" :message="form.errors.city" />
+                  </div>
 
-                <div>
-                  <InputLabel for="province" value="Province" />
-                  <TextInput
-                    id="province"
-                    type="text"
-                    class="mt-1 block w-full"
-                    v-model="form.province"
-                  />
-                  <InputError class="mt-2" :message="form.errors.province" />
-                </div>
+                  <div>
+                    <InputLabel for="province" value="Province" />
+                    <TextInput
+                      id="province"
+                      type="text"
+                      class="mt-1 block w-full"
+                      v-model="form.province"
+                    />
+                    <InputError class="mt-2" :message="form.errors.province" />
+                  </div>
 
-                <div>
-                  <InputLabel for="zip_code" value="ZIP Code" />
-                  <TextInput
-                    id="zip_code"
-                    type="text"
-                    class="mt-1 block w-full"
-                    v-model="form.zip_code"
-                    maxlength="4"
-                  />
-                  <InputError class="mt-2" :message="form.errors.zip_code" />
+                  <div>
+                    <InputLabel for="zip_code" value="ZIP Code" />
+                    <TextInput
+                      id="zip_code"
+                      type="text"
+                      class="mt-1 block w-full"
+                      v-model="form.zip_code"
+                      maxlength="4"
+                    />
+                    <InputError class="mt-2" :message="form.errors.zip_code" />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <!-- Additional Information Section -->
-            <div class="mb-8">
-              <h3 class="text-lg font-medium text-gray-900 mb-4 pb-2 border-b border-gray-200">
-                Additional Information
-              </h3>
-              <div>
-                <InputLabel for="notes" value="Notes" />
-                <textarea
-                  id="notes"
-                  rows="3"
-                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  v-model="form.notes"
-                ></textarea>
-                <InputError class="mt-2" :message="form.errors.notes" />
+              <!-- Additional Information Section -->
+              <div class="mb-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Additional Information</h3>
+                <div>
+                  <InputLabel for="notes" value="Notes" />
+                  <textarea
+                    id="notes"
+                    rows="3"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    v-model="form.notes"
+                  ></textarea>
+                  <InputError class="mt-2" :message="form.errors.notes" />
+                </div>
               </div>
-            </div>
 
-            <div class="mt-6 flex justify-end space-x-4">
-              <SecondaryButton type="button" @click="showCancelModal = true">
-                Cancel
-              </SecondaryButton>
-              <PrimaryButton type="submit" :disabled="form.processing">
-                Update Customer
-              </PrimaryButton>
-            </div>
-          </form>
+              <div class="mt-6 flex justify-end space-x-3">
+                <SecondaryButton type="button" @click="showCancelModal = true">
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton type="submit" :disabled="form.processing">
+                  Update Customer
+                </PrimaryButton>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Cancel Confirmation Modal -->
     <Modal :show="showCancelModal" @close="showCancelModal = false">
-      <div class="p-6">
+      <div class="p-5">
         <h2 class="text-lg font-medium text-gray-900">
           Are you sure you want to discard changes?
         </h2>
         <p class="mt-1 text-sm text-gray-600">
           Any unsaved changes will be lost.
         </p>
-        <div class="mt-6 flex justify-end space-x-4">
+        <div class="mt-4 flex justify-end space-x-3">
           <SecondaryButton @click="showCancelModal = false">
             Continue Editing
           </SecondaryButton>
@@ -349,3 +344,16 @@ const handleDiscard = () => {
   router.visit(route('admin.customers.index'));
 };
 </script>
+
+<style scoped>
+.zoom-content {
+  zoom: 0.80;
+}
+
+/* Add tighter spacing for desktop */
+@media (min-width: 1024px) {
+  .zoom-content {
+    zoom: 0.90;
+  }
+}
+</style>

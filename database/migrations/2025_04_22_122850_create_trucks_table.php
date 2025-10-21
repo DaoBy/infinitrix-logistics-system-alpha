@@ -22,15 +22,18 @@ return new class extends Migration
             $table->decimal('current_weight', 10, 2)->default(0.00);
 
             // 🆕 Expanded status options
-            $table->enum('status', [
-                'available',
-                'nearly_full',
-                'assigned',
-                'in_transit',
-                'returning',
-                'maintenance',
-                'unavailable'
-            ])->default('available');
+        $table->enum('status', [
+            'available',
+            'available_for_backhaul', 
+            'nearly_full',
+            'assigned',
+            'in_transit',
+            'returning',
+            'maintenance',
+            'unavailable',
+            'cooldown' 
+
+        ])->default('available');
 
             $table->integer('year')->nullable();
             $table->string('vin')->nullable()->unique();

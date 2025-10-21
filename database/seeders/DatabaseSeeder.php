@@ -29,6 +29,7 @@ class DatabaseSeeder extends Seeder
             TruckSeeder::class,
             CustomerSeeder::class,
             RegionTravelDurationSeeder::class,
+                       // Region1ToRegion2ReadyOrdersSeeder::class,
             // DeliveryRequestSeeder::class,
         ]);
         

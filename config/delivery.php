@@ -30,7 +30,32 @@ return [
     |
     */
     'capacity_thresholds' => [
-        'warning' => 0.7, // 70% capacity
+        'warning' => 0.75, // 75% capacity
         'critical' => 0.9 // 90% capacity
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cooldown Settings
+    |--------------------------------------------------------------------------
+    |
+    | Settings for driver cooldown periods between assignments
+    |
+    */
+    'cooldown_hours' => env('DRIVER_COOLDOWN_HOURS', 4),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Backhaul Eligibility Settings
+    |--------------------------------------------------------------------------
+    |
+    | Requirements for a driver to be eligible for backhaul assignments
+    |
+    */
+    'backhaul_eligibility' => [
+        'require_package_verification' => true,
+        'require_different_region' => true,
+        'require_completed_deliveries' => true,
+        'cooldown_enabled' => true,
     ],
 ];

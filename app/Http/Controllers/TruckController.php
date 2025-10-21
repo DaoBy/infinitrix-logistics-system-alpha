@@ -53,39 +53,40 @@ class TruckController extends Controller
             }
         }
 
-        // Pagination
-        $trucks = $query->paginate(10)->through(function ($truck) {
-            return [
-                'id' => $truck->id,
-                'make' => $truck->make,
-                'model' => $truck->model,
-                'license_plate' => $truck->license_plate,
-                'volume_capacity' => $truck->volume_capacity,
-                'weight_capacity' => $truck->weight_capacity,
-                'current_volume' => $truck->current_volume,
-                'current_weight' => $truck->current_weight,
-                'status' => $truck->status,
-                'year' => $truck->year,
-                'vin' => $truck->vin,
-                'maintenance_count' => $truck->maintenance_count,
-                'last_maintenance_date' => $truck->maintenance->first()?->maintenance_date?->format('Y-m-d'),
-                'created_at' => $truck->created_at->format('Y-m-d H:i:s'),
-                'region' => $truck->region ? [
-                    'id' => $truck->region->id,
-                    'name' => $truck->region->name,
-                ] : null, // <-- Add this
-            ];
-        });
+          // Pagination
+    $trucks = $query->paginate(10)->through(function ($truck) {
+        return [
+            'id' => $truck->id,
+            'make' => $truck->make,
+            'model' => $truck->model,
+            'license_plate' => $truck->license_plate,
+            'volume_capacity' => $truck->volume_capacity,
+            'weight_capacity' => $truck->weight_capacity,
+            'current_volume' => $truck->current_volume,
+            'current_weight' => $truck->current_weight,
+            'status' => $truck->status,
+            'year' => $truck->year,
+            'vin' => $truck->vin,
+            'maintenance_count' => $truck->maintenance_count,
+            'last_maintenance_date' => $truck->maintenance->first()?->maintenance_date?->format('Y-m-d'),
+            'created_at' => $truck->created_at->format('Y-m-d H:i:s'),
+            'region' => $truck->region ? [
+                'id' => $truck->region->id,
+                'name' => $truck->region->name,
+                'color_hex' => $truck->region->color_hex, // <-- ADD THIS LINE
+            ] : null,
+        ];
+    });
 
-        return Inertia::render('Admin/Trucks/Index', [
-            'trucks' => $trucks,
-            'filters' => $request->only(['search', 'status']),
-            'sort_field' => $sortField,
-            'sort_direction' => $sortDirection,
-            'status' => session('status'),
-            'success' => session('success'),
-            'error' => session('error'),
-        ]);
+      return Inertia::render('Admin/Trucks/Index', [
+        'trucks' => $trucks,
+        'filters' => $request->only(['search', 'status']),
+        'sort_field' => $sortField,
+        'sort_direction' => $sortDirection,
+        'status' => session('status'),
+        'success' => session('success'),
+        'error' => session('error'),
+    ]);
     }
 
     public function create()
@@ -199,84 +200,87 @@ class TruckController extends Controller
         }
     }
 
-    public function archive(Truck $truck)
-    {
-        DB::transaction(function () use ($truck) {
-            $truck->update([
-                'is_active' => false,
-                'status' => 'under_repair',
-            ]);
-        });
-    
-        return redirect()->back()
-            ->with('success', 'Truck archived successfully');
-    }
-
-    public function restore(Truck $truck)
-    {
-        DB::transaction(function () use ($truck) {
-            $truck->update([
-                'is_active' => true,
-                'status' => Truck::STATUS_AVAILABLE, // Changed from 'available' to constant
-            ]);
-        });
-    
-        return redirect()->back()
-            ->with('success', 'Truck restored successfully');
-    }
-
-    public function archived(Request $request)
-    {
-        $query = Truck::query()
-            ->where('is_active', false)
-            ->with(['maintenance' => fn($q) => $q->latest()->take(1)])
-            ->withCount('maintenance');
-
-        // Search filter
-        if ($request->has('search') && $request->search) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('make', 'like', "%{$search}%")
-                  ->orWhere('model', 'like', "%{$search}%")
-                  ->orWhere('license_plate', 'like', "%{$search}%")
-                  ->orWhere('vin', 'like', "%{$search}%");
-            });
-        }
-
-        // Status filter
-        if ($request->has('status') && $request->status) {
-            $query->where('status', $request->status);
-        }
-
-        // Sorting
-        $sortField = $request->get('sort_field', 'archived_at');
-        $sortDirection = $request->get('sort_direction', 'desc');
-        
-        if (in_array($sortField, ['make', 'model', 'license_plate', 'status', 'archived_at'])) {
-            $query->orderBy($sortField, $sortDirection);
-        }
-
-        $trucks = $query->paginate(10)->through(function ($truck) {
-            return [
-                'id' => $truck->id,
-                'make' => $truck->make,
-                'model' => $truck->model,
-                'license_plate' => $truck->license_plate,
-                'status' => $truck->status,
-                'maintenance_count' => $truck->maintenance_count,
-                'last_maintenance_date' => $truck->maintenance->first()?->maintenance_date?->format('Y-m-d'),
-                'created_at' => $truck->created_at->format('Y-m-d '),
-                'archived_at' => $truck->updated_at->format('Y-m-d '), 
-            ];
-        });
-
-        return Inertia::render('Admin/Trucks/Archived', [
-            'trucks' => $trucks,
-            'filters' => $request->only(['search', 'status']),
-            'sort_field' => $sortField,
-            'sort_direction' => $sortDirection,
+   public function archive(Truck $truck)
+{
+    DB::transaction(function () use ($truck) {
+        $truck->update([
+            'is_active' => false,
+            'status' => Truck::STATUS_UNAVAILABLE, // Use unavailable status for archived trucks
         ]);
+    });
+
+    return redirect()->back()
+        ->with('success', 'Truck archived successfully');
+}
+
+public function restore(Truck $truck)
+{
+    DB::transaction(function () use ($truck) {
+        $truck->update([
+            'is_active' => true,
+            'status' => Truck::STATUS_AVAILABLE, // Use the constant
+        ]);
+    });
+
+    return redirect()->back()
+        ->with('success', 'Truck restored successfully');
+}
+
+   public function archived(Request $request)
+{
+    $query = Truck::query()
+        ->where('is_active', false)
+        ->with(['maintenance' => fn($q) => $q->latest()->take(1), 'region']) // Add region relationship
+        ->withCount('maintenance');
+
+    // Search filter
+    if ($request->has('search') && $request->search) {
+        $search = $request->search;
+        $query->where(function($q) use ($search) {
+            $q->where('make', 'like', "%{$search}%")
+              ->orWhere('model', 'like', "%{$search}%")
+              ->orWhere('license_plate', 'like', "%{$search}%")
+              ->orWhere('vin', 'like', "%{$search}%");
+        });
     }
+
+    // Sorting
+    $sortField = $request->get('sort_field', 'updated_at');
+    $sortDirection = $request->get('sort_direction', 'desc');
+    
+    if (in_array($sortField, ['make', 'model', 'license_plate', 'status', 'updated_at'])) {
+        $query->orderBy($sortField, $sortDirection);
+    }
+
+    $trucks = $query->paginate(10)->through(function ($truck) {
+        return [
+            'id' => $truck->id,
+            'make' => $truck->make,
+            'model' => $truck->model,
+            'license_plate' => $truck->license_plate,
+            'status' => $truck->status,
+            'maintenance_count' => $truck->maintenance_count,
+            'last_maintenance_date' => $truck->maintenance->first()?->maintenance_date?->format('Y-m-d'),
+            'created_at' => $truck->created_at->format('Y-m-d'),
+            'archived_at' => $truck->updated_at->format('Y-m-d'), // Use updated_at when archived
+            'region' => $truck->region ? [ // Add region data
+                'id' => $truck->region->id,
+                'name' => $truck->region->name,
+                'color_hex' => $truck->region->color_hex,
+            ] : null,
+        ];
+    });
+
+    return Inertia::render('Admin/Trucks/Archived', [
+        'trucks' => $trucks,
+        'filters' => $request->only(['search']), // Remove status filter
+        'sort_field' => $sortField,
+        'sort_direction' => $sortDirection,
+        'status' => session('status'),
+        'success' => session('success'),
+        'error' => session('error'),
+    ]);
+}
 
     public function destroy(Truck $truck)
     {

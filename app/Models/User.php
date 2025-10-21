@@ -8,6 +8,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class User extends Authenticatable
 {
@@ -23,7 +24,8 @@ class User extends Authenticatable
         'last_region_update',
         'pending_email',
         'email_change_verification_code',
-        'email_change_verification_code_expires_at'
+        'email_change_verification_code_expires_at',
+        'last_assigned_at',
     ];
 
     protected $hidden = [
@@ -35,6 +37,7 @@ class User extends Authenticatable
         'is_active' => 'boolean',
         'email_verified_at' => 'datetime',
         'last_region_update' => 'datetime',
+        'last_assigned_at' => 'datetime',
     ];
 
     protected static function boot()
@@ -48,6 +51,17 @@ class User extends Authenticatable
         });
     }
 
+    public function region()
+{
+    return $this->hasOneThrough(
+        Region::class,
+        EmployeeProfile::class,
+        'user_id', // Foreign key on EmployeeProfile table
+        'id', // Foreign key on Region table  
+        'id', // Local key on User table
+        'region_id' // Local key on EmployeeProfile table
+    );
+}
     protected static function booted()
     {
         static::retrieved(function ($user) {
@@ -63,6 +77,14 @@ class User extends Authenticatable
                     $user->save();
                 }
             }
+            
+            // Process automatic transitions for driver assignments on retrieval
+            if ($user->role === 'driver') {
+                $assignment = $user->currentTruckAssignment;
+                if ($assignment) {
+                    $assignment->processAutomaticTransitions();
+                }
+            }
         });
     }
 
@@ -73,10 +95,42 @@ class User extends Authenticatable
     }
 
     public function currentTruckAssignment()
+{
+    return $this->hasOne(DriverTruckAssignment::class, 'driver_id')
+        ->where('is_active', true)
+        ->notDeleted();
+}
+
+    // NEW: Get driver's current assignment with status
+    public function getCurrentAssignmentAttribute()
     {
-        return $this->hasOne(DriverTruckAssignment::class, 'driver_id')
-            ->where('is_active', true)
-            ->latest();
+        return $this->currentTruckAssignment;
+    }
+
+    // NEW: Check if driver is available for backhaul (automated)
+    public function isAvailableForBackhaul(): bool
+    {
+        $assignment = $this->currentTruckAssignment;
+        return $assignment && $assignment->isEligibleForBackhaul();
+    }
+
+    // NEW: Check if driver is in cooldown period
+    public function isInCooldown(): bool
+    {
+        $assignment = $this->currentTruckAssignment;
+        return $assignment && $assignment->current_status === \App\Models\DriverTruckAssignment::STATUS_COOLDOWN;
+    }
+
+    // NEW: Check if driver is eligible for backhaul (all packages delivered and verified)
+    public function isEligibleForBackhaul(): bool
+    {
+        $assignment = $this->currentTruckAssignment;
+        if (!$assignment) return false;
+        
+        // Process automatic transitions first
+        $assignment->processAutomaticTransitions();
+        
+        return $assignment->current_status === \App\Models\DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE;
     }
 
     // Add to methods
@@ -203,12 +257,67 @@ class User extends Authenticatable
     }
 
     public function notifications()
-{
-    return $this->hasMany(Notification::class);
-}
+    {
+        return $this->hasMany(Notification::class);
+    }
 
     public function sendEmailVerificationNotification()
-{
-    $this->notify(new \App\Notifications\CustomVerifyEmail);
-}
+    {
+        $this->notify(new \App\Notifications\CustomVerifyEmail);
+    }
+
+    // NEW: Get all undelivered packages for this driver
+    public function getUndeliveredPackagesCount(): int
+    {
+        return Package::whereHas('deliveryRequest.deliveryOrder', function($query) {
+                $query->where('driver_id', $this->id)
+                      ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
+            })
+            ->whereNotIn('status', ['delivered', 'completed', 'returned'])
+            ->count();
+    }
+
+    // NEW: Check if all packages are delivered (for backhaul eligibility)
+    public function allPackagesDelivered(): bool
+    {
+        return $this->getUndeliveredPackagesCount() === 0;
+    }
+
+    // NEW: Check if driver is returning to base
+    public function isReturning(): bool
+    {
+        $assignment = $this->currentTruckAssignment;
+        return $assignment && $assignment->current_status === \App\Models\DriverTruckAssignment::STATUS_RETURNING;
+    }
+
+    // NEW: Check if driver has active assignment
+    public function hasActiveAssignment(): bool
+    {
+        return $this->currentTruckAssignment !== null;
+    }
+
+    // NEW: Get driver's home region from assignment
+    public function getHomeRegionAttribute()
+    {
+        $assignment = $this->currentTruckAssignment;
+        return $assignment ? $assignment->region : null;
+    }
+
+    // NEW: Check if driver can skip cooldown (Option A)
+    public function canSkipCooldown(): bool
+    {
+        $assignment = $this->currentTruckAssignment;
+        return $assignment && $assignment->current_status === \App\Models\DriverTruckAssignment::STATUS_COOLDOWN;
+    }
+
+    // NEW: Check if driver can return without backhaul (Option B)
+    public function canReturnWithoutBackhaul(): bool
+    {
+        $assignment = $this->currentTruckAssignment;
+        return $assignment && in_array($assignment->current_status, [
+            \App\Models\DriverTruckAssignment::STATUS_ACTIVE,
+            \App\Models\DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE,
+            \App\Models\DriverTruckAssignment::STATUS_COOLDOWN
+        ]);
+    }
 }

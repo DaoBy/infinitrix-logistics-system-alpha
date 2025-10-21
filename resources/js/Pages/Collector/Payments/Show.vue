@@ -134,7 +134,33 @@
         </div>
       </div>
     </div>
-
+<div v-if="payment.rejected_by" class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg p-4 mb-6">
+  <div class="flex items-center">
+    <ExclamationTriangleIcon class="h-5 w-5 text-red-400 mr-2" />
+    <div class="flex-1">
+      <h3 class="text-lg font-medium text-red-800 dark:text-red-200">Payment Rejected</h3>
+      <p class="text-red-700 dark:text-red-300">
+        This payment was rejected and needs to be resubmitted.
+      </p>
+      <div v-if="payment.rejection_reason" class="mt-2 p-3 bg-red-100 dark:bg-red-800/50 rounded">
+        <p class="text-sm font-medium text-red-800 dark:text-red-200">Rejection Reason:</p>
+        <p class="text-red-700 dark:text-red-300">{{ payment.rejection_reason }}</p>
+      </div>
+      <div class="mt-3 flex items-center gap-4 text-sm text-red-700 dark:text-red-300">
+        <span>Rejected by: {{ payment.rejected_by?.name }}</span>
+        <span>|</span>
+        <span>Rejected at: {{ formatDateTime(payment.rejected_at) }}</span>
+      </div>
+    </div>
+    <PrimaryButton
+      v-if="!payment.verified_by && payment.rejected_by"
+      @click="resubmitPayment"
+      class="bg-orange-600 hover:bg-orange-700"
+    >
+      Resubmit Payment
+    </PrimaryButton>
+  </div>
+</div>
     <!-- Delete Confirmation Modal -->
     <v-dialog v-model="deleteDialog" max-width="500">
       <v-card>
@@ -171,6 +197,13 @@ const deleteDialog = ref(false);
 
 const confirmDelete = () => {
   deleteDialog.value = true;
+};
+
+const resubmitPayment = () => {
+  router.visit(route('collector.payments.resubmit', {
+    delivery: props.payment.delivery_request_id,
+    payment: props.payment.id
+  }));
 };
 
 const deletePayment = () => {

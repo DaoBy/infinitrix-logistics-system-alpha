@@ -1,11 +1,19 @@
 <template>
   <EmployeeLayout>
     <template #header>
-      <div class="flex justify-between items-center px-6">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">
-          Components - {{ truck.make }} {{ truck.model }} ({{ truck.license_plate }})
-        </h2>
-        <div class="flex space-x-2">
+      <div class="flex justify-between items-center w-full px-6 md:px-8">
+        <!-- Left: Title & Subtitle -->
+        <div>
+          <h2 class="text-xl font-semibold leading-tight text-gray-800">
+            Components - {{ truck.make }} {{ truck.model }} ({{ truck.license_plate }})
+          </h2>
+          <p class="mt-1 text-sm text-gray-500">
+            Manage truck components and their maintenance
+          </p>
+        </div>
+
+        <!-- Right: Buttons -->
+        <div class="flex gap-2">
           <SecondaryButton @click="router.get(route('admin.trucks.show', truck.id))">
             Back to Truck
           </SecondaryButton>
@@ -16,57 +24,92 @@
       </div>
     </template>
 
+    <!-- ZOOM CONTENT WRAPPER -->
+    <div class="zoom-content">
+      <!-- MAIN CONTENT CONTAINER WITH PROPER PADDING -->
+      <div class="px-6 py-4">
+        <div v-if="status || success || error" class="mb-4">
+          <div v-if="status" class="p-3 bg-blue-100 text-blue-800 rounded">{{ status }}</div>
+          <div v-if="success" class="p-3 bg-green-100 text-green-800 rounded">{{ success }}</div>
+          <div v-if="error" class="p-3 bg-red-100 text-red-800 rounded">{{ error }}</div>
+        </div>
 
-    <div class="px-6 sm:px-8">
-      <div v-if="status || success || error" class="mb-6">
-        <div v-if="status" class="p-4 bg-blue-100 text-blue-800 rounded">{{ status }}</div>
-        <div v-if="success" class="p-4 bg-green-100 text-green-800 rounded">{{ success }}</div>
-        <div v-if="error" class="p-4 bg-red-100 text-red-800 rounded">{{ error }}</div>
-      </div>
-
-      <DataTable
-        :columns="columns"
-        :data="components"
-        class="w-full"
-      >
-        <template #name="{ row }">
-          <span class="truncate block">{{ row.name || 'N/A' }}</span>
-        </template>
-        <template #type="{ row }">
-          <span class="truncate block capitalize">{{ row.type.replace('_', ' ') || 'N/A' }}</span>
-        </template>
-        <template #condition="{ row }">
-          <span 
-            class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full capitalize"
-            :class="conditionClasses[row.condition]"
-          >
-            {{ conditionLabels[row.condition] }}
-          </span>
-        </template>
-        <template #installation_date="{ row }">
-          {{ formatDate(row.installation_date) || 'N/A' }}
-        </template>
-        <template #actions="{ row }">
-          <div class="flex space-x-2">
-            <SecondaryButton @click="viewComponent(row.id)">View</SecondaryButton>
-            <PrimaryButton @click="editComponent(row.id)">Edit</PrimaryButton>
-            <DangerButton @click="confirmDeleteComponent(row)">Delete</DangerButton>
+        <!-- Results Counter -->
+        <div class="mb-4 flex justify-between items-center">
+          <div class="text-sm text-gray-500 bg-blue-50 px-3 py-1 rounded border border-blue-100">
+            📋 Showing {{ components.length }} {{ components.length === 1 ? 'component' : 'components' }}
           </div>
-        </template>
-      </DataTable>
+        </div>
+
+        <!-- Data Table Container -->
+        <div class="justify-center flex items-center">
+          <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg w-full max-w-[95vw]">
+            <div class="p-4 bg-white border-b border-gray-200">
+              <DataTable
+                :columns="columns"
+                :data="components"
+                class="w-full"
+              >
+                <template #name="{ row }">
+                  <span class="font-medium text-gray-900">{{ row.name || 'N/A' }}</span>
+                </template>
+                <template #type="{ row }">
+                  <span class="text-gray-700 capitalize">{{ row.type.replace('_', ' ') || 'N/A' }}</span>
+                </template>
+                <template #serial_number="{ row }">
+                  <span class="text-gray-700">{{ row.serial_number || 'N/A' }}</span>
+                </template>
+                <template #condition="{ row }">
+                  <span 
+                    class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full capitalize"
+                    :class="conditionClasses[row.condition]"
+                  >
+                    {{ conditionLabels[row.condition] }}
+                  </span>
+                </template>
+                <template #installation_date="{ row }">
+                  <span class="text-gray-600">{{ formatDate(row.installation_date) || 'N/A' }}</span>
+                </template>
+                <template #actions="{ row }">
+                  <div class="flex space-x-2">
+                    <SecondaryButton @click="viewComponent(row.id)" class="text-xs py-1 px-2">View</SecondaryButton>
+                    <PrimaryButton @click="editComponent(row.id)" class="text-xs py-1 px-2">Edit</PrimaryButton>
+                    <DangerButton @click="confirmDeleteComponent(row)" class="text-xs py-1 px-2">Delete</DangerButton>
+                  </div>
+                </template>
+                
+                <!-- Empty State Slot -->
+                <template #empty>
+                  <div class="text-center py-8">
+                    <div class="bg-gray-50 rounded-lg p-6 max-w-md mx-auto">
+                      <CogIcon class="h-10 w-10 text-gray-400 mx-auto mb-3" />
+                      <h3 class="text-lg font-medium text-gray-900 mb-2">No components found</h3>
+                      <p class="text-gray-500 mb-3">
+                        Get started by adding your first component
+                      </p>
+                      <PrimaryButton @click="createComponent">Add New Component</PrimaryButton>
+                    </div>
+                  </div>
+                </template>
+              </DataTable>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
+    <!-- Delete Confirmation Modal -->
     <Modal :show="showDeleteModal" @close="closeDeleteModal">
-      <div class="p-6">
+      <div class="p-5">
         <h2 class="text-lg font-medium text-gray-900">Delete Component?</h2>
         <p class="mt-1 text-sm text-gray-600">
           Are you sure you want to delete <strong>{{ componentToDelete?.name }}</strong>?
           This action cannot be undone.
         </p>
-        <div class="mt-6 flex justify-end space-x-4">
+        <div class="mt-4 flex justify-end space-x-3">
           <SecondaryButton @click="closeDeleteModal">Cancel</SecondaryButton>
           <DangerButton @click="handleDelete" :disabled="isDeleting">
-            <span v-if="isDeleting">Deleting...</span>
+            <span v-if="isDeleting">Processing...</span>
             <span v-else>Delete</span>
           </DangerButton>
         </div>
@@ -84,30 +127,22 @@ import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 import DataTable from '@/Components/DataTable.vue';
 import Modal from '@/Components/Modal.vue';
+import { CogIcon } from '@heroicons/vue/24/outline';
 
 const props = defineProps({
-  truck: {
-    type: Object,
-    required: true
-  },
-  components: {
-    type: Array,
-    default: () => []
-  },
-  status: {
-    type: String,
-    default: ''
-  },
-  success: {
-    type: String,
-    default: ''
-  },
-  error: {
-    type: String,
-    default: ''
-  },
+  truck: Object,
+  components: Array,
+  status: String,
+  success: String,
+  error: String,
 });
 
+// State
+const showDeleteModal = ref(false);
+const componentToDelete = ref(null);
+const isDeleting = ref(false);
+
+// Constants
 const columns = [
   { field: 'name', header: 'Name', sortable: true },
   { field: 'type', header: 'Type', sortable: true },
@@ -133,10 +168,7 @@ const conditionClasses = {
   needs_replacement: 'bg-red-100 text-red-800'
 };
 
-const showDeleteModal = ref(false);
-const componentToDelete = ref(null);
-const isDeleting = ref(false);
-
+// Methods
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A';
   return new Date(dateString).toLocaleDateString();
@@ -167,10 +199,8 @@ const confirmDeleteComponent = (component) => {
 
 const closeDeleteModal = () => {
   showDeleteModal.value = false;
-  setTimeout(() => {
-    componentToDelete.value = null;
-    isDeleting.value = false;
-  }, 300);
+  componentToDelete.value = null;
+  isDeleting.value = false;
 };
 
 const handleDelete = async () => {
@@ -192,3 +222,33 @@ const handleDelete = async () => {
   }
 };
 </script>
+
+<style scoped>
+.zoom-content {
+  zoom: 0.80;
+}
+
+/* DataTable styling adjustments */
+:deep(.datatable-table) {
+  width: 100%;
+}
+
+/* Reduce table row padding for more compact rows */
+:deep(.datatable-table td) {
+  padding-top: 0.375rem !important;
+  padding-bottom: 0.375rem !important;
+}
+
+/* Reduce table header padding */
+:deep(.datatable-table th) {
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+  font-size: 0.875rem !important;
+}
+
+/* Reduce button sizes in the table */
+:deep(.datatable-table .btn) {
+  padding: 0.25rem 0.5rem !important;
+  font-size: 0.75rem !important;
+}
+</style>

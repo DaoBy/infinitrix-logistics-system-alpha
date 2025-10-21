@@ -34,7 +34,7 @@ class RequestApprovalController extends Controller
             ->latest()
             ->get()
             ->map(function ($delivery) {
-                return $this->formatDeliveryRequest($delivery, true); // <-- add true here
+                return $this->formatDeliveryRequest($delivery, true);
             });
 
         return Inertia::render('Admin/Deliveries/ApprovedRequest', [
@@ -43,7 +43,7 @@ class RequestApprovalController extends Controller
         ]);
     }
 
-    public function pending(Request $request)
+   public function pending(Request $request)
     {
         // Gate::authorize('view-pending-requests');
         
@@ -70,6 +70,10 @@ class RequestApprovalController extends Controller
             $query->where('payment_method', $request->payment_method);
         }
 
+        if ($request->payment_type) {
+            $query->where('payment_type', $request->payment_type);
+        }
+
         // Apply date filters
         if ($request->date_range) {
             $query = $this->applyDateFilter($query, $request->date_range);
@@ -80,12 +84,12 @@ class RequestApprovalController extends Controller
         return Inertia::render('Admin/Deliveries/PendingRequests', [
             'requests' => $requests->map(fn($request) => $this->formatDeliveryRequest($request)),
             'pagination' => $requests->only(['current_page', 'last_page', 'per_page', 'total']),
-            'filters' => $request->only(['search', 'payment_method', 'date_range']),
+            'filters' => $request->only(['search', 'payment_method', 'payment_type', 'date_range']),
             'status' => session('status'),
         ]);
     }
 
-    public function rejected()
+  public function rejected()
     {
         // Gate::authorize('view-rejected-requests');
         
@@ -101,7 +105,7 @@ class RequestApprovalController extends Controller
         ]);
     }
 
-    public function show(DeliveryRequest $delivery)
+   public function show(DeliveryRequest $delivery)
     {
         // Gate::authorize('view-delivery-request', $delivery);
 
@@ -125,8 +129,8 @@ class RequestApprovalController extends Controller
             return [
                 ...$package->toArray(),
                 'status_history' => $package->statusHistory,
-                'photo_path' => $package->photo_path,
-                'photo_url' => $package->photo_path ? asset('storage/' . $package->photo_path) : null,
+                'photo_path' => $package->photo_path, // This is now always an array
+                'photo_url' => $package->photo_url, 
             ];
         });
 
@@ -370,8 +374,19 @@ public function approve(DeliveryRequest $delivery)
         // Always generate reference number on approval
         $referenceNumber = $delivery->generateReferenceNumber();
 
-        // Update all associated packages to 'preparing'
-        $delivery->packages()->update(['status' => 'preparing']);
+        // ✅ ENHANCED: Update packages with status history logging
+        $delivery->packages()->each(function($package) {
+            $package->update([
+                'status' => 'preparing'
+            ]);
+            
+            // Log the status change in package_status_history
+            $package->statusHistory()->create([
+                'status' => 'preparing',
+                'remarks' => 'Delivery request approved - package ready for processing',
+                'updated_by' => auth()->id() // Staff who approved
+            ]);
+        });
 
         // Create the delivery order if not exists
         if (!$delivery->deliveryOrder) {
@@ -446,7 +461,7 @@ public function approve(DeliveryRequest $delivery)
 
     // Helper Methods
     
-    protected function formatDeliveryRequest(DeliveryRequest $delivery, bool $detailed = false): array
+  protected function formatDeliveryRequest(DeliveryRequest $delivery, bool $detailed = false): array
     {
         $data = [
             'id' => $delivery->id,
@@ -455,13 +470,17 @@ public function approve(DeliveryRequest $delivery)
             'receiver' => $delivery->receiver->name ?? $delivery->receiver->company_name,
             'pick_up_region' => $delivery->pickUpRegion->name ?? 'N/A',
             'drop_off_region' => $delivery->dropOffRegion->name ?? 'N/A',
+            'pick_up_region_color' => $delivery->pickUpRegion->color_hex ?? null, // <-- ADD THIS
+            'drop_off_region_color' => $delivery->dropOffRegion->color_hex ?? null, // <-- ADD THIS
             'status' => $delivery->status,
             'total_price' => (float) $delivery->total_price,
             'payment_method' => $delivery->payment_method,
-            'payment_terms' => $delivery->payment_terms, // <-- Add this
-            'payment_due_date' => $delivery->payment_due_date, // <-- Add this
+            'payment_type' => $delivery->payment_type, // <-- ADD THIS
+            'payment_terms' => $delivery->payment_terms,
+            'payment_due_date' => $delivery->payment_due_date,
             'created_at' => $delivery->created_at->format('Y-m-d H:i'),
             'package_count' => $delivery->packages->count(),
+            'has_order' => $delivery->deliveryOrder()->exists(), // For assignment button
         ];
 
         if ($detailed) {
@@ -471,6 +490,10 @@ public function approve(DeliveryRequest $delivery)
                 'rejected_at' => optional($delivery->rejected_at)->format('Y-m-d H:i'),
                 'rejected_by' => $delivery->rejectedBy?->name ?? null,
                 'rejection_reason' => $delivery->rejection_reason,
+                'deliveryOrder' => $delivery->deliveryOrder ? [
+                    'id' => $delivery->deliveryOrder->id,
+                    'status' => $delivery->deliveryOrder->status,
+                ] : null,
             ];
         }
 

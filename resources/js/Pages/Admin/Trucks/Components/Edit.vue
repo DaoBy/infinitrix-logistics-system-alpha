@@ -1,11 +1,19 @@
 <template>
   <EmployeeLayout>
     <template #header>
-      <div class="flex justify-between items-center">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">
-          Edit Component - {{ component.name }}
-        </h2>
-        <div class="flex space-x-2">
+      <div class="flex justify-between items-center w-full px-6 md:px-8">
+        <!-- Left: Title & Subtitle -->
+        <div>
+          <h2 class="text-xl font-semibold leading-tight text-gray-800">
+            Edit Component - {{ component.name }}
+          </h2>
+          <p class="mt-1 text-sm text-gray-500">
+            Update component information and details
+          </p>
+        </div>
+
+        <!-- Right: Buttons -->
+        <div class="flex gap-2">
           <SecondaryButton @click="router.get(route('admin.trucks.components.index', truck.id))">
             Back to Components
           </SecondaryButton>
@@ -13,18 +21,14 @@
       </div>
     </template>
 
-    <div class="py-6">
-      <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
-        <div v-if="status || success || error" class="mb-6">
-          <div v-if="status" class="p-4 bg-blue-100 text-blue-800 rounded">
-            {{ status }}
-          </div>
-          <div v-if="success" class="p-4 bg-green-100 text-green-800 rounded">
-            {{ success }}
-          </div>
-          <div v-if="error" class="p-4 bg-red-100 text-red-800 rounded">
-            {{ error }}
-          </div>
+    <!-- ZOOM CONTENT WRAPPER -->
+    <div class="zoom-content">
+      <!-- MAIN CONTENT CONTAINER WITH PROPER PADDING -->
+      <div class="px-6 py-4">
+        <div v-if="status || success || error" class="mb-4">
+          <div v-if="status" class="p-3 bg-blue-100 text-blue-800 rounded">{{ status }}</div>
+          <div v-if="success" class="p-3 bg-green-100 text-green-800 rounded">{{ success }}</div>
+          <div v-if="error" class="p-3 bg-red-100 text-red-800 rounded">{{ error }}</div>
         </div>
 
         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
@@ -46,13 +50,13 @@
                 <div>
                   <InputLabel for="type" value="Type *" />
                   <SelectInput
-                 id="type"
-                v-model="form.type"
-                :options="componentTypes"
-                option-value="key"
-                option-label="value"
-                class="mt-1 block w-full"
-                required
+                    id="type"
+                    v-model="form.type"
+                    :options="componentTypes"
+                    option-value="key"
+                    option-label="text"
+                    class="mt-1 block w-full"
+                    required
                   />
                   <InputError class="mt-2" :message="form.errors.type" />
                 </div>
@@ -82,13 +86,13 @@
                 <div>
                   <InputLabel for="condition" value="Condition *" />
                   <SelectInput
-                       id="condition"
-                        v-model="form.condition"
-                        :options="conditionOptions"
-                        option-value="key"
-                        option-label="value"
-                        class="mt-1 block w-full"
-                        required
+                    id="condition"
+                    v-model="form.condition"
+                    :options="conditionOptions"
+                    option-value="key"
+                    option-label="text"
+                    class="mt-1 block w-full"
+                    required
                   />
                   <InputError class="mt-2" :message="form.errors.condition" />
                 </div>
@@ -105,12 +109,13 @@
                 </div>
               </div>
 
-              <div class="mt-6 flex justify-end space-x-4">
+              <div class="mt-6 flex justify-end space-x-3">
                 <SecondaryButton type="button" @click="router.get(route('admin.trucks.components.index', truck.id))">
                   Cancel
                 </SecondaryButton>
                 <PrimaryButton type="submit" :disabled="form.processing">
-                  Update Component
+                  <span v-if="form.processing">Updating...</span>
+                  <span v-else>Update Component</span>
                 </PrimaryButton>
               </div>
             </form>
@@ -122,6 +127,7 @@
 </template>
 
 <script setup>
+import { useForm } from '@inertiajs/vue3';
 import EmployeeLayout from '@/Layouts/EmployeeLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -130,7 +136,6 @@ import TextInput from '@/Components/TextInput.vue';
 import SelectInput from '@/Components/SelectInput.vue';
 import TextArea from '@/Components/TextArea.vue';
 import InputError from '@/Components/InputError.vue';
-import { useForm } from '@inertiajs/vue3';
 import { router } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -142,6 +147,17 @@ const props = defineProps({
   success: String,
   error: String,
 });
+
+// Format the options to match backend format and capitalize display text
+const componentTypes = props.componentTypes.map(option => ({
+  key: option.value, // Use 'value' as 'key' (this is the actual value sent to backend)
+  text: option.text.replace(/\b\w/g, char => char.toUpperCase()) // Capitalize display text
+}));
+
+const conditionOptions = props.conditionOptions.map(option => ({
+  key: option.value, // Use 'value' as 'key' (this is the actual value sent to backend)
+  text: option.text.replace(/\b\w/g, char => char.toUpperCase()) // Capitalize display text
+}));
 
 const form = useForm({
   name: props.component.name,
@@ -161,3 +177,9 @@ const submit = () => {
   });
 };
 </script>
+
+<style scoped>
+.zoom-content {
+  zoom: 0.80;
+}
+</style>

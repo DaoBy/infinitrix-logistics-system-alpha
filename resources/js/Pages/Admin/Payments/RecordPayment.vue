@@ -8,7 +8,7 @@
           </h2>
           <p class="text-sm text-gray-600 mt-1">Process over-the-counter cash payments</p>
         </div>
-        <Link :href="route('staff.payments.index')">
+        <Link :href="route('staff.payments.dashboard')">  
           <SecondaryButton>← Back to Payments</SecondaryButton>
         </Link>
       </div>
@@ -298,10 +298,10 @@
         <h3 class="mt-4 text-lg font-medium text-gray-900">No Delivery Selected</h3>
         <p class="mt-2 text-sm text-gray-500">Please go back to the payments page and select a delivery to record payment.</p>
         <div class="mt-6">
-          <Link :href="route('staff.payments.index')">
-            <PrimaryButton class="px-4 py-2">
-              ← Back to Payments
-            </PrimaryButton>
+             <Link :href="route('staff.payments.dashboard')">  
+          <PrimaryButton class="px-4 py-2">
+            ← Back to Payments
+          </PrimaryButton>
           </Link>
         </div>
       </div>
@@ -400,9 +400,8 @@ const resetForm = () => {
 
 const submit = () => {
   if (!props.delivery) return;
-  // Ensure we're sending the correct amount (total due, not amount received)
   form.amount = parseFloat(props.delivery.total_price || 0);
-  form.post(route('staff.payments.store', props.delivery.id), {
+  form.post(route('staff.payments.store'), { 
     onSuccess: () => {
       form.reset();
     }

@@ -24,65 +24,59 @@ const packageStep = ref(1);
 
 // HARDCODED PICKUP REGIONS (Easily editable)
 const PICKUP_REGIONS = [
-  { value: 1, label: 'Metro Manila' },
-  { value: 2, label: 'Cebu City' }
+  { value: 1, label: ' Manila' },
+  { value: 2, label: 'Legazpi' }
 ];
 
-// Container Presets
+// Container Presets with corrected dimension display (Length × Height × Width)
+// Update containerPresets array:
 const containerPresets = [
   {
-    label: 'Small Pouch (25x15x1 cm, max 0.5kg)',
+    label: 'Small Pouch (L 25cm × H 1cm × W 15cm)',
     value: 'small_pouch',
-    dimensions: { height: 1, width: 15, length: 25 },
-    weight: 0.5,
-    category: 'piece', // <-- FIXED
+    dimensions: { length: 25, height: 1, width: 15 },
+    category: 'piece',
     image: '/images/presets/small_pouch.png'
   },
   {
-    label: 'Medium Box (30x25x20 cm, max 5kg)',
+    label: 'Medium Box (L 30cm × H 20cm × W 25cm)',
     value: 'medium_box',
-    dimensions: { height: 20, width: 25, length: 30 },
-    weight: 5,
+    dimensions: { length: 30, height: 20, width: 25 },
     category: 'carton',
     image: '/images/presets/medium_box.png'
   },
   {
-    label: 'Large Box (50x40x35 cm, max 10kg)',
+    label: 'Large Box (L 50cm × H 35cm × W 40cm)',
     value: 'large_box',
-    dimensions: { height: 35, width: 40, length: 50 },
-    weight: 10,
+    dimensions: { length: 50, height: 35, width: 40 },
     category: 'carton',
     image: '/images/presets/large_box.png'
   },
   {
-    label: 'Extra Large Box (70x50x50 cm, max 15kg)',
+    label: 'Extra Large Box (L 70cm × H 50cm × W 50cm)',
     value: 'xl_box',
-    dimensions: { height: 50, width: 50, length: 70 },
-    weight: 15,
+    dimensions: { length: 70, height: 50, width: 50 },
     category: 'carton',
     image: '/images/presets/xl_box.png'
   },
   {
-    label: 'Large Sack (60x40x40 cm, max 20kg)',
+    label: 'Large Sack (L 60cm × H 40cm × W 40cm)',
     value: 'large_sack',
-    dimensions: { height: 40, width: 40, length: 60 },
-    weight: 20,
+    dimensions: { length: 60, height: 40, width: 40 },
     category: 'sack',
     image: '/images/presets/large_sack.png'
   },
   {
-    label: 'Standard Roll (50x10x10 cm, max 1.5kg)',
+    label: 'Standard Roll (L 50cm × H 10cm × W 10cm)',
     value: 'standard_roll',
-    dimensions: { height: 10, width: 10, length: 50 },
-    weight: 1.5,
+    dimensions: { length: 50, height: 10, width: 10 },
     category: 'roll',
-    image: '/images/presets/standard_roll.png' 
+    image: '/images/presets/standard_roll.png'
   },
   {
-    label: 'Bundle Roll (100x10x10 cm, max 3kg)',
+    label: 'Bundle Roll (L 100cm × H 10cm × W 10cm)',
     value: 'bundle_roll',
-    dimensions: { height: 10, width: 10, length: 100 },
-    weight: 3,
+    dimensions: { length: 100, height: 10, width: 10 },
     category: 'B/R',
     image: '/images/presets/bundle_roll.png'
   },
@@ -94,7 +88,22 @@ const containerPresets = [
   }
 ];
 
-
+// Weight range options (charging upper limit)
+const weightRangeOptions = [
+  { value: 5, label: '0-5 kg' },
+  { value: 10, label: '6-10 kg' },
+  { value: 15, label: '11-15 kg' },
+  { value: 20, label: '16-20 kg' },
+  { value: 25, label: '21-25 kg' },
+  { value: 30, label: '26-30 kg' },
+  { value: 40, label: '31-40 kg' },
+  { value: 50, label: '41-50 kg' },
+  { value: 60, label: '51-60 kg' },
+  { value: 70, label: '61-70 kg' },
+  { value: 80, label: '71-80 kg' },
+  { value: 90, label: '81-90 kg' },
+  { value: 100, label: '91-100 kg' }
+];
 
 // Form Step Management
 const currentStep = ref(1);
@@ -254,20 +263,21 @@ const form = useForm({
     total_price: 0,
     priceBreakdown: null,
     packages: [
-        {
-            item_name: '',
-            description: '',
-            category: '',
-            height: '',
-            width: '',
-            length: '',
-            weight: '',
-            value: '',
-            photo: null,
-            photo_url: null,
-            preset: ''
-        },
-    ],
+  {
+    item_name: '',
+    description: '',
+    category: '',
+    length: '',
+    height: '',
+    width: '',
+    weight: '',
+    value: '',
+    quantity: 1, // NEW: Quantity field for duplicate packages
+    photos: [], // Changed from 'photo' to 'photos' (array)
+    photo_urls: [], // Changed from 'photo_url' to 'photo_urls' (array)
+    preset: ''
+  },
+],
 });
 
 const paymentTypeOptions = computed(() => {
@@ -313,7 +323,7 @@ const useMyInfo = () => {
     }
 };
 
-// Price Calculation - Updated version without quantity
+// Price Calculation - Updated version with quantity
 const calculatePrice = async () => {
   isLoading.value = true;
 
@@ -335,12 +345,24 @@ const calculatePrice = async () => {
   }
 
   try {
-    const packagesData = form.packages.map(pkg => ({
-      height: parseFloat(pkg.height) || 0,
-      width: parseFloat(pkg.width) || 0,
-      length: parseFloat(pkg.length) || 0,
-      weight: parseFloat(pkg.weight) || 0
-    }));
+    // Calculate total packages including quantity
+    let totalPackages = 0;
+    const packagesData = [];
+
+    form.packages.forEach(pkg => {
+      const quantity = parseInt(pkg.quantity) || 1;
+      totalPackages += quantity;
+      
+      // Add package data for each quantity (for accurate calculation)
+      for (let i = 0; i < quantity; i++) {
+        packagesData.push({
+          height: parseFloat(pkg.height) || 0,
+          width: parseFloat(pkg.width) || 0,
+          length: parseFloat(pkg.length) || 0,
+          weight: parseFloat(pkg.weight) || 0
+        });
+      }
+    });
 
     const response = await axios.post(route('customer.delivery-requests.calculate-price'), {
       packages: packagesData,
@@ -366,27 +388,30 @@ const calculatePrice = async () => {
 
 const handlePresetChange = (presetValue, index) => {
   if (presetValue === 'custom') {
+    // Custom size - clear dimensions but KEEP weight as is (user will select from range)
     form.packages[index] = {
       ...form.packages[index],
-      height: '',
-      width: '',
       length: '',
-      weight: '',
-      category: 'C/S', // Default for custom
+      height: '', 
+      width: '',
+      // weight: '', // DON'T clear weight - user will select from range
+      category: 'C/S',
       preset: 'custom'
     };
+    console.log(`🛠️ Package ${index} set to Custom Size - user can input dimensions`);
   } else {
     const preset = containerPresets.find(p => p.value === presetValue);
     if (preset) {
       form.packages[index] = {
         ...form.packages[index],
+        length: preset.dimensions.length,
         height: preset.dimensions.height,
         width: preset.dimensions.width,
-        length: preset.dimensions.length,
-        weight: preset.weight,
-        category: preset.category, // Use preset category
+        // weight: '', // Keep weight empty - user will select from range
+        category: preset.category,
         preset: preset.value
       };
+      console.log(`📦 Package ${index} set to ${preset.label} with preset dimensions`);
     }
   }
 };
@@ -415,12 +440,12 @@ const cyclePreset = (packageIndex, direction) => {
   handlePresetChange(containerPresets[newIndex].value, packageIndex);
 };
 
-// Watch for package changes (without quantity)
+// Watch for package changes (with quantity)
 watch(() => [
   form.pick_up_region_id,
   form.drop_off_region_id,
   ...form.packages.map(pkg => [
-    pkg.height, pkg.width, pkg.length, pkg.weight
+    pkg.height, pkg.width, pkg.length, pkg.weight, pkg.quantity
   ]).flat()
 ], () => {
   const allValid = form.packages.every(pkg =>
@@ -571,51 +596,56 @@ const validateStep = () => {
   }
   
   if (currentStep.value === 3) {
-    // Package validation without quantity
-    form.packages.forEach((pkg, index) => {
-      if (!pkg.item_name.trim()) {
-        form.setError(`packages.${index}.item_name`, 'Package name is required.');
+  // Package validation - now checking all packages individually
+  form.packages.forEach((pkg, index) => {
+    if (!pkg.item_name.trim()) {
+      form.setError(`packages.${index}.item_name`, 'Package name is required.');
+      isValid = false;
+    }
+    
+    const height = sanitizeNumber(pkg.height) / 100;
+    const width = sanitizeNumber(pkg.width) / 100;
+    const length = sanitizeNumber(pkg.length) / 100;
+    const weight = sanitizeNumber(pkg.weight);
+    const value = sanitizeNumber(pkg.value);
+    const quantity = parseInt(pkg.quantity) || 1;
+    
+    if (height <= 0) {
+      form.setError(`packages.${index}.height`, 'Height must be greater than 0.');
+      isValid = false;
+    }
+    if (width <= 0) {
+      form.setError(`packages.${index}.width`, 'Width must be greater than 0.');
+      isValid = false;
+    }
+    if (length <= 0) {
+      form.setError(`packages.${index}.length`, 'Length must be greater than 0.');
+      isValid = false;
+    }
+    if (weight <= 0) {
+      form.setError(`packages.${index}.weight`, 'Weight must be greater than 0.');
+      isValid = false;
+    }
+    if (value < 0) {
+      form.setError(`packages.${index}.value`, 'Package value cannot be negative.');
+      isValid = false;
+    }
+    if (quantity < 1) {
+      form.setError(`packages.${index}.quantity`, 'Quantity must be at least 1.');
+      isValid = false;
+    }
+    
+    const volume = length * height * width;
+    if (volume > 10) {
+        form.setError(`packages.${index}.height`, 'Package volume exceeds 10 m³.');
         isValid = false;
-      }
-      
-      const height = sanitizeNumber(pkg.height) / 100;
-      const width = sanitizeNumber(pkg.width) / 100;
-      const length = sanitizeNumber(pkg.length) / 100;
-      const weight = sanitizeNumber(pkg.weight);
-      const value = sanitizeNumber(pkg.value);
-      
-      if (height <= 0) {
-        form.setError(`packages.${index}.height`, 'Height must be greater than 0.');
+    }
+    if (weight > 100) {
+        form.setError(`packages.${index}.weight`, 'Package weight exceeds 100 kg.');
         isValid = false;
-      }
-      if (width <= 0) {
-        form.setError(`packages.${index}.width`, 'Width must be greater than 0.');
-        isValid = false;
-      }
-      if (length <= 0) {
-        form.setError(`packages.${index}.length`, 'Length must be greater than 0.');
-        isValid = false;
-      }
-      if (weight <= 0) {
-        form.setError(`packages.${index}.weight`, 'Weight must be greater than 0.');
-        isValid = false;
-      }
-      if (value < 0) {
-        form.setError(`packages.${index}.value`, 'Package value cannot be negative.');
-        isValid = false;
-      }
-      
-      const volume = height * width * length;
-      if (volume > 10) {
-          form.setError(`packages.${index}.height`, 'Package volume exceeds 10 m³.');
-          isValid = false;
-      }
-      if (weight > 100) {
-          form.setError(`packages.${index}.weight`, 'Package weight exceeds 100 kg.');
-          isValid = false;
-      }
-    });
-  }
+    }
+  });
+}
   
   if (currentStep.value === 4) {
     if (!form.payment_method) {
@@ -628,20 +658,39 @@ const validateStep = () => {
 };
 
 const handlePhotoUpload = (event, index) => {
-  const file = event.target.files[0];
-  if (file) {
-    if (!file.type.match('image.*')) {
-      form.setError(`packages.${index}.photo`, 'Only image files are allowed');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      form.setError(`packages.${index}.photo`, 'File size must be less than 5MB');
-      return;
+  const files = event.target.files;
+  if (files && files.length > 0) {
+    // Clear previous errors
+    form.clearErrors(`packages.${index}.photos`);
+    
+    const validFiles = [];
+    const fileUrls = [];
+    
+    // Validate each file
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      
+      if (!file.type.match('image.*')) {
+        form.setError(`packages.${index}.photos`, 'Only image files are allowed');
+        return;
+      }
+      
+      if (file.size > 5 * 1024 * 1024) {
+        form.setError(`packages.${index}.photos`, `File ${file.name} exceeds 5MB limit`);
+        return;
+      }
+      
+      validFiles.push(file);
+      fileUrls.push(URL.createObjectURL(file));
     }
     
-    form.packages[index].photo = file;
-    form.clearErrors(`packages.${index}.photo`);
-    form.packages[index].photo_url = URL.createObjectURL(file);
+    // Update package with multiple photos
+    form.packages[index].photos = validFiles;
+    form.packages[index].photo_urls = fileUrls;
+    
+    // Clear any previous single photo data for consistency
+    form.packages[index].photo = null;
+    form.packages[index].photo_url = null;
   }
 };
 
@@ -651,13 +700,14 @@ const addPackage = () => {
     item_name: '',
     description: '',
     category: '',
+    length: '',
     height: '',
     width: '',
-    length: '',
     weight: '',
     value: '',
-    photo: null,
-    photo_url: null,
+    quantity: 1, // NEW: Default quantity is 1
+    photos: [], // Array for multiple photos
+    photo_urls: [], // Array for multiple photo URLs
     preset: ''
   });
 };
@@ -669,8 +719,11 @@ const duplicatePackage = (index) => {
 
 const removePackage = (index) => {
   if (form.packages.length > 1) {
-    if (form.packages[index].photo_url) {
-      URL.revokeObjectURL(form.packages[index].photo_url);
+    // Clean up all photo URLs to prevent memory leaks
+    if (form.packages[index].photo_urls) {
+      form.packages[index].photo_urls.forEach(url => {
+        URL.revokeObjectURL(url);
+      });
     }
     form.packages.splice(index, 1);
   }
@@ -696,18 +749,27 @@ const sanitizeNumber = (value) => {
 
 const resetForm = () => {
   currentStep.value = 1;
+  
+  // Clean up all photo URLs before resetting
+  form.packages.forEach(pkg => {
+    if (pkg.photo_urls) {
+      pkg.photo_urls.forEach(url => URL.revokeObjectURL(url));
+    }
+  });
+  
   form.reset();
   form.packages = [{
     item_name: '',
     description: '',
     category: '',
+    length: '',
     height: '',
     width: '',
-    length: '',
     weight: '',
     value: '',
-    photo: null,
-    photo_url: null,
+    quantity: 1, // Reset to default quantity 1
+    photos: [], // Reset to empty array
+    photo_urls: [], // Reset to empty array
     preset: ''
   }];
   form.priceBreakdown = null;
@@ -715,12 +777,32 @@ const resetForm = () => {
   isUsingMyInfo.value = false;
 };
 
+// NEW: Function to expand packages based on quantity
+const expandPackagesByQuantity = () => {
+  const expandedPackages = [];
+  
+  form.packages.forEach(pkg => {
+    const quantity = parseInt(pkg.quantity) || 1;
+    
+    for (let i = 0; i < quantity; i++) {
+      // Create a copy of the package without quantity field
+      const packageCopy = { ...pkg };
+      delete packageCopy.quantity; // Remove quantity from individual packages
+      delete packageCopy.photo_urls; // Remove photo URLs (we'll use the files directly)
+      
+      expandedPackages.push(packageCopy);
+    }
+  });
+  
+  return expandedPackages;
+};
+
 const submitRequest = () => {
   if (!validateStep()) return;
   isLoading.value = true;
-  form.total_price = form.priceBreakdown ? form.total_price : 0;
 
   const formData = new window.FormData();
+
 
   // Sender fields
   Object.entries(form.sender).forEach(([key, value]) => {
@@ -736,7 +818,7 @@ const submitRequest = () => {
   formData.append('pick_up_region_id', form.pick_up_region_id);
   formData.append('drop_off_region_id', form.drop_off_region_id);
 
-  // Payment fields - updated to include payment_terms
+  // Payment fields
   formData.append('payment_type', form.payment_type || 'prepaid');
   formData.append('payment_method', form.payment_type === 'prepaid' ? (form.payment_method || '') : '');
   formData.append('payment_terms', form.payment_terms || '');
@@ -751,46 +833,139 @@ const submitRequest = () => {
     formData.append('price_breakdown', JSON.stringify(form.priceBreakdown));
   }
 
-  // Packages
-  form.packages.forEach((pkg, index) => {
-    formData.append(`packages[${index}][item_name]`, pkg.item_name);
-    formData.append(`packages[${index}][category]`, pkg.category);
-    formData.append(`packages[${index}][description]`, pkg.description || '');
-    formData.append(`packages[${index}][value]`, pkg.value || 0);
-    formData.append(`packages[${index}][height]`, pkg.height);
-    formData.append(`packages[${index}][width]`, pkg.width);
-    formData.append(`packages[${index}][length]`, pkg.length);
-    formData.append(`packages[${index}][weight]`, pkg.weight);
-    if (pkg.photo instanceof File) {
-      formData.append(`packages[${index}][photo]`, pkg.photo);
+  // 🎯 CRITICAL: Expand packages based on quantity AT SUBMISSION TIME ONLY
+      // 🎯 CRITICAL: Expand packages based on quantity AT SUBMISSION TIME ONLY
+  console.log('🔄 NEW STRATEGY: Upload photos once, reuse paths');
+  
+  // First, collect all unique photos and upload them
+  const photoUploadPromises = [];
+  const uploadedPhotoPaths = {}; // Store uploaded photo paths by original index
+  
+  // Upload photos for EACH original package
+  for (let originalIndex = 0; originalIndex < form.packages.length; originalIndex++) {
+    const originalPkg = form.packages[originalIndex];
+    
+    if (originalPkg.photos && originalPkg.photos.length > 0) {
+      console.log(`📸 Uploading ${originalPkg.photos.length} photos for original package ${originalIndex}: "${originalPkg.item_name}"`);
+      
+      // Create a temporary form to upload these photos
+      const photoFormData = new FormData();
+      originalPkg.photos.forEach((photo, photoIndex) => {
+        photoFormData.append(`photos[]`, photo);
+      });
+      
+      // Upload photos and store the promise
+      const uploadPromise = axios.post(route('customer.delivery-requests.upload-photos'), photoFormData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      }).then(response => {
+        uploadedPhotoPaths[originalIndex] = response.data.photo_paths;
+        console.log(`✅ Photos for package ${originalIndex} ("${originalPkg.item_name}") uploaded:`, {
+          photo_count: response.data.photo_paths.length,
+          paths: response.data.photo_paths
+        });
+      }).catch(error => {
+        console.error(`❌ Failed to upload photos for package ${originalIndex} ("${originalPkg.item_name}"):`, error);
+        throw error;
+      });
+      
+      photoUploadPromises.push(uploadPromise);
+    } else {
+      console.warn(`⚠️ Package ${originalIndex} ("${originalPkg.item_name}") has NO photos to upload`);
+      uploadedPhotoPaths[originalIndex] = []; // Set empty array for packages with no photos
     }
-  });
+  }
 
-  form.post(route('customer.delivery-requests.store'), {
-    data: formData,
-    forceFormData: true,
-    preserveScroll: true,
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    },
-    onSuccess: () => {
+  console.log(`📦 Photo upload promises: ${photoUploadPromises.length} packages have photos to upload`);
+
+  // Wait for all photos to upload
+  Promise.all(photoUploadPromises)
+    .then(() => {
+      console.log('✅ ALL PHOTOS UPLOADED SUCCESSFULLY');
+      console.log('📋 UPLOADED PHOTO PATHS SUMMARY:', uploadedPhotoPaths);
+      
+      // Now expand packages and send to backend WITH PHOTO PATHS
+      const expandedPackages = [];
+      
+      form.packages.forEach((originalPkg, originalIndex) => {
+        const quantity = parseInt(originalPkg.quantity) || 1;
+        
+        console.log(`📦 Expanding package ${originalIndex}: "${originalPkg.item_name}" - Quantity: ${quantity}`);
+        
+        // Get the uploaded photo paths for this original package
+        const photoPaths = uploadedPhotoPaths[originalIndex] || [];
+        console.log(`   Using ${photoPaths.length} uploaded photo paths for package ${originalIndex}`);
+        
+        // Create multiple copies of this package
+        for (let i = 0; i < quantity; i++) {
+          const packageCopy = {
+            item_name: originalPkg.item_name,
+            category: originalPkg.category,
+            description: originalPkg.description || '',
+            value: originalPkg.value || 0,
+            height: originalPkg.height,
+            width: originalPkg.width,
+            length: originalPkg.length,
+            weight: originalPkg.weight,
+            preset: originalPkg.preset || '',
+            // Use the uploaded photo PATHS instead of File objects
+            photo_path: [...photoPaths] // Copy the array of paths
+          };
+          
+          expandedPackages.push(packageCopy);
+          console.log(`   → Created copy ${i + 1}/${quantity} with ${photoPaths.length} photo paths`);
+        }
+      });
+
+      console.log(`✅ EXPANSION COMPLETE: ${form.packages.length} original → ${expandedPackages.length} expanded packages`);
+
+      // 🎯 Send expanded packages WITH PHOTO PATHS to backend
+      expandedPackages.forEach((pkg, index) => {
+        formData.append(`packages[${index}][item_name]`, pkg.item_name);
+        formData.append(`packages[${index}][category]`, pkg.category);
+        formData.append(`packages[${index}][description]`, pkg.description || '');
+        formData.append(`packages[${index}][value]`, pkg.value || 0);
+        formData.append(`packages[${index}][height]`, pkg.height);
+        formData.append(`packages[${index}][width]`, pkg.width);
+        formData.append(`packages[${index}][length]`, pkg.length);
+        formData.append(`packages[${index}][weight]`, pkg.weight);
+        
+        // 🎯 Send photo PATHS instead of File objects
+        if (pkg.photo_path && pkg.photo_path.length > 0) {
+          pkg.photo_path.forEach((photoPath, pathIndex) => {
+            formData.append(`packages[${index}][photo_path][${pathIndex}]`, photoPath);
+          });
+          console.log(`   📸 Package ${index} ("${pkg.item_name}") using ${pkg.photo_path.length} photo paths`);
+        } else {
+          console.warn(`   ⚠️ Package ${index} ("${pkg.item_name}") has NO photo paths`);
+        }
+      });
+
+      // Send to main endpoint
+      return axios.post(route('customer.delivery-requests.store'), formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+    })
+    .then(response => {
+      console.log('✅ SUCCESS: Delivery request created with all photos');
       currentStep.value = 6;
       isLoading.value = false;
-    },
-    onError: (errors) => {
-      console.error('Submission failed:', errors);
+    })
+    .catch(error => {
+      console.error('❌ SUBMISSION FAILED:', error);
       isLoading.value = false;
-      if (errors.sender?.mobile) form.setError('sender.mobile', errors.sender.mobile);
-      if (errors.sender?.email) form.setError('sender.email', errors.sender.email);
-      if (errors.receiver?.mobile) form.setError('receiver.mobile', errors.receiver.mobile);
-      if (errors.receiver?.email) form.setError('receiver.email', errors.receiver.email);
-      const firstError = Object.keys(errors)[0];
-      if (firstError) {
-        const element = document.querySelector(`[name="${firstError}"]`);
-        if (element) element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
+      if (error.response && error.response.data.errors) {
+        const errors = error.response.data.errors;
+        Object.keys(errors).forEach(key => {
+          form.setError(key, errors[key][0]);
+        });
       }
-    },
-  });
+    });
 };
 
 // Add watcher for payment_type
@@ -812,17 +987,17 @@ watch(() => form.payment_type, (val) => {
 
 // Add package value options for dropdown
 const packageValueOptions = [
-  { value: 350, label: '₱200 - ₱500' },
-  { value: 750, label: '₱500 - ₱1000' },
-  { value: 1500, label: '₱1000 - ₱2000' },
-  { value: 3000, label: '₱2000 - ₱4000' },
-  { value: 5000, label: '₱4000 - ₱6000' },
-  { value: 8000, label: '₱6000 - ₱10000' },
-  { value: 15000, label: '₱10000 - ₱20000' },
-  { value: 25000, label: '₱20000 - ₱30000' },
-  { value: 40000, label: '₱30000 - ₱50000' },
-  { value: 60000, label: '₱50000 - ₱70000' },
-  { value: 85000, label: '₱70000 - ₱100000' },
+  { value: 500, label: 'Value: ₱500 or less' },
+  { value: 1000, label: 'Value: ₱1,000 or less' },
+  { value: 2000, label: 'Value: ₱2,000 or less' },
+  { value: 4000, label: 'Value: ₱4,000 or less' },
+  { value: 6000, label: 'Value: ₱6,000 or less' },
+  { value: 10000, label: 'Value: ₱10,000 or less' },
+  { value: 20000, label: 'Value: ₱20,000 or less' },
+  { value: 30000, label: 'Value: ₱30,000 or less' },
+  { value: 50000, label: 'Value: ₱50,000 or less' },
+  { value: 70000, label: 'Value: ₱70,000 or less' },
+  { value: 100000, label: 'Value: ₱100,000 or less' },
 ];
 </script>
 
@@ -873,7 +1048,7 @@ const packageValueOptions = [
     </h3>
     <p class="text-sm text-blue-700 mt-1">
       Your sender information is pulled from your profile. To update your details, please visit your 
-      <a :href="route('customer.profile-update.create')" class="text-blue-800 font-semibold underline hover:text-blue-600 transition-colors">
+      <a :href="route('customer.profile.update')" class="text-blue-800 font-semibold underline hover:text-blue-600 transition-colors">
         Delivery Information Page
       </a>. This ensures all profile modifications are properly verified and recorded.
     </p>
@@ -1339,7 +1514,7 @@ const packageValueOptions = [
       Advisory Notice
     </h3>
     <p class="text-sm text-yellow-700 mt-1">
-      We only carry individual packages up to 10 cubic meters in volume (calculated as height × width × length in cm ÷ 1,000,000) 
+      We only carry individual packages up to 10 cubic meters in volume (calculated as Length × Height × Width in cm ÷ 1,000,000) 
       and 100 kg in weight. Items exceeding these limits require special freight arrangements. 
       Please ensure your items meet these requirements before booking.
     </p>
@@ -1510,21 +1685,29 @@ const packageValueOptions = [
   </div>
 </div>
 
-    <!-- Step 4: Package Details -->
+   <!-- Step 4: Package Details -->
 <div v-if="currentStep === 4" class="space-y-6">
   <h2 class="text-xl flex items-center justify-center font-semibold">Package Details</h2>
 
-  <!-- Important Information -->
+  <!-- Updated Important Information with Photo Requirements -->
   <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
     <h3 class="font-semibold text-blue-800 flex items-center">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
-      Important Information
+      Important Information - Photo Requirements
     </h3>
-    <p class="text-sm text-blue-700 mt-1">
-      Please provide accurate details for each package. This information helps us handle your items safely and calculate the correct shipping costs.
-    </p>
+    <div class="text-sm text-blue-700 mt-1 space-y-2">
+      <p><strong>Package photos are mandatory for documentation and verification purposes.</strong></p>
+      
+      <div class="ml-4 space-y-1">
+        <p>• <strong>Single Package:</strong> Minimum 6 images required - front, back, left, right, top, bottom views, plus at least 1 image showing the package on a weighing scale.</p>
+        <p>• <strong>Multiple Packages (2 or more):</strong> Minimum 2 images required - 1 group photo showing all packages together, and 1 image showing a single package on a weighing scale.</p>
+        <p>• <strong>Important Note:</strong> All packages in a multiple package shipment should be of close to equal weight. Significant weight variations may incur additional handling fees.</p>
+      </div>
+      
+      <p class="font-semibold mt-2">Ensure photos are clear, well-lit, and show all sides of the package for proper documentation.</p>
+    </div>
   </div>
 
   <!-- Dynamic Package Input -->
@@ -1536,7 +1719,9 @@ const packageValueOptions = [
       </h3>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <!-- Row 1: Package Name and Quantity -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Package Name -->
       <div>
         <InputLabel :for="`item_name-${index}`" value="Package Name *" />
         <TextInput
@@ -1550,58 +1735,41 @@ const packageValueOptions = [
         <p class="text-xs text-gray-500 mt-1">Give your package a descriptive name</p>
       </div>
 
-      <!-- Removed Package Category dropdown but kept spacing -->
+      <!-- Quantity Input -->
       <div>
-        <InputLabel value="Package Type" />
-        <div class="mt-1 p-2 bg-gray-100 rounded text-sm text-gray-600">
-          {{ pkg.preset ? containerPresets.find(p => p.value === pkg.preset)?.label : 'Custom Package' }}
-        </div>
-        <p class="text-xs text-gray-500 mt-1">Package type is determined by your selection</p>
-      </div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div>
-        <InputLabel :for="`description-${index}`" value="Special Instructions" />
-        <TextArea
-          :id="`description-${index}`"
-          v-model="pkg.description"
+        <InputLabel :for="`quantity-${index}`" value="Quantity *" />
+        <TextInput
+          :id="`quantity-${index}`"
+          v-model.number="pkg.quantity"
+          type="number"
+          min="1"
+          max="100"
           class="w-full"
-          :rows="3"
-          placeholder="Package contents, special handling instructions, etc."
-          :error="form.errors[`packages.${index}.description`] || ''"
         />
-        <InputError :message="form.errors[`packages.${index}.description`]" />
-        <p class="text-xs text-gray-500 mt-1">Include any special handling requirements</p>
-      </div>
-
-      <div>
-        <InputLabel :for="`photo-${index}`" value="Package Photo (Optional)" />
-        <input
-          :id="`photo-${index}`"
-          type="file"
-          accept="image/*"
-          @change="(e) => handlePhotoUpload(e, index)"
-          class="mt-1 block w-full text-sm text-gray-500
-            file:mr-4 file:py-2 file:px-4
-            file:rounded-md file:border-0
-            file:text-sm file:font-semibold
-            file:bg-blue-50 file:text-blue-700
-            hover:file:bg-blue-100"
-        />
-        <InputError :message="form.errors[`packages.${index}.photo`]" />
-        <div v-if="pkg.photo" class="mt-2 text-sm text-gray-600 truncate">
-          Selected: {{ pkg.photo.name }}
-        </div>
-        <div v-if="pkg.photo_url" class="mt-2 flex justify-center">
-          <img :src="pkg.photo_url" class="h-20 object-cover rounded shadow mx-auto" />
-        </div>
-        <p class="text-xs text-gray-500 mt-1">Upload a photo to help identify your package</p>
+        <InputError :message="form.errors[`packages.${index}.quantity`]" />
+        <p class="text-xs text-gray-500 mt-1">Number of identical packages</p>
       </div>
     </div>
 
-    <!-- Dimensions & Package Value -->
+    <!-- Row 2: Weight Range and Package Value -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Weight Range Selector -->
+      <div>
+        <InputLabel :for="`weight-${index}`" value="Weight Range (kg) *" />
+        <SelectInput
+          :id="`weight-${index}`"
+          v-model="pkg.weight"
+          :options="weightRangeOptions"
+          option-value="value"
+          option-label="label"
+          class="w-full"
+          :error="!!form.errors[`packages.${index}.weight`]"
+        />
+        <InputError :message="form.errors[`packages.${index}.weight`]" />
+        <p class="text-xs text-gray-500 mt-1">Select weight range - charged at upper limit</p>
+      </div>
+
+      <!-- Package Value -->
       <div>
         <InputLabel :for="`value-${index}`" value="Package Value (₱) *" />
         <SelectInput
@@ -1617,94 +1785,138 @@ const packageValueOptions = [
         <InputError :message="form.errors[`packages.${index}.value`]" />
         <p class="text-xs text-gray-500 mt-1">Select the estimated value range for insurance purposes</p>
       </div>
+    </div>
 
-      <!-- Custom: Show editable dimensions and weight in 2x2 grid -->
-      <template v-if="pkg.preset === 'custom'">
+    <!-- 🛠️ NEW ROW: Custom Dimensions for Custom Packages -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div>
+        <InputLabel :for="`length-${index}`" value="Length (cm) *" />
+        <TextInput
+          :id="`length-${index}`"
+          v-model="pkg.length"
+          type="number"
+          step="0.1"
+          min="0.1"
+          class="w-full"
+          :error="!!form.errors[`packages.${index}.length`]"
+          placeholder="Length in cm"
+          :readonly="pkg.preset !== 'custom'" 
+          :class="pkg.preset !== 'custom' ? 'bg-gray-100 text-gray-600' : ''"
+        />
+        <InputError :message="form.errors[`packages.${index}.length`]" />
+        <p class="text-xs text-gray-500 mt-1" v-if="pkg.preset !== 'custom'">Preset dimension</p>
+        <p class="text-xs text-blue-500 mt-1" v-else>Enter custom length</p>
+      </div>
+
+      <div>
+        <InputLabel :for="`width-${index}`" value="Width (cm) *" />
+        <TextInput
+          :id="`width-${index}`"
+          v-model="pkg.width"
+          type="number"
+          step="0.1"
+          min="0.1"
+          class="w-full"
+          :error="!!form.errors[`packages.${index}.width`]"
+          placeholder="Width in cm"
+          :readonly="pkg.preset !== 'custom'"
+          :class="pkg.preset !== 'custom' ? 'bg-gray-100 text-gray-600' : ''"
+        />
+        <InputError :message="form.errors[`packages.${index}.width`]" />
+        <p class="text-xs text-gray-500 mt-1" v-if="pkg.preset !== 'custom'">Preset dimension</p>
+        <p class="text-xs text-blue-500 mt-1" v-else>Enter custom width</p>
+      </div>
+
+      <div>
+        <InputLabel :for="`height-${index}`" value="Height (cm) *" />
+        <TextInput
+          :id="`height-${index}`"
+          v-model="pkg.height"
+          type="number"
+          step="0.1"
+          min="0.1"
+          class="w-full"
+          :error="!!form.errors[`packages.${index}.height`]"
+          placeholder="Height in cm"
+          :readonly="pkg.preset !== 'custom'"
+          :class="pkg.preset !== 'custom' ? 'bg-gray-100 text-gray-600' : ''"
+        />
+        <InputError :message="form.errors[`packages.${index}.height`]" />
+        <p class="text-xs text-gray-500 mt-1" v-if="pkg.preset !== 'custom'">Preset dimension</p>
+        <p class="text-xs text-blue-500 mt-1" v-else>Enter custom height</p>
+      </div>
+    </div>
+
+    <!-- Row 3: Left Column (Package Type + Special Instructions) and Right Column (Package Photos) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Left Column -->
+      <div class="space-y-4">
+        <!-- Package Type Display -->
         <div>
-          <InputLabel value="Package Dimensions *" />
-          <div class="grid grid-cols-2 gap-4 mt-1">
-            <div>
-              <InputLabel :for="`height-${index}`" value="Height (cm)" class="text-xs" />
-              <TextInput
-                :id="`height-${index}`"
-                v-model.number="pkg.height"
-                type="number"
-                min="0.01"
-                step="0.01"
-                class="w-full"
-                :error="!!form.errors[`packages.${index}.height`]"
-                placeholder="0.00"
-              />
-              <InputError :message="form.errors[`packages.${index}.height`]" />
-            </div>
-            <div>
-              <InputLabel :for="`width-${index}`" value="Width (cm)" class="text-xs" />
-              <TextInput
-                :id="`width-${index}`"
-                v-model.number="pkg.width"
-                type="number"
-                min="0.01"
-                step="0.01"
-                class="w-full"
-                :error="!!form.errors[`packages.${index}.width`]"
-                placeholder="0.00"
-              />
-              <InputError :message="form.errors[`packages.${index}.width`]" />
-            </div>
-            <div>
-              <InputLabel :for="`length-${index}`" value="Length (cm)" class="text-xs" />
-              <TextInput
-                :id="`length-${index}`"
-                v-model.number="pkg.length"
-                type="number"
-                min="0.01"
-                step="0.01"
-                class="w-full"
-                :error="!!form.errors[`packages.${index}.length`]"
-                placeholder="0.00"
-              />
-              <InputError :message="form.errors[`packages.${index}.length`]" />
-            </div>
-            <div>
-              <InputLabel :for="`weight-${index}`" value="Weight (kg)" class="text-xs" />
-              <TextInput
-                :id="`weight-${index}`"
-                v-model.number="pkg.weight"
-                type="number"
-                min="0.01"
-                step="0.01"
-                class="w-full"
-                :error="!!form.errors[`packages.${index}.weight`]"
-                placeholder="0.00"
-              />
-              <InputError :message="form.errors[`packages.${index}.weight`]" />
-            </div>
+          <InputLabel value="Package Type" />
+          <div class="mt-1 p-2 bg-gray-100 rounded text-sm text-gray-600">
+            {{ pkg.preset ? containerPresets.find(p => p.value === pkg.preset)?.label : 'Custom Package' }}
+            <span v-if="pkg.preset === 'custom'" class="text-blue-600 font-semibold block mt-1">Custom dimensions enabled</span>
           </div>
-          <p class="text-xs text-gray-500 mt-2">Enter accurate dimensions for proper pricing</p>
+          <p class="text-xs text-gray-500 mt-1" v-if="pkg.preset === 'custom'">You can input custom dimensions above</p>
+          <p class="text-xs text-gray-500 mt-1" v-else>Dimensions are preset based on package type</p>
         </div>
-      </template>
 
-      <!-- Preset: Show weight input with greyed out style -->
-      <template v-else>
+        <!-- Special Instructions -->
         <div>
-          <InputLabel :for="`weight-${index}`" :value="`Weight (kg) (max ${containerPresets.find(p => p.value === pkg.preset)?.weight || 0}kg)`" />
-          <TextInput
-            :id="`weight-${index}`"
-            v-model.number="pkg.weight"
-            type="number"
-            min="0.01"
-            :max="containerPresets.find(p => p.value === pkg.preset)?.weight || 0"
-            step="0.01"
-            class="w-full bg-gray-100 text-gray-600"
-            :error="!!form.errors[`packages.${index}.weight`]"
-            :placeholder="`Max ${containerPresets.find(p => p.value === pkg.preset)?.weight || 0} kg`"
-            readonly
-            disabled
+          <InputLabel :for="`description-${index}`" value="Special Instructions" />
+          <TextArea
+            :id="`description-${index}`"
+            v-model="pkg.description"
+            class="w-full"
+            :rows="3"
+            placeholder="Package contents, special handling instructions, etc."
+            :error="form.errors[`packages.${index}.description`] || ''"
           />
-          <InputError :message="form.errors[`packages.${index}.weight`]" />
-          <p class="text-xs text-gray-500 mt-1">Weight is predetermined for this package type</p>
+          <InputError :message="form.errors[`packages.${index}.description`]" />
+          <p class="text-xs text-gray-500 mt-1">Include any special handling requirements</p>
         </div>
-      </template>
+      </div>
+
+      <!-- Right Column - Package Photos -->
+      <div>
+        <InputLabel :for="`photo-${index}`" value="Package Photos *" />
+        <input
+          :id="`photo-${index}`"
+          type="file"
+          accept="image/*"
+          multiple
+          required
+          @change="(e) => handlePhotoUpload(e, index)"
+          class="mt-1 block w-full text-sm text-gray-500
+            file:mr-4 file:py-2 file:px-4
+            file:rounded-md file:border-0
+            file:text-sm file:font-semibold
+            file:bg-blue-50 file:text-blue-700
+            hover:file:bg-blue-100"
+        />
+        <InputError :message="form.errors[`packages.${index}.photos`]" />
+        
+        <!-- Show selected file names -->
+        <div v-if="pkg.photos && pkg.photos.length > 0" class="mt-2 text-sm text-gray-600">
+          <div class="font-medium mb-1">Selected files ({{ pkg.photos.length }}):</div>
+          <div v-for="(photo, photoIndex) in pkg.photos" :key="photoIndex" class="truncate">
+            {{ photoIndex + 1 }}. {{ photo.name }}
+          </div>
+        </div>
+        
+        <!-- Show image previews -->
+        <div v-if="pkg.photo_urls && pkg.photo_urls.length > 0" class="mt-3 flex flex-wrap gap-2">
+          <div v-for="(url, urlIndex) in pkg.photo_urls" :key="urlIndex" class="relative">
+            <img :src="url" class="h-20 w-20 object-cover rounded shadow" />
+            <span class="absolute -top-2 -right-2 bg-gray-700 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+              {{ urlIndex + 1 }}
+            </span>
+          </div>
+        </div>
+        
+        <p class="text-xs text-red-600 mt-1 font-semibold">Required: See photo requirements above</p>
+      </div>
     </div>
   </div>
 
@@ -1752,10 +1964,10 @@ const packageValueOptions = [
           <!-- Package Summary -->
           <div class="p-4 bg-gray-100 rounded-lg space-y-4">
             <template v-for="(pkg, index) in form.packages" :key="index">
-              <p>📦 <strong>Package {{ index + 1 }}:</strong></p>
-              <p>📏 Dimensions: {{ pkg.height }}cm (H) × {{ pkg.width }}cm (W) × {{ pkg.length }}cm (L)</p>
-              <p>📦 Volume: {{ ((pkg.height / 100) * (pkg.width / 100) * (pkg.length / 100)).toFixed(3) }} m³ ({{ pkg.height / 100 }}m × {{ pkg.width / 100 }}m × {{ pkg.length / 100 }}m)</p>
-              <p>⚖️ Weight: {{ pkg.weight }} kg</p>
+              <p>📦 <strong>Package {{ index + 1 }}:</strong> {{ pkg.quantity }} × {{ pkg.item_name }}</p>
+              <p>📏 Dimensions: {{ pkg.length }}cm (L) × {{ pkg.height }}cm (H) × {{ pkg.width }}cm (W)</p>
+              <p>📦 Volume: {{ ((pkg.length / 100) * (pkg.height / 100) * (pkg.width / 100)).toFixed(3) }} m³ ({{ pkg.length / 100 }}m × {{ pkg.height / 100 }}m × {{ pkg.width / 100 }}m)</p>
+              <p>⚖️ Weight: {{ pkg.weight }} kg (upper limit)</p>
               <hr />
             </template>
 
@@ -1772,7 +1984,7 @@ const packageValueOptions = [
         <div>Weight Fee ({{ form.priceBreakdown.metrics?.total_weight?.toFixed(2) || 0 }} kg):</div>
         <div class="text-right">₱{{ formatCurrency(form.priceBreakdown.weight_fee) }}</div>
         
-        <div>Package Fee ({{ form.packages.length }} items):</div>
+        <div>Package Fee ({{ form.packages.reduce((total, pkg) => total + (parseInt(pkg.quantity) || 1), 0) }} items):</div>
         <div class="text-right">₱{{ formatCurrency(form.priceBreakdown.package_fee) }}</div>
       </div>
       <div class="border-t pt-2 mt-2 grid grid-cols-2 font-semibold">

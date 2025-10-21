@@ -13,131 +13,165 @@ use Inertia\Inertia;
 
 class PaymentController extends Controller
 {
-    public function index(Request $request)
+    // Main dashboard - replaces multiple index methods
+    public function dashboard(Request $request)
     {
-        // Get filters from request
-        $type = $request->input('type', 'prepaid');
-        $status = $request->input('status', '');
-        $search = $request->input('search', '');
+        $activeTab = $request->input('tab', 'verification');
+        
+        // TAB 1: Verification Queue Data
+        $verificationQuery = Payment::with([
+            'deliveryRequest.sender', 
+            'deliveryRequest.receiver', 
+            'submittedBy',
+            'verifiedBy',
+            'rejectedBy'
+        ])->where('status', 'pending_verification');
+        
+        if ($request->search) {
+            $verificationQuery->where(function($q) use ($request) {
+                $q->where('reference_number', 'like', "%{$request->search}%")
+                  ->orWhereHas('deliveryRequest', function($q2) use ($request) {
+                      $q2->where('reference_number', 'like', "%{$request->search}%")
+                         ->orWhereHas('sender', function($q3) use ($request) {
+                             $q3->where('name', 'like', "%{$request->search}%");
+                         });
+                  });
+            });
+        }
+        
+        $verificationPayments = $verificationQuery->latest()->paginate(10, ['*'], 'verification_page');
 
-        // Prepaid: payment_method in ['cash','gcash','bank']
+        // TAB 2: Collection Management Data
+        $collectionSearch = $request->input('collection_search', '');
+        $collectionType = $request->input('collection_type', 'all');
+        
+        // Prepaid deliveries needing payment
         $prepaidQuery = DeliveryRequest::query()
             ->whereIn('payment_method', ['cash', 'gcash', 'bank'])
-            ->whereIn('status', ['approved', 'pending_payment', 'completed']);
+            ->whereIn('status', ['approved', 'pending_payment', 'completed'])
+            ->where(function($q) {
+                $q->whereNull('payment_status')
+                  ->orWhere('payment_status', 'pending')
+                  ->orWhere('payment_status', 'unpaid');
+            });
 
-        // Postpaid: payment_method not in ['cash','gcash','bank'] and not null
+        // Postpaid deliveries needing collection
         $postpaidQuery = DeliveryOrder::query()
             ->whereHas('deliveryRequest', function($q) {
                 $q->whereNotNull('payment_method')
                   ->whereNotIn('payment_method', ['cash', 'gcash', 'bank'])
-                  ->whereIn('status', ['approved', 'completed']);
-            });
-
-        // Apply search filter
-        if ($search) {
-            $prepaidQuery->where(function($q) use ($search) {
-                $q->where('reference_number', 'like', "%$search%")
-                  ->orWhereHas('sender', function($q2) use ($search) {
-                      $q2->where('name', 'like', "%$search%");
-                  })
-                  ->orWhereHas('receiver', function($q2) use ($search) {
-                      $q2->where('name', 'like', "%$search%");
+                  ->whereIn('status', ['approved', 'completed'])
+                  ->where(function($q2) {
+                      $q2->whereNull('payment_status')
+                         ->orWhereIn('payment_status', ['pending', 'pending_payment', 'unpaid']);
                   });
             });
-            $postpaidQuery->where(function($q) use ($search) {
-                $q->where('id', 'like', "%$search%")
-                  ->orWhereHas('deliveryRequest.sender', function($q2) use ($search) {
-                      $q2->where('name', 'like', "%$search%");
-                  })
-                  ->orWhereHas('deliveryRequest.receiver', function($q2) use ($search) {
-                      $q2->where('name', 'like', "%$search%");
+
+        // Apply search to both
+        if ($collectionSearch) {
+            $prepaidQuery->where(function($q) use ($collectionSearch) {
+                $q->where('reference_number', 'like', "%$collectionSearch%")
+                  ->orWhereHas('sender', function($q2) use ($collectionSearch) {
+                      $q2->where('name', 'like', "%$collectionSearch%");
+                  });
+            });
+            
+            $postpaidQuery->where(function($q) use ($collectionSearch) {
+                $q->where('id', 'like', "%$collectionSearch%")
+                  ->orWhereHas('deliveryRequest', function($q2) use ($collectionSearch) {
+                      $q2->where('reference_number', 'like', "%$collectionSearch%")
+                         ->orWhereHas('sender', function($q3) use ($collectionSearch) {
+                             $q3->where('name', 'like', "%$collectionSearch%");
+                         });
                   });
             });
         }
 
-        // Apply status filter
-        if ($status) {
-            if ($type === 'prepaid') {
-                $prepaidQuery->where('payment_status', $status);
-            } else {
-                $postpaidQuery->where('payment_status', $status);
-            }
+        // Filter by type
+        if ($collectionType === 'prepaid') {
+            $postpaidQuery->whereRaw('1 = 0'); // Exclude postpaid
+        } elseif ($collectionType === 'postpaid') {
+            $prepaidQuery->whereRaw('1 = 0'); // Exclude prepaid
         }
 
-        // Eager load relationships
-        $prepaidQuery->with(['sender', 'receiver', 'packages', 'payment']);
-        $postpaidQuery->with([
+        $prepaidRequests = $prepaidQuery->with(['sender', 'receiver', 'packages', 'payment'])
+            ->orderByDesc('id')->paginate(5, ['*'], 'prepaid_page');
+        
+        $postpaidRequests = $postpaidQuery->with([
             'deliveryRequest.sender',
-            'deliveryRequest.receiver',
+            'deliveryRequest.receiver', 
             'deliveryRequest.packages',
             'deliveryRequest.payment',
-        ]);
+        ])->orderByDesc('id')->paginate(5, ['*'], 'postpaid_page');
 
-        // Paginate (always run both)
-        $prepaidRequests = $prepaidQuery->orderByDesc('id')->paginate(5, ['*'], 'page')->withQueryString();
-        $postpaidRequests = $postpaidQuery->orderByDesc('id')->paginate(5, ['*'], 'postpaid_page')->withQueryString();
+        // TAB 3: Payment History Data
+        $historyQuery = Payment::with([
+            'deliveryRequest.sender',
+            'deliveryRequest.receiver',
+            'verifiedBy',
+            'rejectedBy'
+        ])->whereIn('status', ['verified', 'rejected', 'cancelled']);
 
-        // Cast total_price to float for prepaid
-        if ($prepaidRequests) {
-            $prepaidRequests->getCollection()->transform(function ($item) {
-                $item->total_price = (float) $item->total_price;
-                return $item;
+        if ($request->history_search) {
+            $historyQuery->where(function($q) use ($request) {
+                $q->where('reference_number', 'like', "%{$request->history_search}%")
+                  ->orWhereHas('deliveryRequest', function($q2) use ($request) {
+                      $q2->where('reference_number', 'like', "%{$request->history_search}%");
+                  });
             });
         }
 
-        return Inertia::render('Admin/Payments/Index', [
+        $historyPayments = $historyQuery->latest()->paginate(15, ['*'], 'history_page');
+
+        // Stats for badges
+        $stats = [
+            'pending_verification' => Payment::where('status', 'pending_verification')->count(),
+            'needs_collection' => $prepaidQuery->clone()->count() + $postpaidQuery->clone()->count(),
+            'verified_today' => Payment::where('status', 'verified')
+                ->whereDate('verified_at', today())->count(),
+        ];
+
+        return Inertia::render('Admin/Payments/Dashboard', [
+            'activeTab' => $activeTab,
+            'verificationPayments' => $verificationPayments,
             'prepaidRequests' => $prepaidRequests,
             'postpaidRequests' => $postpaidRequests,
-            'filters' => [
-                'type' => $type,
-                'status' => $status,
-                'search' => $search,
-            ]
+            'historyPayments' => $historyPayments,
+            'stats' => $stats,
+            'filters' => $request->all(),
         ]);
     }
 
-    // NEW: Show form to record over-the-counter payment
-    // In PaymentController.php
-public function create(Request $request)
-{
-    $deliveryId = $request->input('delivery_id');
-    
-    \Log::info('Payment create method called', [
-        'delivery_id' => $deliveryId,
-        'request_all' => $request->all()
-    ]);
-    
-    $selectedDelivery = null;
-    
-    // If a specific delivery ID is provided, get that delivery with ALL necessary relationships
-    if ($deliveryId) {
-        $selectedDelivery = DeliveryRequest::with([
-            'sender', 
-            'receiver',
-            'packages',
-            'pickUpRegion',
-            'dropOffRegion'
-        ])
-        ->whereIn('status', ['approved', 'completed'])
-        ->where(function($query) {
-            $query->whereNull('payment_status')
-                  ->orWhere('payment_status', 'pending')
-                  ->orWhere('payment_status', 'unpaid');
-        })
-        ->find($deliveryId);
+    // Show form to record over-the-counter payment
+    public function create(Request $request)
+    {
+        $deliveryId = $request->input('delivery_id');
+        
+        $selectedDelivery = null;
+        
+        if ($deliveryId) {
+            $selectedDelivery = DeliveryRequest::with([
+                'sender', 
+                'receiver',
+                'packages',
+                'pickUpRegion',
+                'dropOffRegion'
+            ])
+            ->whereIn('status', ['approved', 'completed'])
+            ->where(function($query) {
+                $query->whereNull('payment_status')
+                      ->orWhere('payment_status', 'pending')
+                      ->orWhere('payment_status', 'unpaid');
+            })
+            ->find($deliveryId);
+        }
 
-        \Log::info('Delivery found', [
-            'delivery' => $selectedDelivery ? $selectedDelivery->toArray() : null,
-            'has_packages' => $selectedDelivery ? $selectedDelivery->packages->count() : 0
+        return Inertia::render('Admin/Payments/RecordPayment', [
+            'delivery' => $selectedDelivery
         ]);
     }
 
-    return Inertia::render('Admin/Payments/RecordPayment', [
-        'delivery' => $selectedDelivery
-    ]);
-}
-
-    // NEW: Store over-the-counter payment
+    // Store over-the-counter payment
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -161,7 +195,6 @@ public function create(Request $request)
         DB::transaction(function () use ($validated, $request) {
             $delivery = DeliveryRequest::find($validated['delivery_request_id']);
             
-            // UPDATE: Override the payment method to reflect actual payment
             $delivery->update([
                 'payment_method' => $validated['method'],
                 'payment_status' => 'paid',
@@ -173,7 +206,7 @@ public function create(Request $request)
                 'method' => $validated['method'],
                 'reference_number' => $validated['reference_number'] ?? null,
                 'source' => 'branch_staff',
-                'amount' => $delivery->total_price, // Use the actual total, not amount received
+                'amount' => $delivery->total_price,
                 'notes' => $validated['notes'] ?? null,
                 'collected_by' => auth()->id(),
                 'collected_at' => now(),
@@ -185,7 +218,6 @@ public function create(Request $request)
                 'status' => 'verified',
             ]);
 
-            // Update all packages to 'preparing' status
             $delivery->packages()->update(['status' => 'preparing']);
             
             if ($delivery->deliveryOrder) {
@@ -196,7 +228,6 @@ public function create(Request $request)
                 ]);
             }
 
-            // Send notification to customer
             NotificationService::send(
                 $delivery->sender->user,
                 'Payment Received ✅',
@@ -205,54 +236,41 @@ public function create(Request $request)
             );
         });
 
-        return redirect()->route('staff.payments.index')
+        return redirect()->route('staff.payments.dashboard')
             ->with('success', 'Payment recorded successfully!');
     }
 
-    // FIXED: Show payment details
-   public function show(Payment $payment)
-{
-    if (!$payment || !$payment->id) {
-        \Log::error('Payment not found or invalid in show method', [
-            'payment' => $payment,
+    // Show payment details
+    public function show(Payment $payment)
+    {
+        if (!$payment || !$payment->id) {
+            abort(404, 'Payment not found.');
+        }
+        
+        $payment->load([
+            'deliveryRequest.sender',
+            'deliveryRequest.receiver', 
+            'deliveryRequest.packages',
+            'deliveryRequest.pickUpRegion',
+            'deliveryRequest.dropOffRegion',
+            'verifiedBy',
+            'rejectedBy',
+            'collectedBy',
+            'submittedBy'
         ]);
-        abort(404, 'Payment not found.');
-    }
-    $payment->load([
-        'deliveryRequest.sender',
-        'deliveryRequest.receiver', 
-        'deliveryRequest.packages',
-        'deliveryRequest.pickUpRegion',
-        'deliveryRequest.dropOffRegion',
-        'verifiedBy',
-        'rejectedBy',
-        'collectedBy',
-        'submittedBy'
-    ]);
 
-    \Log::info('Payment show method', [
-        'payment_id' => $payment->id,
-        'delivery_request_loaded' => $payment->relationLoaded('deliveryRequest'),
-        'delivery_request_id' => $payment->delivery_request_id
-    ]);
+        if ($payment->receipt_image) {
+            $payment->receipt_image_url = Storage::url($payment->receipt_image);
+        }
 
-    // Add the full URL for the receipt image as a regular property
-    if ($payment->receipt_image) {
-        $payment->receipt_image_url = Storage::url($payment->receipt_image);
+        return Inertia::render('Admin/Payments/Show', [
+            'payment' => $payment
+        ]);
     }
 
-    return Inertia::render('Admin/Payments/Show', [
-        'payment' => $payment
-    ]);
-}
-    // REMOVED: The old store method that required DeliveryRequest parameter
-    // This was causing conflicts with the new store method
-
+    // Verify payment
     public function verify(Payment $payment)
     {
-        // Authorization is handled by middleware
-
-        // Validation - can't verify already verified payments
         if ($payment->verified_by) {
             return back()->with('error', 'Payment already verified');
         }
@@ -265,7 +283,7 @@ public function create(Request $request)
                 'paid_at' => $payment->paid_at ?? now(),
             ]);
 
-            // For prepaid, ensure delivery order is ready (existing logic)
+            // Update delivery request and order based on payment type
             if ($payment->type === 'prepaid' && $payment->deliveryRequest->deliveryOrder) {
                 $payment->deliveryRequest->deliveryOrder->update([
                     'status' => 'ready',
@@ -274,13 +292,12 @@ public function create(Request $request)
                 ]);
             }
 
-            // For postpaid, mark the delivery request as paid
             if ($payment->type === 'postpaid') {
                 $payment->deliveryRequest->update([
                     'payment_status' => 'paid',
                     'payment_verified' => true,
                 ]);
-                // Also update DeliveryOrder payment_status and payment_verified_at
+                
                 if ($payment->deliveryRequest->deliveryOrder) {
                     $payment->deliveryRequest->deliveryOrder->update([
                         'payment_status' => 'paid',
@@ -290,39 +307,6 @@ public function create(Request $request)
                 }
             }
 
-            // For postpaid online, update delivery request status
-            if ($payment->type === 'postpaid' && $payment->source === 'customer_online_postpaid') {
-                $payment->deliveryRequest->update([
-                    'payment_status' => 'paid',
-                    'payment_verified' => true,
-                ]);
-                // Also update DeliveryOrder payment_status
-                if ($payment->deliveryRequest->deliveryOrder) {
-                    $payment->deliveryRequest->deliveryOrder->update([
-                        'payment_status' => 'paid',
-                        'payment_verified_at' => now(),
-                        'status' => 'ready',
-                    ]);
-                }
-            }
-
-            // For prepaid online payments, update delivery request status
-            if ($payment->type === 'prepaid') {
-                $payment->deliveryRequest->update([
-                    'payment_status' => 'paid',
-                    'payment_verified' => true,
-                ]);
-                // Also update DeliveryOrder payment_status if exists
-                if ($payment->deliveryRequest->deliveryOrder) {
-                    $payment->deliveryRequest->deliveryOrder->update([
-                        'payment_status' => 'paid',
-                        'payment_verified_at' => now(),
-                        'status' => 'ready',
-                    ]);
-                }
-            }
-
-            // Send verification notification
             NotificationService::send(
                 $payment->deliveryRequest->sender->user,
                 'Payment Verified ✅',
@@ -334,7 +318,7 @@ public function create(Request $request)
         return back()->with('success', 'Payment verified successfully');
     }
 
-    // Show the verification page for a payment
+    // Show verification page
     public function verifyView(Payment $payment)
     {
         $payment->load([
@@ -344,7 +328,6 @@ public function create(Request $request)
             'verifiedBy'
         ]);
         
-        // Add receipt image URL
         if ($payment->receipt_image) {
             $payment->receipt_image_url = Storage::url($payment->receipt_image);
         }
@@ -354,74 +337,9 @@ public function create(Request $request)
         ]);
     }
 
-    public function verificationIndex(Request $request)
-    {
-        $status = $request->input('status', 'pending');
-        $search = $request->input('search', '');
-        $source = $request->input('source', '');
-
-        $query = Payment::with([
-            'deliveryRequest.sender', 
-            'deliveryRequest.receiver', 
-            'submittedBy',
-            'verifiedBy',
-            'rejectedBy'
-        ])->latest();
-
-        // Filter by verification status - robust version
-        if ($status === 'pending') {
-            $query->where('status', 'pending_verification');
-        } elseif ($status === 'verified') {
-            $query->where('status', 'verified');
-        } elseif ($status === 'rejected') {
-            $query->where('status', 'rejected');
-        }
-        // Keep the legacy checks as a fallback for old data if needed
-        if ($status === 'pending') {
-            $query->orWhere(function($q) {
-                $q->whereNull('status')
-                  ->whereNull('verified_by')
-                  ->whereNull('rejected_by');
-            });
-        }
-
-        // Filter by payment source
-        if ($source) {
-            $query->where('source', $source);
-        }
-
-        // Search filter
-        if ($search) {
-            $query->where(function($q) use ($search) {
-                $q->where('reference_number', 'like', "%$search%")
-                  ->orWhereHas('deliveryRequest', function($q2) use ($search) {
-                      $q2->where('reference_number', 'like', "%$search%")
-                         ->orWhereHas('sender', function($q3) use ($search) {
-                             $q3->where('name', 'like', "%$search%");
-                         })
-                         ->orWhereHas('receiver', function($q3) use ($search) {
-                             $q3->where('name', 'like', "%$search%");
-                         });
-                  });
-            });
-        }
-
-        $payments = $query->paginate(15);
-
-        return Inertia::render('Admin/Payments/VerificationIndex', [
-            'payments' => $payments,
-            'filters' => [
-                'status' => $status,
-                'search' => $search,
-                'source' => $source,
-            ],
-            'sources' => Payment::SOURCES
-        ]);
-    }
-
+    // Reject payment
     public function reject(Payment $payment, Request $request)
     {
-        // Validation - can't reject already verified payments
         if ($payment->verified_by) {
             return back()->with('error', 'Payment already verified');
         }
@@ -431,29 +349,22 @@ public function create(Request $request)
         ]);
 
         DB::transaction(function () use ($payment, $validated) {
-            $updateData = [
+            $payment->update([
                 'rejected_by' => auth()->id(),
                 'rejected_at' => now(),
                 'rejection_reason' => $validated['rejection_reason'],
                 'status' => 'rejected',
-            ];
+            ]);
 
-            $payment->update($updateData);
-
-            // Reset delivery payment status to allow resubmission
             $payment->deliveryRequest->update([
                 'payment_status' => 'rejected'
             ]);
 
-            // Also update DeliveryOrder payment_status if exists
             if ($payment->deliveryRequest->deliveryOrder) {
                 $payment->deliveryRequest->deliveryOrder->update([
                     'payment_status' => 'rejected'
                 ]);
             }
-
-            // Send notification to the submitter
-            // NotificationService::sendPaymentRejectedNotification($payment);
         });
 
         return back()->with('success', 'Payment rejected successfully. Customer can resubmit with corrections.');

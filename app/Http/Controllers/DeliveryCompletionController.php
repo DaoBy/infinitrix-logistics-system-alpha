@@ -4,247 +4,387 @@ namespace App\Http\Controllers;
 
 use App\Models\DeliveryOrder;
 use App\Models\DeliveryRequest;
-use App\Models\Truck;
+use App\Models\Refund;
+use App\Models\Package;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
 
 class DeliveryCompletionController extends Controller
 {
-    public function completeDelivery(DeliveryOrder $order)
-    {
-        Log::info('[CompleteDelivery] Starting process for Order ID: ' . $order->id);
+  public function showCompletionForm(DeliveryOrder $order)
+{
+      $order->load([
+        'deliveryRequest.sender',
+        'deliveryRequest.receiver', 
+        'deliveryRequest.packages' => function($query) {
+            $query->with(['currentRegion', 'incidentReporter']);
+        },
+        'deliveryRequest.payment',
+        'deliveryRequest.dropOffRegion',
+        'deliveryRequest.pickUpRegion', // ADD THIS LINE
+        'deliveryRequest.refunds',
+        'driver',
+        'truck'
+    ]);
 
-        try {
-            DB::beginTransaction();
+    // Calculate delivery outcome statistics
+    $outcomeStats = $this->calculateDeliveryOutcome($order);
+    
+    // Check if refund is needed (prepaid with issues)
+    $requiresRefund = $order->needsReview() && $order->deliveryRequest->isPrepaid();
 
-            $order->refresh();
+    // Get existing refund details
+    $existingRefund = $order->deliveryRequest->refunds->first();
+    $hasExistingRefund = $existingRefund ? true : false;
+    $existingRefundStatus = $existingRefund ? $existingRefund->status : null;
+    $existingRefundId = $existingRefund ? $existingRefund->id : null;
 
-            if (!$order->deliveryRequest()->exists()) {
-                throw new \Exception("Delivery Request not found for order #{$order->id}");
-            }
+    return Inertia::render('Admin/DeliveryCompletion/CompletionForm', [
+        'order' => $order,
+        'outcomeStats' => $outcomeStats,
+        'requiresRefund' => $requiresRefund,
+        'hasExistingRefund' => $hasExistingRefund,
+        'existingRefundStatus' => $existingRefundStatus,
+        'existingRefundId' => $existingRefundId,
+    ]);
+}
 
-            $order->load([
-                'deliveryRequest.packages',
-                'truck',
-                'driver'
-            ]);
+    public function processCompletion(Request $request, DeliveryOrder $order)
+{
+    $request->validate([
+        'receiver_name' => 'required|string|max:255',
+        'receiver_contact' => 'nullable|string|max:50',
+        'signature' => 'nullable|string',
+        'notes' => 'nullable|string|max:500',
+        'release_packages' => 'required|array',
+        'release_packages.*' => 'exists:packages,id',
+    ]);
 
-            if ($order->deliveryRequest->packages->isEmpty()) {
-                throw new \Exception("No packages found for delivery request #{$order->deliveryRequest->id}");
-            }
+    Log::info('📦 Starting delivery completion process', [
+        'order_id' => $order->id,
+        'user_id' => auth()->id(),
+        'release_packages' => $request->release_packages,
+        'order_status' => $order->status,
+    ]);
 
-            // Update Delivery Order
-            $order->update([
-                'status' => 'completed',
-                'actual_arrival' => now(),
-                'completed_by' => auth()->id()
-            ]);
-
-            // --- Mark DeliveryRequest as completed ---
-            if ($order->deliveryRequest) {
-                $order->deliveryRequest->update([
-                    'status' => 'completed'
-                ]);
-            }
-
-            // Update Truck status if exists
-            if ($order->truck) {
-                $hasOtherOrders = DeliveryOrder::where('truck_id', $order->truck_id)
-                    ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
-                    ->exists();
-                
-                if (!$hasOtherOrders) {
-                    $order->truck->update(['status' => 'available']);
-                }
-            }
-
-            // Update all packages
-            foreach ($order->deliveryRequest->packages as $package) {
-                if ($package->status !== 'delivered') {
-                    $package->updateStatus('delivered', auth()->user(), "Marked delivered via DO #{$order->id}");
-                }
-                
-                $package->confirmDelivery(auth()->user(), "Completed via DO #{$order->id}");
-                $package->updateStatus('completed', auth()->user(), "Completed via DO #{$order->id}");
-            }
-
-            // --- REMOVE payment creation logic here ---
-            // Do NOT create or update payment records here.
-            // Payment handling is managed in PaymentController only.
-
-            DB::commit();
-
-            return redirect()->route('cargo-assignments.index')
-                ->with('success', "Delivery #{$order->id} completed successfully!");
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('[CompleteDelivery] Failed to complete order', [
-                'order_id' => $order->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return back()
-                ->withInput()
-                ->with('error', "Failed to complete delivery: {$e->getMessage()}");
-        }
-    }
-
-    public function showReleaseForm(DeliveryOrder $order)
-    {
-        // Eager load all necessary relationships
-        $order->load([
-            'deliveryRequest.sender',
-            'deliveryRequest.receiver',
-            'deliveryRequest.packages',
-            'deliveryRequest.payment',
-            'deliveryRequest.pickUpRegion',
-            'deliveryRequest.dropOffRegion',
-            'driver',
-            'truck'
-        ]);
-
-        // Log to verify data loading
-        \Log::debug('Release Form Data:', [
+    // PREVENT DUPLICATE PROCESSING - Check if already completed
+    if ($order->status === 'completed') {
+        Log::warning('❌ Duplicate completion attempt for already completed order', [
             'order_id' => $order->id,
-            'status' => $order->status,
-            'has_delivery_request' => $order->deliveryRequest ? true : false,
-            'package_count' => $order->deliveryRequest ? $order->deliveryRequest->packages->count() : 0
+            'user_id' => auth()->id(),
         ]);
-
-        // Remap delivery_request to deliveryRequest for Vue
-        $orderArr = $order->toArray();
-        if (isset($orderArr['delivery_request'])) {
-            $orderArr['deliveryRequest'] = $orderArr['delivery_request'];
-            unset($orderArr['delivery_request']);
-        }
-
-        return inertia('Admin/CargoAssignment/Release', [
-            'order' => $orderArr
-        ]);
+        return back()->with('error', 'This delivery order has already been completed.');
     }
 
-    public function completeOrder(Request $request, DeliveryOrder $order)
-    {
-        $request->validate([
-            'receiver_name' => 'required_if:is_postpaid,true|string|max:255',
-            'receiver_contact' => 'nullable|string|max:50',
-            'signature' => 'nullable|string',
-            'notes' => 'nullable|string'
-        ]);
-
-        // Status validation
-        if ($order->status !== 'delivered') {
-            return back()->with('error', 'Only delivered orders can be completed');
+    // PREVENT DUPLICATE REFUND CREATION - More specific check
+    if ($order->needsReview() && $order->deliveryRequest->isPrepaid()) {
+        $existingRefund = Refund::where('delivery_request_id', $order->delivery_request_id)
+            ->whereIn('status', ['pending', 'processed'])
+            ->first();
+            
+        if ($existingRefund) {
+            Log::warning('❌ Duplicate refund creation attempt', [
+                'order_id' => $order->id,
+                'user_id' => auth()->id(),
+                'existing_refund_id' => $existingRefund->id,
+                'existing_refund_status' => $existingRefund->status
+            ]);
+            
+            $message = $existingRefund->status === 'processed' 
+                ? "A refund has already been processed for this delivery. No further action needed."
+                : "A refund request (#{$existingRefund->id}) is already pending review.";
+                
+            return back()->with('error', $message);
         }
+    }
 
-        DB::transaction(function () use ($order, $request) {
-            // Update order status
-            $order->update([
-                'status' => 'completed',
+        return DB::transaction(function () use ($order, $request) {
+            $deliveryRequest = $order->deliveryRequest;
+            $isPrepaid = $deliveryRequest->isPrepaid();
+            $isPostpaid = $deliveryRequest->isPostpaid();
+
+            Log::info('🔍 Transaction started for delivery completion', [
+                'order_id' => $order->id,
+                'delivery_request_id' => $deliveryRequest->id,
+                'payment_type' => $isPrepaid ? 'prepaid' : ($isPostpaid ? 'postpaid' : 'unknown'),
+                'order_status' => $order->status,
+            ]);
+
+            // 1. Handle based on payment type and order status
+            if ($order->isDelivered()) {
+                Log::info('✅ Completing successful delivery', ['order_id' => $order->id]);
+                $this->completeSuccessfulDelivery($order, $request);
+            } elseif ($order->needsReview()) {
+                Log::info('⚠️ Handling delivery with issues', [
+                    'order_id' => $order->id,
+                    'payment_type' => $isPrepaid ? 'prepaid' : 'postpaid',
+                ]);
+
+                if ($isPrepaid) {
+                    $this->handlePrepaidWithIssues($order, $request);
+                } else {
+                    $this->handlePostpaidWithIssues($order, $request);
+                }
+            }
+
+            // 2. Update delivery order completion details
+            // Note: Prepaid with issues stays in 'needs_review' until refund processed
+            $orderUpdateData = [
                 'completed_at' => now(),
                 'completed_by' => auth()->id(),
                 'receiver_name' => $request->receiver_name,
                 'receiver_contact' => $request->receiver_contact,
                 'signature' => $request->signature,
-                'notes' => $request->notes
-            ]);
+                'notes' => $request->notes,
+            ];
 
-            // --- Mark DeliveryRequest as completed ---
-            if ($order->deliveryRequest) {
-                $order->deliveryRequest->update([
-                    'status' => 'completed'
-                ]);
+            // Only mark as completed if it's not prepaid with issues
+            if (!($order->needsReview() && $isPrepaid)) {
+                $orderUpdateData['status'] = 'completed';
             }
 
-            // Update packages
-            $order->deliveryRequest->packages()->each(function($package) {
-                $package->update(['status' => 'completed']);
-                $package->confirmDelivery(auth()->user(), 'Released via delivery completion');
-            });
+            $order->update($orderUpdateData);
 
-            // --- REMOVE payment creation logic here ---
-            // Do NOT create or update payment records here.
-            // Payment handling is managed in PaymentController only.
+            // 3. Update delivery request status
+            if (!($order->needsReview() && $isPrepaid)) {
+                $deliveryRequest->update(['status' => 'completed']);
+            }
+
+            Log::info('✅ Delivery completion process finished', [
+                'order_id' => $order->id,
+                'user_id' => auth()->id(),
+                'final_status' => $order->status,
+            ]);
+
+            return redirect()->route('delivery-completion.ready-for-completion')
+                ->with('success', 'Delivery completion processed successfully');
         });
-
-        return redirect()->route('cargo-assignments.delivery-completion.ready-for-release')
-            ->with('success', 'Delivery completed successfully');
     }
 
-    public function readyForRelease(Request $request)
+    private function completeSuccessfulDelivery(DeliveryOrder $order, Request $request)
     {
-        // Pending (delivered, not completed)
-        $pendingQuery = \App\Models\DeliveryOrder::with([
-                'deliveryRequest.sender',
-                'deliveryRequest.receiver',
-                'deliveryRequest.dropOffRegion',
-                'deliveryRequest.drop_off_region',
-                'deliveryRequest.payment'
-            ])
-            ->where('status', 'delivered')
-            ->latest();
-
-        // Completed (status = completed)
-        $completedQuery = \App\Models\DeliveryOrder::with([
-                'deliveryRequest.sender',
-                'deliveryRequest.receiver',
-                'deliveryRequest.dropOffRegion',
-                'deliveryRequest.drop_off_region',
-                'deliveryRequest.payment'
-            ])
-            ->where('status', 'completed')
-            ->latest();
-
-        // Apply filters to both queries
-        if ($request->search) {
-            $pendingQuery->where(function($query) use ($request) {
-                $query
-                    ->whereHas('deliveryRequest.sender', function($q) use ($request) {
-                        $q->where('name', 'like', "%{$request->search}%");
-                    })
-                    ->orWhereHas('deliveryRequest.receiver', function($q) use ($request) {
-                        $q->where('name', 'like', "%{$request->search}%");
-                    })
-                    ->orWhereHas('deliveryRequest', function($q) use ($request) {
-                        $q->where('reference_number', 'like', "%{$request->search}%");
-                    })
-                    ->orWhere('id', 'like', "%{$request->search}%");
-            });
-            $completedQuery->where(function($query) use ($request) {
-                $query
-                    ->whereHas('deliveryRequest.sender', function($q) use ($request) {
-                        $q->where('name', 'like', "%{$request->search}%");
-                    })
-                    ->orWhereHas('deliveryRequest.receiver', function($q) use ($request) {
-                        $q->where('name', 'like', "%{$request->search}%");
-                    })
-                    ->orWhereHas('deliveryRequest', function($q) use ($request) {
-                        $q->where('reference_number', 'like', "%{$request->search}%");
-                    })
-                    ->orWhere('id', 'like', "%{$request->search}%");
-            });
+        $deliveryRequest = $order->deliveryRequest;
+        
+        // Release all packages for successful delivery
+        $this->releasePackages($order, $request->release_packages, $request->receiver_name);
+        
+        if ($deliveryRequest->isPostpaid()) {
+            // Postpaid - mark as awaiting payment
+            $deliveryRequest->update([
+                'payment_status' => 'awaiting_payment'
+            ]);
         }
+        // Prepaid - no action needed (already paid)
 
-        if ($request->payment_type) {
-            $pendingQuery->whereHas('deliveryRequest', function($q) use ($request) {
-                $q->where('payment_type', $request->payment_type);
-            });
-            $completedQuery->whereHas('deliveryRequest', function($q) use ($request) {
-                $q->where('payment_type', $request->payment_type);
-            });
-        }
-
-        // Use different page parameters for each table
-        $pendingPage = $request->input('page', 1);
-        $completedPage = $request->input('completed_page', 1);
-
-        return inertia('Admin/CargoAssignment/ReleaseIndex', [
-            'orders' => $pendingQuery->paginate(5, ['*'], 'page', $pendingPage),
-            'completedOrders' => $completedQuery->paginate(5, ['*'], 'completed_page', $completedPage),
-            'filters' => $request->only(['search', 'payment_type'])
+        Log::info("Successful delivery completed", [
+            'order_id' => $order->id,
+            'payment_type' => $deliveryRequest->payment_type,
+            'payment_status' => $deliveryRequest->payment_status
         ]);
     }
+
+   private function handlePrepaidWithIssues(DeliveryOrder $order, Request $request)
+{
+    $deliveryRequest = $order->deliveryRequest;
+    
+    // CHECK FOR EXISTING REFUND FIRST
+    $existingRefund = Refund::where('delivery_request_id', $deliveryRequest->id)
+        ->whereIn('status', ['pending', 'processed'])
+        ->first();
+
+    if ($existingRefund) {
+        Log::warning("Prepaid delivery with issues - refund already exists", [
+            'order_id' => $order->id,
+            'existing_refund_id' => $existingRefund->id,
+            'existing_refund_status' => $existingRefund->status
+        ]);
+        
+        // Return specific message based on refund status
+        $message = $existingRefund->status === 'processed' 
+            ? "A refund has already been processed for this delivery order. No further action required."
+            : "A refund request is already pending review for this delivery order.";
+            
+        throw new \Exception($message);
+    }
+    
+    // Get incident packages (damaged/lost)
+    $incidentPackages = $this->getIncidentPackages($order);
+    $incidentPackageIds = $incidentPackages->pluck('id')->toArray();
+    
+    // Calculate refund amount: DELIVERY COST + INCIDENT PACKAGE VALUES
+    $deliveryCost = $deliveryRequest->total_price;
+    $incidentPackageValues = $incidentPackages->sum('value');
+    $refundAmount = $deliveryCost + $incidentPackageValues;
+    
+    // Create PENDING refund for negotiation (holds packages)
+    $refund = Refund::create([
+        'delivery_request_id' => $deliveryRequest->id,
+        'processed_by' => auth()->id(),
+        'refund_amount' => $refundAmount,
+        'original_amount' => $deliveryCost,
+        'reason' => 'incomplete',
+        'description' => 'Delivery issues require refund negotiation',
+        'refunded_packages' => $incidentPackageIds, // Auto-select incident packages
+        'notes' => $request->notes ?? "Automatic refund: Delivery cost + " . count($incidentPackageIds) . " incident package(s)",
+        'status' => 'pending', // PENDING = holds packages
+    ]);
+
+    Log::info("Prepaid delivery with issues - refund created with delivery cost + package values", [
+        'order_id' => $order->id,
+        'refund_id' => $refund->id,
+        'refund_amount' => $refundAmount,
+        'delivery_cost' => $deliveryCost,
+        'incident_package_values' => $incidentPackageValues,
+        'incident_packages' => $incidentPackageIds,
+        'incident_count' => count($incidentPackageIds)
+    ]);
+}
+    private function handlePostpaidWithIssues(DeliveryOrder $order, Request $request)
+    {
+        $deliveryRequest = $order->deliveryRequest;
+        
+        // Release ALL packages immediately (including damaged ones for inspection)
+        $this->releasePackages($order, $request->release_packages, $request->receiver_name);
+        
+        // Flag for invoice adjustment - don't charge for damaged/lost
+        $incidentPackages = $this->getIncidentPackages($order);
+        $adjustmentAmount = $incidentPackages->sum('value');
+        
+        $deliveryRequest->update([
+            'payment_status' => 'requires_adjustment',
+            'notes' => $request->notes ?? "Invoice adjustment needed: ₱" . number_format($adjustmentAmount, 2)
+        ]);
+
+        Log::info("Postpaid delivery with issues - packages released, invoice adjustment required", [
+            'order_id' => $order->id,
+            'adjustment_amount' => $adjustmentAmount,
+            'incident_packages' => $incidentPackages->pluck('id')
+        ]);
+    }
+
+    private function releasePackages(DeliveryOrder $order, array $packageIds, string $receiverName)
+    {
+        $packages = $order->deliveryRequest->packages()
+            ->whereIn('id', $packageIds)
+            ->get();
+
+        foreach ($packages as $package) {
+            // Release ALL selected packages (including damaged ones)
+            // Only block lost packages (which are already filtered out in Vue)
+            if (!in_array($package->status, ['lost_in_transit'])) {
+                $package->updateStatus('completed', auth()->user(), "Released to: $receiverName");
+                $package->confirmDelivery(auth()->user(), "Released to: $receiverName");
+                
+                // If package is damaged, log it for refund tracking
+                if ($package->status === 'damaged_in_transit') {
+                    Log::info("Released damaged package with refund", [
+                        'package_id' => $package->id,
+                        'order_id' => $order->id,
+                        'value' => $package->value
+                    ]);
+                }
+            }
+        }
+
+        Log::info("Packages released for delivery order", [
+            'order_id' => $order->id,
+            'released_packages' => $packageIds,
+            'released_by' => auth()->id(),
+            'receiver' => $receiverName
+        ]);
+    }
+
+    private function calculateDeliveryOutcome(DeliveryOrder $order): array
+    {
+        $packages = $order->deliveryRequest->packages;
+        
+        $total = $packages->count();
+        $delivered = $packages->where('status', 'delivered')->count();
+        $damaged = $packages->where('status', 'damaged_in_transit')->count();
+        $lost = $packages->where('status', 'lost_in_transit')->count();
+        
+        return [
+            'total_packages' => $total,
+            'delivered_count' => $delivered,
+            'damaged_count' => $damaged,
+            'lost_count' => $lost,
+            'success_rate' => $total > 0 ? round(($delivered / $total) * 100, 2) : 0,
+            'incident_count' => $damaged + $lost,
+        ];
+    }
+
+    private function getIncidentPackages(DeliveryOrder $order)
+    {
+        return $order->deliveryRequest->packages()
+            ->whereIn('status', ['damaged_in_transit', 'lost_in_transit'])
+            ->get();
+    }
+
+    private function getIncidentPackageIds(DeliveryOrder $order): array
+    {
+        return $this->getIncidentPackages($order)->pluck('id')->toArray();
+    }
+
+    public function readyForCompletion(Request $request)
+{
+    // Orders that have delivery outcomes but not yet completed
+    $pendingQuery = DeliveryOrder::with([
+            'deliveryRequest.sender',
+            'deliveryRequest.receiver',
+            'deliveryRequest.packages',
+            'deliveryRequest.payment',
+            'deliveryRequest.dropOffRegion',
+            'deliveryRequest.pickUpRegion', // ADD THIS LINE
+            'deliveryRequest.refunds',
+            'driver'
+        ])
+        ->whereIn('status', ['delivered', 'needs_review'])
+        ->latest();
+
+    $completedQuery = DeliveryOrder::with([
+            'deliveryRequest.sender', 
+            'deliveryRequest.receiver',
+            'deliveryRequest.packages',
+            'deliveryRequest.payment',
+            'deliveryRequest.dropOffRegion',
+            'deliveryRequest.pickUpRegion', // ADD THIS LINE
+            'deliveryRequest.refunds',
+            'driver'
+        ])
+        ->where('status', 'completed')
+        ->latest();
+
+    // Apply filters
+    if ($request->search) {
+        $search = $request->search;
+        $pendingQuery->where(function($q) use ($search) {
+            $q->whereHas('deliveryRequest', function($q) use ($search) {
+                $q->where('reference_number', 'like', "%{$search}%")
+                  ->orWhereHas('sender', function($q) use ($search) {
+                      $q->where('name', 'like', "%{$search}%");
+                  });
+            });
+        });
+        $completedQuery->where(function($q) use ($search) {
+            $q->whereHas('deliveryRequest', function($q) use ($search) {
+                $q->where('reference_number', 'like', "%{$search}%")
+                  ->orWhereHas('sender', function($q) use ($search) {
+                      $q->where('name', 'like', "%{$search}%");
+                  });
+            });
+        });
+    }
+
+    if ($request->status) {
+        $pendingQuery->where('status', $request->status);
+    }
+
+    return Inertia::render('Admin/DeliveryCompletion/CompletionIndex', [
+        'pendingOrders' => $pendingQuery->paginate(10, ['*'], 'pending_page'),
+        'completedOrders' => $completedQuery->paginate(10, ['*'], 'completed_page'),
+        'filters' => $request->only(['search', 'status'])
+    ]);
+}
 }

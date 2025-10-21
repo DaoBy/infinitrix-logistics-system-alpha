@@ -70,17 +70,24 @@ import DangerButton from '@/Components/DangerButton.vue';
 
 const { props } = usePage();
 
+// Define emits
+const emit = defineEmits(['sidebar-toggle']);
+
 // Sidebar State (Persistent using localStorage)
 const isSidebarOpen = ref(true);
 
 const toggleSidebar = () => {
   isSidebarOpen.value = !isSidebarOpen.value;
   localStorage.setItem('sidebarOpen', isSidebarOpen.value);
+  // Emit the toggle event to parent
+  emit('sidebar-toggle', isSidebarOpen.value);
 };
 
 onMounted(() => {
   const savedState = localStorage.getItem('sidebarOpen');
-  isSidebarOpen.value = savedState === 'true';
+  isSidebarOpen.value = savedState === null || savedState === 'true';
+  // Emit initial state
+  emit('sidebar-toggle', isSidebarOpen.value);
 });
 
 // User Info
@@ -91,29 +98,30 @@ const role = authUser?.role ?? 'guest';
 
 // Navigation Links by Role (Updated with MDI Icons)
 const navLinks = {
-admin: [
-  // { name: 'Dashboard', href: '/admin/dashboard', route: 'admin.dashboard', icon: 'mdi-home' },
-  { name: 'Employees', href: '/admin/employees', route: 'admin.employees', icon: 'mdi-account-group' },
-  { name: 'Customers', href: '/admin/customers', route: 'admin.customers', icon: 'mdi-account-box' },
-  { name: 'Profile Requests', href: '/admin/customer-update-requests', route: 'admin.customer-update-requests.index', icon: 'mdi-account-edit' },
-  { name: 'Regions', href: '/admin/regions', route: 'admin.regions.index', icon: 'mdi-map-marker-multiple' },
-  { name: 'Trucks', href: '/admin/trucks', route: 'admin.trucks', icon: 'mdi-truck' },
-  { name: 'Pending Requests', href: '/deliveries/pending', route: 'deliveries.pending', icon: 'mdi-package' },
-  { name: 'Package', href: '/admin/packages', route: 'admin.packages.index', icon: 'mdi-cash' },
-  { name: 'Driver-Truck Sets', href: '/driver-truck-assignments', route: 'driver-truck-assignments.index', icon: 'mdi-account-switch' },
-  { name: 'Cargo Assignment', href: '/cargo-assignments', route: 'cargo-assignments.index', icon: 'mdi-package-variant' },
-  { name: 'Release Package', href: '/cargo-assignments/delivery-completion/ready-for-release', route: 'cargo-assignments.delivery-completion.ready-for-release', icon: 'mdi-package-up' },
-  { name: 'Waybills', href: '/waybills', route: 'waybills.index', icon: 'mdi-cash' },
-  { name: 'Stickers', href: '/stickers', route: 'stickers.index', icon: 'mdi-label' },
-  { name: 'Truck Manifest', href: '/admin/manifests', route: 'manifests.index', icon: 'mdi-file-tree' },
-  { name: 'Payments', href: '/staff/payments', route: 'staff.payments.index', icon: 'mdi-cash-multiple' },
-{ 
-  name: 'Payment Verification', 
-  href: '/staff/payments/verification', 
-  route: 'staff.payments.verification.index', 
-  icon: 'mdi-check-decagram' 
-}, { name: 'Settings', href: '/admin/price-matrix/edit', route: 'admin.price-matrix.edit', icon: 'mdi-cog' }, 
+  admin: [
+    // { name: 'Dashboard', href: '/admin/dashboard', route: 'admin.dashboard', icon: 'mdi-home' },
+    { name: 'Employees', href: '/admin/employees', route: 'admin.employees', icon: 'mdi-account-group' },
+    { name: 'Customers', href: '/admin/customers', route: 'admin.customers', icon: 'mdi-account-box' },
+    { name: 'Profile Requests', href: '/admin/customer-update-requests', route: 'admin.customer-update-requests.index', icon: 'mdi-account-edit' },
+    { name: 'Regions', href: '/admin/regions', route: 'admin.regions.index', icon: 'mdi-map-marker-multiple' },
+    { name: 'Trucks', href: '/admin/trucks', route: 'admin.trucks', icon: 'mdi-truck' },
+    { name: 'Pending Requests', href: '/deliveries/pending', route: 'deliveries.pending', icon: 'mdi-package' },
+    { name: 'Package', href: '/admin/packages', route: 'admin.packages.index', icon: 'mdi-cash' },
+    { name: 'Driver-Truck Sets', href: '/driver-truck-assignments', route: 'driver-truck-assignments.index', icon: 'mdi-account-switch' },
+    { name: 'Cargo Assignment', href: '/cargo-assignments', route: 'cargo-assignments.index', icon: 'mdi-package-variant' },
+{
+  name: 'Release Package',
+  href: '/cargo-assignments/delivery-completion/ready-for-completion',
+  route: 'cargo-assignments.delivery-completion.ready-for-completion',
+  icon: 'mdi-package-up'
+},
+    { name: 'Waybills', href: '/waybills', route: 'waybills.index', icon: 'mdi-cash' },
+    { name: 'Stickers', href: '/stickers', route: 'stickers.index', icon: 'mdi-label' },
+    { name: 'Truck Manifest', href: '/admin/manifests', route: 'manifests.index', icon: 'mdi-file-tree' },
+    { name: 'Payments', href: '/staff/payments', route: 'staff.payments.dashboard', icon: 'mdi-cash-multiple' },
+ { name: 'Settings', href: '/admin/price-matrix/edit', route: 'admin.price-matrix.edit', icon: 'mdi-cog' }, 
   { name: 'Region Durations', href: '/region-durations', route: 'region-durations.index', icon: 'mdi-clock-outline' },
+  { name: 'Refunds', href: '/refunds', route: 'refunds.index', icon: 'mdi-cash-refund' },
 ],
 
  
@@ -125,12 +133,18 @@ staff: [
   { name: 'Package', href: '/admin/packages', route: 'admin.packages.index', icon: 'mdi-cash' },
   { name: 'Driver-Truck Sets', href: '/driver-truck-assignments', route: 'driver-truck-assignments.index', icon: 'mdi-account-switch' },
   { name: 'Cargo Assignment', href: '/cargo-assignments', route: 'cargo-assignments.index', icon: 'mdi-package-variant' },
-  { name: 'Release Package', href: '/cargo-assignments/delivery-completion/ready-for-release', route: 'cargo-assignments.delivery-completion.ready-for-release', icon: 'mdi-package-up' },
-  { name: 'Payments', href: '/staff/payments', route: 'staff.payments.index', icon: 'mdi-cash-multiple' },
+{
+  name: 'Release Package',
+  href: '/cargo-assignments/delivery-completion/ready-for-completion',
+  route: 'cargo-assignments.delivery-completion.ready-for-completion',
+  icon: 'mdi-package-up'
+}, { name: 'Payments', href: '/staff/payments', route: 'staff.payments.index', icon: 'mdi-cash-multiple' },
   { name: 'Payment Verification', href: '/staff/payments/verification', route: 'staff.payments.verification.index', icon: 'mdi-check-decagram' },
   { name: 'Waybills', href: '/waybills', route: 'waybills.index', icon: 'mdi-cash' },
   { name: 'Stickers', href: '/stickers', route: 'stickers.index', icon: 'mdi-label' },
   { name: 'Truck Manifest', href: '/admin/manifests', route: 'manifests.index', icon: 'mdi-file-tree' },
+  { name: 'Package Verification', href: '/package-verification/pending', route: 'package-verification.pending', icon: 'mdi-checkbox-marked-circle-outline' },
+  { name: 'Refunds', href: '/refunds', route: 'refunds.index', icon: 'mdi-cash-refund' },
 ],
 
 
@@ -156,10 +170,14 @@ driver: [
   },
 ],
 
-  collector: [
-    { name: 'Payments', href: '/collector/payments', route: 'collector.payments.index', icon: 'mdi-cash' },
-    { name: 'Pending Collections', href: '/collector/payments/pending', route: 'collector.payments.pending', icon: 'mdi-clock-alert' },
-  ],
+ collector: [
+  { name: 'Collection Dashboard', href: '/collector/payments/dashboard', route: 'collector.payments.dashboard', icon: 'mdi-view-dashboard' },
+  { name: 'Pending Collections', href: '/collector/payments/pending', route: 'collector.payments.pending', icon: 'mdi-clock-alert' },
+  { name: 'My Collections', href: '/collector/payments', route: 'collector.payments.index', icon: 'mdi-cash' },
+  { name: 'Verified Payments', href: '/collector/payments?status=verified', route: 'collector.payments.index', icon: 'mdi-check-circle' },
+  { name: 'Rejected Payments', href: '/collector/payments?status=rejected', route: 'collector.payments.index', icon: 'mdi-close-circle' },
+],
+
   guest: [],
 };
 

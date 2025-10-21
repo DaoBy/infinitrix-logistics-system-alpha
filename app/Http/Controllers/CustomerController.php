@@ -15,72 +15,93 @@ use Illuminate\Validation\Rules;
 
 class CustomerController extends Controller
 {
-    public function index(Request $request)
-    {
-        $query = Customer::query()
-            ->with(['user', 'sentDeliveries', 'receivedDeliveries'])
-            ->withCount(['sentDeliveries', 'receivedDeliveries'])
-            ->whereHas('user', function ($query) {
-                $query->where('is_active', true);
-            });
+  public function index(Request $request)
+{
+    // Remove the user filter temporarily to see all customers
+    $query = Customer::query()
+        ->with(['user']);
 
-        // Search filter
-        if ($request->has('search') && $request->search) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('company_name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('mobile', 'like', "%{$search}%");
-            });
-        }
-
-        // Category filter
-        if ($request->has('customer_category') && $request->customer_category) {
-            $query->where('customer_category', $request->customer_category);
-        }
-
-        // Frequency filter
-        if ($request->has('frequency_type') && $request->frequency_type) {
-            $query->where('frequency_type', $request->frequency_type);
-        }
-
-        // Sorting
-        $sortField = $request->get('sort_field', 'created_at');
-        $sortDirection = $request->get('sort_direction', 'desc');
-        
-        if (in_array($sortField, ['name', 'email', 'customer_category', 'frequency_type', 'created_at'])) {
-            $query->orderBy($sortField, $sortDirection);
-        }
-
-        // Pagination
-        $customers = $query->paginate(10)->through(function ($customer) {
-            return [
-                'id' => $customer->id,
-                'first_name' => $customer->first_name,
-                'last_name' => $customer->last_name,
-                'company_name' => $customer->company_name,
-                'email' => $customer->email,
-                'mobile' => $customer->mobile,
-                'customer_category' => $customer->customer_category,
-                'frequency_type' => $customer->frequency_type,
-                'total_orders' => $customer->sent_deliveries_count + $customer->received_deliveries_count,
-                'created_at' => $customer->created_at->format('Y-m-d H:i:s'),
-                'user_id' => $customer->user_id,
-                'is_active' => $customer->user?->is_active,
-            ];
+    // Search filter
+    if ($request->has('search') && $request->search) {
+        $search = $request->search;
+        $query->where(function($q) use ($search) {
+            $q->where('first_name', 'like', "%{$search}%")
+              ->orWhere('last_name', 'like', "%{$search}%")
+              ->orWhere('company_name', 'like', "%{$search}%")
+              ->orWhere('email', 'like', "%{$search}%")
+              ->orWhere('mobile', 'like', "%{$search}%");
         });
-
-        return Inertia::render('Admin/Customers/Index', [
-            'customers' => $customers,
-            'filters' => $request->only(['search', 'customer_category', 'frequency_type']),
-            'sort_field' => $sortField,
-            'sort_direction' => $sortDirection,
-            'status' => session('status'),
-            'success' => session('success'),
-            'error' => session('error'),
-        ]);
     }
+
+    // Category filter
+    if ($request->has('customer_category') && $request->customer_category) {
+        $query->where('customer_category', $request->customer_category);
+    }
+
+    // Frequency filter
+    if ($request->has('frequency_type') && $request->frequency_type) {
+        $query->where('frequency_type', $request->frequency_type);
+    }
+
+    // Sorting
+    $sortField = $request->get('sort_field', 'created_at');
+    $sortDirection = $request->get('sort_direction', 'desc');
+    
+    if (in_array($sortField, ['first_name', 'last_name', 'email', 'customer_category', 'frequency_type', 'created_at'])) {
+        $query->orderBy($sortField, $sortDirection);
+    }
+
+    $customers = $query->paginate(20); // Increased to see more customers
+
+    // Manually load the counts for ALL customers
+    $customerIds = $customers->pluck('id');
+    
+    // Get sent deliveries count
+    $sentCounts = \App\Models\DeliveryRequest::whereIn('sender_id', $customerIds)
+        ->selectRaw('sender_id, COUNT(*) as count')
+        ->groupBy('sender_id')
+        ->pluck('count', 'sender_id');
+    
+    // Get received deliveries count  
+    $receivedCounts = \App\Models\DeliveryRequest::whereIn('receiver_id', $customerIds)
+        ->selectRaw('receiver_id, COUNT(*) as count')
+        ->groupBy('receiver_id')
+        ->pluck('count', 'receiver_id');
+
+    // Transform the customers with manual counts
+    $customers->getCollection()->transform(function ($customer) use ($sentCounts, $receivedCounts) {
+        $sentCount = $sentCounts[$customer->id] ?? 0;
+        $receivedCount = $receivedCounts[$customer->id] ?? 0;
+        
+        \Log::debug("Customer {$customer->id}: {$customer->first_name} {$customer->last_name} - User Active: " . ($customer->user?->is_active ? 'Yes' : 'No') . " - Sent: {$sentCount}, Received: {$receivedCount}");
+        
+        return [
+            'id' => $customer->id,
+            'first_name' => $customer->first_name,
+            'last_name' => $customer->last_name,
+            'company_name' => $customer->company_name,
+            'email' => $customer->email,
+            'mobile' => $customer->mobile,
+            'customer_category' => $customer->customer_category,
+            'frequency_type' => $customer->frequency_type,
+            'total_orders' => $sentCount + $receivedCount,
+            'sent_deliveries_count' => $sentCount,
+            'received_deliveries_count' => $receivedCount,
+            'created_at' => $customer->created_at->format('Y-m-d H:i:s'),
+            'user_id' => $customer->user_id,
+            'is_active' => $customer->user?->is_active,
+            'user_status' => $customer->user ? ($customer->user->is_active ? 'Active' : 'Inactive') : 'No User',
+        ];
+    });
+
+    return Inertia::render('Admin/Customers/Index', [
+        'customers' => $customers,
+        'filters' => $request->only(['search', 'customer_category', 'frequency_type', 'sort_field', 'sort_direction']),
+        'status' => session('status'),
+        'success' => session('success'),
+        'error' => session('error'),
+    ]);
+}
 
     public function create()
     {
@@ -137,35 +158,50 @@ class CustomerController extends Controller
         }
     }
 
-    public function show(Customer $customer)
-    {
-        $customer->load([
-            'sentDeliveries' => fn($q) => $q->with('packages')->latest()->take(5),
-            'receivedDeliveries' => fn($q) => $q->with('packages')->latest()->take(5),
-            'user'
-        ]);
+public function show(Customer $customer)
+{
+    // Load relationships with proper counting
+    $customer->load([
+        'sentDeliveries' => function($q) {
+            $q->with(['receiver', 'pickUpRegion', 'dropOffRegion', 'packages'])
+              ->latest();
+        },
+        'receivedDeliveries' => function($q) {
+            $q->with(['sender', 'pickUpRegion', 'dropOffRegion', 'packages'])
+              ->latest();
+        },
+        'user'
+    ]);
 
-        // Add these queries for the tables
-        $deliveryRequests = $customer->sentDeliveries()
-            ->with(['receiver', 'pickUpRegion', 'dropOffRegion']) // updated
-            ->latest()
-            ->paginate(5);
+    // Get delivery requests with pagination
+    $deliveryRequests = $customer->sentDeliveries()
+        ->with(['receiver', 'pickUpRegion', 'dropOffRegion'])
+        ->latest()
+        ->paginate(10); // Increased from 5 to 10 for better display
 
-        $transactions = DeliveryOrder::whereHas('deliveryRequest', function($q) use ($customer) {
-                $q->where('sender_id', $customer->id);
-            })
-            ->with(['deliveryRequest.receiver'])
-            ->latest()
-            ->paginate(5);
+    // Get recent deliveries for the summary
+    $recentSentDeliveries = $customer->sentDeliveries()
+        ->with('packages')
+        ->latest()
+        ->take(5)
+        ->get();
 
-        return Inertia::render('Admin/Customers/Show', [
-            'customer' => $customer,
-            'recent_sent_deliveries' => $customer->sentDeliveries,
-            'recent_received_deliveries' => $customer->receivedDeliveries,
-            'deliveryRequests' => $deliveryRequests, // Add this
-            'transactions' => $transactions, // Add this
-        ]);
-    }
+    $recentReceivedDeliveries = $customer->receivedDeliveries()
+        ->with('packages')
+        ->latest()
+        ->take(5)
+        ->get();
+
+    return Inertia::render('Admin/Customers/Show', [
+        'customer' => $customer,
+        'recent_sent_deliveries' => $recentSentDeliveries,
+        'recent_received_deliveries' => $recentReceivedDeliveries,
+        'deliveryRequests' => $deliveryRequests,
+        'status' => session('status'),
+        'success' => session('success'),
+        'error' => session('error'),
+    ]);
+}
 
     public function edit(Customer $customer)
     {

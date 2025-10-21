@@ -41,6 +41,12 @@
             placeholder="Filter by region"
             class="flex-1 min-w-0"
           />
+          <SelectInput
+            v-model="backhaulFilter"
+            :options="backhaulOptions"
+            placeholder="Backhaul status"
+            class="flex-1 min-w-0"
+          />
         </div>
         <SecondaryButton @click="resetFilters" size="sm">
           Clear Filters
@@ -62,27 +68,60 @@
         
         <DataTable
           :columns="deliveryColumns"
-          :data="deliveries?.data ?? []"
+          :data="transformedDeliveries"
           :loading="loading"
           selectable
           @selection-change="handleSelectionChange"
         >
           <template #status="{ row }">
-            <StatusBadge
-              :status="row.status"
-              :class="statusBadgeClass(row.status)"
-            >
-              {{ formatStatusText(row.status) }}
-            </StatusBadge>
+            <div class="flex items-center space-x-2">
+              <StatusBadge
+                :status="row.status"
+                :class="statusBadgeClass(row.status)"
+              >
+                {{ formatStatusText(row.status) }}
+              </StatusBadge>
+              <span 
+                v-if="row.is_backhaul" 
+                class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clip-rule="evenodd" />
+                </svg>
+                Backhaul
+              </span>
+            </div>
           </template>
           <template #packages="{ row }">
             <div class="flex flex-col items-center">
               <span>{{ row.delivery_request?.packages?.length ?? 0 }}</span>
-              <!-- Show warning icon if any packages are missing stickers -->
               <span v-if="hasUnstickerizedPackages(row)" class="text-yellow-500" title="Some packages are missing stickers">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
                 </svg>
+              </span>
+            </div>
+          </template>
+          <template #assignment_type="{ row }">
+            <div class="flex items-center">
+              <span 
+                v-if="row.is_backhaul" 
+                class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clip-rule="evenodd" />
+                </svg>
+                Backhaul
+              </span>
+              <span 
+                v-else 
+                class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1 1 0 11-3 0 1 1 0 013 0z" />
+                  <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1v-1a1 1 0 011-1h2a1 1 0 011 1v1a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H19a1 1 0 001-1V5a1 1 0 00-1-1H3z" />
+                </svg>
+                Regular
               </span>
             </div>
           </template>
@@ -111,7 +150,6 @@
           </template>
         </DataTable>
         
-        <!-- Use the provided Pagination component for Delivery Orders -->
         <Pagination
           v-if="deliveries?.last_page > 1"
           :pagination="deliveries"
@@ -149,6 +187,12 @@
                     <div>
                       <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
                         DO-{{ delivery.id?.toString()?.padStart(6, '0') }}
+                        <span 
+                          v-if="delivery.is_backhaul" 
+                          class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800"
+                        >
+                          Backhaul
+                        </span>
                       </p>
                       <p class="text-xs text-gray-500 dark:text-gray-400">
                         {{ delivery.delivery_request?.pick_up_region?.name ?? 'N/A' }} → 
@@ -157,7 +201,6 @@
                       <div class="mt-1 text-xs">
                         <p>Volume: {{ calculateTotalVolume(delivery.delivery_request?.packages ?? []) }} m³</p>
                         <p>Weight: {{ calculateTotalWeight(delivery.delivery_request?.packages ?? []) }} kg</p>
-                        <!-- Show warning if packages are missing stickers -->
                         <p v-if="hasUnstickerizedPackages(delivery)" class="text-yellow-600 dark:text-yellow-400 flex items-center">
                           <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
                             <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
@@ -187,14 +230,19 @@
                 <p class="font-medium">Total Selected:</p>
                 <p>Volume: {{ totalSelectedVolume }} m³</p>
                 <p>Weight: {{ totalSelectedWeight }} kg</p>
-                <!-- Show warning if any selected delivery has packages without stickers -->
                 <p v-if="hasAnyUnstickerizedPackages" class="text-yellow-600 dark:text-yellow-400 font-medium">
                   ⚠️ Some packages are missing stickers
+                </p>
+                <p v-if="hasMixedAssignmentTypes" class="text-red-600 dark:text-red-400 font-medium">
+                  ⚠️ Mixed assignment types (Regular + Backhaul)
+                </p>
+                <p v-if="hasRegionMismatch" class="text-red-600 dark:text-red-400 font-medium">
+                  ⚠️ Region mismatch in assignments
                 </p>
               </div>
               <PrimaryButton 
                 class="mt-4 w-full"
-                :disabled="!selectedSet || !selectedDeliveries.length || hasAnyUnstickerizedPackages"
+                :disabled="!canAssignSelected"
                 @click="openAssignmentModal"
               >
                 Assign Selected
@@ -209,17 +257,31 @@
             <div class="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
               <h3 class="font-medium text-gray-900 dark:text-gray-100">
                 Available Driver-Truck Sets
+                <div class="mt-2 flex space-x-2">
+                  <button 
+                    v-for="type in assignmentTypeOptions" 
+                    :key="type.value"
+                    @click="setAssignmentTypeFilter(type.value)"
+                    class="px-2 py-1 text-xs rounded border"
+                    :class="assignmentTypeFilter === type.value 
+                      ? 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700' 
+                      : 'bg-gray-100 text-gray-600 border-gray-300 dark:bg-gray-700 dark:text-gray-400 dark:border-gray-600'"
+                  >
+                    {{ type.label }}
+                  </button>
+                </div>
               </h3>
             </div>
             <div class="p-4">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <template v-if="driverTruckSets?.length > 0">
+                <template v-if="filteredDriverTruckSets?.length > 0">
                   <div 
-                    v-for="set in driverTruckSets" 
+                    v-for="set in filteredDriverTruckSets" 
                     :key="set.id" 
                     class="border rounded-lg p-4 hover:border-blue-500 transition-colors cursor-pointer"
                     :class="{ 
                       'border-blue-500 bg-blue-50 dark:bg-blue-900/20': selectedSet?.id === set.id,
+                      'border-purple-500 bg-purple-50 dark:bg-purple-900/20': set.available_for_backhaul,
                       'opacity-50 cursor-not-allowed': !set.is_available,
                       'cursor-pointer': set.is_available
                     }"
@@ -230,19 +292,34 @@
                       <div class="flex-1">
                         <div class="flex items-center space-x-2">
                           <div class="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
-                            <span class="text-gray-600 dark:text-gray-300 font-medium">{{ set.driver?.initials ?? '' }}</span>
+                            <span class="text-gray-600 dark:text-gray-300 font-medium">{{ set.driver.initials ?? '' }}</span>
                           </div>
                           <div>
-                            <p class="font-medium">{{ set.driver?.name ?? 'N/A' }}</p>
-                            <p class="text-xs text-gray-500 dark:text-gray-400">{{ set.driver?.employee_id ?? '' }}</p>
+                            <p class="font-medium">{{ set.driver.name ?? 'N/A' }}</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">{{ set.driver.employee_id ?? '' }}</p>
+                            <span 
+                              v-if="set.available_for_backhaul" 
+                              class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 mt-1"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clip-rule="evenodd" />
+                              </svg>
+                              Backhaul Available
+                            </span>
                           </div>
                         </div>
                         <div class="mt-2 text-xs">
-                          <p>Current Assignments: {{ set.driver?.current_assignments ?? 0 }}</p>
+                          <p>Current Assignments: {{ set.driver?.delivery_orders_count ?? 0 }}</p>
                           <p>Available: 
                             <span :class="set.driver?.canAcceptNewAssignment ? 'text-green-600' : 'text-red-600'">
                               {{ set.driver?.canAcceptNewAssignment ? 'Yes' : 'No' }}
                             </span>
+                          </p>
+                          <p v-if="set.available_for_backhaul" class="text-purple-600">
+                            Current: {{ set.current_region?.name ?? 'N/A' }}
+                          </p>
+                          <p v-else class="text-blue-600">
+                            Home: {{ set.region?.name ?? 'N/A' }}
                           </p>
                         </div>
                       </div>
@@ -256,6 +333,12 @@
                           <div>
                             <p class="font-medium">{{ set.truck?.license_plate ?? 'N/A' }}</p>
                             <p class="text-xs text-gray-500 dark:text-gray-400">{{ set.truck?.make ?? '' }} {{ set.truck?.model ?? '' }}</p>
+                            <span 
+                              v-if="set.truck?.status === 'available_for_backhaul'"
+                              class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 mt-1"
+                            >
+                              Backhaul
+                            </span>
                           </div>
                         </div>
                         <div class="mt-2 space-y-2">
@@ -282,12 +365,17 @@
                         </div>
                       </div>
                     </div>
-                    <!-- Current Trips -->
-                    <div v-if="set.active_orders?.length > 0" class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                      <p class="text-xs font-medium mb-1">Current Trips:</p>
-                      <div v-for="order in set.active_orders" :key="order.id" class="text-xs">
-                        <p>DO-{{ order.id }}: {{ order.status }}</p>
-                      </div>
+
+                    <!-- Backhaul Management Buttons -->
+                    <div v-if="set.is_available && !set.available_for_backhaul" class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                      <SecondaryButton 
+                        size="xs" 
+                        class="w-full"
+                        @click.stop="enableBackhaul(set)"
+                        :disabled="!canEnableBackhaul(set)"
+                      >
+                        Enable Backhaul
+                      </SecondaryButton>
                     </div>
 
                     <!-- Dispatch Button -->
@@ -316,67 +404,78 @@
     </div>
 
     <!-- Batch Assignment Suggestions -->
-  <div class="mt-8 bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
-    <div class="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
-      <h3 class="font-medium text-gray-900 dark:text-gray-100">
-        Batch Assignment Suggestions
-      </h3>
-    </div>
-    <div class="p-4">
-      <div v-if="batchSuggestions.length > 0" class="space-y-4">
-        <div v-for="suggestion in batchSuggestions" :key="suggestion.destination_region.id" 
-             class="border rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-          <div class="flex justify-between items-start">
-            <div>
-              <p class="font-medium">
-                From: {{ suggestion.pickup_region?.name ?? 'N/A' }} → To: {{ suggestion.destination_region.name }}
-              </p>
-              <p class="text-sm text-gray-600 dark:text-gray-400">
-                {{ suggestion.delivery_requests.length }} deliveries
-              </p>
-              <p class="text-sm mt-2">
-                Total Volume: {{ suggestion.total_volume.toFixed(2) }} m³ | 
-                Total Weight: {{ suggestion.total_weight.toFixed(2) }} kg
-              </p>
-              <!-- Show warning if any delivery has packages without stickers -->
-              <p v-if="hasUnstickerizedPackagesInSuggestion(suggestion)" class="text-yellow-600 dark:text-yellow-400 text-sm mt-1">
-                ⚠️ Some deliveries have packages without stickers
-              </p>
+    <div class="mt-8 bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
+      <div class="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
+        <h3 class="font-medium text-gray-900 dark:text-gray-100">
+          Batch Assignment Suggestions
+        </h3>
+      </div>
+      <div class="p-4">
+        <div v-if="effectiveBatchSuggestions.length > 0" class="space-y-4">
+          <div v-for="suggestion in effectiveBatchSuggestions" :key="suggestion.destination_region?.id || suggestion.pickup_region?.id" 
+               class="border rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="font-medium">
+                  From: {{ suggestion.pickup_region?.name ?? 'N/A' }} → To: {{ suggestion.destination_region?.name ?? 'N/A' }}
+                </p>
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                  {{ suggestion.delivery_requests?.length ?? 0 }} deliveries
+                </p>
+                <p class="text-sm mt-2">
+                  Total Volume: {{ (suggestion.total_volume || 0).toFixed(2) }} m³ | 
+                  Total Weight: {{ (suggestion.total_weight || 0).toFixed(2) }} kg
+                </p>
+                <p v-if="isBackhaulSuggestion(suggestion)" class="text-purple-600 dark:text-purple-400 text-sm mt-1">
+                  💡 Backhaul Opportunity: Deliveries from current region to home region
+                </p>
+                <p v-if="hasUnstickerizedPackagesInSuggestion(suggestion)" class="text-yellow-600 dark:text-yellow-400 text-sm mt-1">
+                  ⚠️ Some deliveries have packages without stickers
+                </p>
+              </div>
+              <PrimaryButton 
+                size="sm" 
+                @click="prepareBatchAssignment(suggestion)"
+                :disabled="!suitableDriverTruckSets(suggestion).length || hasUnstickerizedPackagesInSuggestion(suggestion)"
+              >
+                Assign Batch
+              </PrimaryButton>
             </div>
-            <PrimaryButton 
-              size="sm" 
-              @click="prepareBatchAssignment(suggestion)"
-              :disabled="!suitableDriverTruckSets(suggestion).length || hasUnstickerizedPackagesInSuggestion(suggestion)"
-            >
-              Assign Batch
-            </PrimaryButton>
-          </div>
-          
-          <div v-if="suitableDriverTruckSets(suggestion).length" class="mt-4">
-            <p class="text-sm font-medium">Suitable Driver-Truck Sets (Region: {{ suggestion.pickup_region?.name ?? 'N/A' }}):</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
-              <div v-for="set in suitableDriverTruckSets(suggestion)" 
-                   :key="set.id"
-                   class="p-2 border rounded cursor-pointer"
-                   :class="{ 'border-blue-500': selectedSet?.id === set.id }"
-                   @click="selectSet(set)">
-                <p class="font-medium">{{ set.driver.name }}</p>
-                <p class="text-xs">{{ set.truck.license_plate }}</p>
-                <p class="text-xs">Available: {{ set.available_volume.toFixed(2) }}m³ {{ set.available_weight.toFixed(2) }}kg</p>
-                <p class="text-xs text-gray-500">Region: {{ set.region?.name ?? 'N/A' }}</p>
+            
+            <div v-if="suitableDriverTruckSets(suggestion).length" class="mt-4">
+              <p class="text-sm font-medium">Suitable Driver-Truck Sets:</p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                <div v-for="set in suitableDriverTruckSets(suggestion)" 
+                     :key="set.id"
+                     class="p-2 border rounded cursor-pointer"
+                     :class="{ 
+                       'border-blue-500': selectedSet?.id === set.id,
+                       'border-purple-500': set.available_for_backhaul
+                     }"
+                     @click="selectSet(set)">
+                  <p class="font-medium">{{ set.driver?.name ?? 'N/A' }}</p>
+                  <p class="text-xs">{{ set.truck?.license_plate ?? 'N/A' }}</p>
+                  <p class="text-xs">Available: {{ (set.available_volume ?? 0).toFixed(2) }}m³ {{ (set.available_weight ?? 0).toFixed(2) }}kg</p>
+                  <p class="text-xs text-gray-500">Region: {{ set.region?.name ?? 'N/A' }}</p>
+                  <span 
+                    v-if="set.available_for_backhaul" 
+                    class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 mt-1"
+                  >
+                    Backhaul
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-          <div v-else class="mt-4 text-sm text-yellow-600">
-            No suitable driver-truck sets available in region: {{ suggestion.pickup_region?.name ?? 'N/A' }}
+            <div v-else class="mt-4 text-sm text-yellow-600">
+              No suitable driver-truck sets available
+            </div>
           </div>
         </div>
-      </div>
-      <div v-else class="text-center text-gray-500 dark:text-gray-400">
-        No batch assignment suggestions available
+        <div v-else class="text-center text-gray-500 dark:text-gray-400">
+          No batch assignment suggestions available
+        </div>
       </div>
     </div>
-  </div>
 
     <!-- Assignment Confirmation Modal -->
     <ConfirmationModal 
@@ -396,193 +495,101 @@
           <ul v-if="validationSummary.details" class="mt-2 list-disc list-inside">
             <li v-for="detail in validationSummary.details" :key="detail">{{ detail }}</li>
           </ul>
-          <div v-if="validationSummary.etaWarning" class="mt-2 text-yellow-700 text-xs">
-            ⚠️ {{ validationSummary.etaWarning }}
-          </div>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div>
             <p class="text-sm font-medium">Total Selected Volume</p>
-            <p class="text-lg">{{ totalSelectedVolume }} m³</p>
-            <p class="text-xs">Available: {{ validationSummary.availableVolume.toFixed(2) }} m³</p>
+            <p class="text-lg">{{ totalSelectedVolume.toFixed(2) }} m³</p>
+            <p class="text-xs">Available: {{ (validationSummary.availableVolume || 0).toFixed(2) }} m³</p>
           </div>
           <div>
             <p class="text-sm font-medium">Total Selected Weight</p>
-            <p class="text-lg">{{ totalSelectedWeight }} kg</p>
-            <p class="text-xs">Available: {{ validationSummary.availableWeight.toFixed(2) }} kg</p>
+            <p class="text-lg">{{ totalSelectedWeight.toFixed(2) }} kg</p>
+            <p class="text-xs">Available: {{ (validationSummary.availableWeight || 0).toFixed(2) }} kg</p>
           </div>
         </div>
 
-        <div class="mt-4">
-          <InputLabel value="Estimated Departure Time" />
-          <DateTimeInput
-            v-model="assignmentForm.estimated_departure"
-            class="w-full"
-            :min="minDepartureDateTime"
-          />
-          <div v-if="autoDepartureNote" class="text-xs text-blue-600 mt-1">
-            {{ autoDepartureNote }}
+        <div class="border-t pt-4">
+          <p class="text-sm font-medium mb-2">Selected Deliveries:</p>
+          <div class="space-y-2 max-h-32 overflow-y-auto">
+            <div v-for="delivery in selectedDeliveries" :key="delivery.id" class="flex justify-between text-sm">
+              <span>DO-{{ delivery.id.toString().padStart(6, '0') }}</span>
+              <span>{{ delivery.delivery_request?.pick_up_region?.name ?? 'N/A' }} → {{ delivery.delivery_request?.drop_off_region?.name ?? 'N/A' }}</span>
+              <span v-if="delivery.is_backhaul" class="text-purple-600">Backhaul</span>
+            </div>
           </div>
         </div>
 
-        <div v-if="calculatedETA" class="mt-2 text-sm">
-          <p>Estimated Arrival: {{ formatDateTime(calculatedETA) }}</p>
-        </div>
-      </div>
-    </ConfirmationModal>
-
-    <!-- Cancel Confirmation Modal -->
-    <ConfirmationModal 
-      :show="showCancelModal"
-      @close="closeCancelModal"
-      @confirmed="cancelAssignment"
-      title="Cancel Assignment"
-      confirm-text="Yes, Cancel"
-      confirm-variant="danger"
-    >
-      <p>Are you sure you want to cancel this assignment?</p>
-      <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">This action cannot be undone.</p>
-    </ConfirmationModal>
-
-    <!-- Validation Modal -->
-    <ConfirmationModal 
-      :show="showValidationModal"
-      @close="closeValidationModal"
-      @confirmed="submitAssignment"
-      title="Assignment Validation"
-      confirm-text="Confirm Assignment"
-      :confirm-disabled="!validationSummary.isValid"
-    >
-      <div v-if="validationSummary.value">
-        <div class="space-y-4">
-          <div class="p-4 rounded-lg" :class="{
-            'bg-green-50 text-green-800': validationSummary.value.isValid,
-            'bg-red-50 text-red-800': !validationSummary.value.isValid
-          }">
-            <p class="font-medium">{{ validationSummary.value.message }}</p>
-            <ul v-if="validationSummary.value.details" class="mt-2 list-disc list-inside">
-              <li v-for="detail in validationSummary.value.details" :key="detail">{{ detail }}</li>
-            </ul>
-          </div>
-
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <p class="text-sm font-medium">Total Selected Volume</p>
-              <p class="text-lg">{{ totalSelectedVolume }} m³</p>
-              <p class="text-xs">Available: {{ validationSummary.value.availableVolume.toFixed(2) }} m³</p>
+        <div class="border-t pt-4">
+          <p class="text-sm font-medium mb-2">Selected Driver-Truck Set:</p>
+          <div class="flex items-center space-x-3">
+            <div class="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+              <span class="text-gray-600 dark:text-gray-300 font-medium">{{ selectedSet?.driver?.initials ?? '' }}</span>
             </div>
             <div>
-              <p class="text-sm font-medium">Total Selected Weight</p>
-              <p class="text-lg">{{ totalSelectedWeight }} kg</p>
-              <p class="text-xs">Available: {{ validationSummary.value.availableWeight.toFixed(2) }} kg</p>
-            </div>
-          </div>
-
-          <div v-if="selectedSet" class="mt-4">
-            <p class="text-sm font-medium">Driver Status</p>
-            <p class="flex items-center">
-              <span class="inline-block w-2 h-2 rounded-full mr-2" :class="{
-                'bg-green-500': selectedSet.driver.available,
-                'bg-red-500': !selectedSet.driver.available
-              }"></span>
-              {{ selectedSet.driver.available ? 'Available' : 'Unavailable' }}
-            </p>
-            <p class="text-xs">Current assignments: {{ selectedSet.driver.current_assignments }}</p>
-          </div>
-
-          <div v-if="selectedSet && selectedSet.active_orders?.length" class="mt-4">
-            <p class="text-sm font-medium">Current Trips</p>
-            <div v-for="order in selectedSet.active_orders" :key="order.id" class="text-xs">
-              DO-{{ order.id }}: {{ order.status }}
-            </div>
-          </div>
-
-          <DateTimeInput
-            v-model="assignmentForm.estimated_departure"
-            label="Estimated Departure"
-            class="mt-4"
-          />
-
-          <div v-if="calculatedETA" class="mt-2 text-sm">
-            <p>Estimated Arrival: {{ formatDateTime(calculatedETA) }}</p>
-          </div>
-        </div>
-      </div>
-    </ConfirmationModal>
-
-    <!-- Dispatch Confirmation Modal -->
-    <ConfirmationModal
-      :show="showDispatchModal"
-      @close="closeDispatchModal"
-      @confirmed="confirmDispatch"
-      title="Dispatch Driver-Truck Set"
-      confirm-text="Confirm Dispatch"
-      :confirm-disabled="!dispatchValidation.can_dispatch || dispatchValidation.loading"
-    >
-      <div class="space-y-3">
-        <div v-if="dispatchValidation.loading" class="flex items-center space-x-2">
-          <LoadingSpinner size="sm" />
-          <span>Validating manifest and waybills...</span>
-        </div>
-        <div v-else>
-          <div v-if="dispatchValidation.can_dispatch" class="bg-green-50 text-green-800 p-2 rounded">
-            <p>All checks passed. Ready to dispatch this set.</p>
-          </div>
-          <div v-else class="bg-red-50 text-red-800 p-2 rounded">
-            <p v-if="!dispatchValidation.has_manifest">
-              Missing Manifest: Manifest must be created and finalized.
-            </p>
-            <p v-if="dispatchValidation.missing_waybills?.length">
-              Missing waybills:
-              <span>
-                {{
-                  dispatchValidation.missing_waybills
-                    .map(id => `DO-${id.toString().padStart(6, '0')}`)
-                    .join(', ')
-                }}
+              <p class="font-medium">{{ selectedSet?.driver?.name ?? 'N/A' }}</p>
+              <p class="text-xs text-gray-500">{{ selectedSet?.truck?.license_plate ?? 'N/A' }}</p>
+              <span 
+                v-if="selectedSet?.available_for_backhaul" 
+                class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 mt-1"
+              >
+                Backhaul Available
               </span>
-            </p>
-            <p v-if="dispatchValidation.message && !dispatchValidation.can_dispatch && dispatchValidation.has_manifest">
-              {{ dispatchValidation.message }}
-            </p>
+            </div>
           </div>
         </div>
       </div>
+    </ConfirmationModal>
+
+    <!-- Dispatch Modal -->
+    <DispatchModal 
+      :show="showDispatchModal"
+      :set="dispatchingSet"
+      @close="closeDispatchModal"
+      @dispatched="handleDispatched"
+    />
+
+    <!-- Cancel Delivery Modal -->
+    <ConfirmationModal 
+      :show="!!deliveryToCancel"
+      @close="cancelDeliveryToCancel"
+      @confirmed="cancelDelivery"
+      title="Cancel Delivery Order"
+      confirm-text="Cancel Delivery"
+      variant="danger"
+    >
+      <p>Are you sure you want to cancel delivery order DO-{{ deliveryToCancel?.id?.toString()?.padStart(6, '0') }}?</p>
+      <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">This action cannot be undone.</p>
     </ConfirmationModal>
   </EmployeeLayout>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
-import { router, useForm } from '@inertiajs/vue3';
-import { debounce } from 'lodash';
-import { formatDate, formatDateTime, calculateTotalVolume, calculateTotalWeight } from '@/Utils/helpers';
-import EmployeeLayout from '@/Layouts/EmployeeLayout.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
-import SecondaryButton from '@/Components/SecondaryButton.vue';
-import DangerButton from '@/Components/DangerButton.vue';
-import InputLabel from '@/Components/InputLabel.vue';
-import TextArea from '@/Components/TextArea.vue';
-import SelectInput from '@/Components/SelectInput.vue';
-import Modal from '@/Components/Modal.vue';
-import ConfirmationModal from '@/Components/ConfirmationModal.vue';
-import DataTable from '@/Components/DataTable.vue';
-import Pagination from '@/Components/Pagination.vue';
-import StatusBadge from '@/Components/StatusBadge.vue';
-import FlashMessages from '@/Components/FlashMessages.vue';
-import LoadingSpinner from '@/Components/LoadingSpinner.vue';
-import SearchInput from '@/Components/SearchInput.vue';
-import DateTimeInput from '@/Components/DateTimeInput.vue';
-import { useToast } from 'vue-toastification';
-const toast = useToast();
+import { ref, computed, onMounted, watch } from 'vue'
+import { router, usePage } from '@inertiajs/vue3'
+import EmployeeLayout from '@/Layouts/EmployeeLayout.vue'
+import DataTable from '@/Components/DataTable.vue'
+import Pagination from '@/Components/Pagination.vue'
+import SelectInput from '@/Components/SelectInput.vue'
+import SearchInput from '@/Components/SearchInput.vue'
+import PrimaryButton from '@/Components/PrimaryButton.vue'
+import SecondaryButton from '@/Components/SecondaryButton.vue'
+import DangerButton from '@/Components/DangerButton.vue'
+import StatusBadge from '@/Components/StatusBadge.vue'
+import FlashMessages from '@/Components/FlashMessages.vue'
+import LoadingSpinner from '@/Components/LoadingSpinner.vue'
+import ConfirmationModal from '@/Components/ConfirmationModal.vue'
+import DispatchModal from '@/Components/DispatchModal.vue'
 
+// Props
 const props = defineProps({
-  deliveries: {
-    type: Object,
-    default: () => ({ data: [] })
-  },
+  deliveries: Object,
   driverTruckSets: {
+    type: Array,
+    default: () => []
+  },
+  batchSuggestions: {
     type: Array,
     default: () => []
   },
@@ -590,522 +597,596 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
-  filters: {
-    type: Object,
-    default: () => ({})
-  },
-  flash: {
-    type: Object,
-    default: () => ({})
-  }
-});
+  flash: Object,
+  filters: Object
+})
 
-// Use computed to always get the latest from props
-const driverTruckSets = computed(() => props.driverTruckSets);
-const deliveries = computed(() => props.deliveries);
-const regions = computed(() => props.regions);
+// Refs
+const searchTerm = ref(props.filters?.search || '')
+const statusFilter = ref(props.filters?.status || '')
+const regionFilter = ref(props.filters?.region || '')
+const backhaulFilter = ref(props.filters?.backhaul || '')
+const assignmentTypeFilter = ref('all')
 
-const loading = ref(false);
-const selectedDeliveries = ref([]);
-const selectedSet = ref(null);
-const showCancelModal = ref(false);
-const deliveryToCancel = ref(null);
-const searchTerm = ref(props.filters?.search || '');
-const statusFilter = ref(props.filters?.status || '');
-const regionFilter = ref(props.filters?.region_id || '');
-
-// Forms
-const assignmentForm = useForm({
-  driver_truck_assignment_id: null,
-  delivery_request_ids: [],
-  // Set default to 1 day (24 hours) in the future, formatted as 'YYYY-MM-DDTHH:mm'
-  estimated_departure: (() => {
-    const now = new Date();
-    now.setDate(now.getDate() + 1);
-    return now.toISOString().slice(0, 16);
-  })(),
-  notes: null
-});
+const selectedDeliveries = ref([])
+const selectedSet = ref(null)
+const loading = ref(false)
+const showAssignmentModal = ref(false)
+const showDispatchModal = ref(false)
+const dispatchingSet = ref(null)
+const dispatchingSetId = ref(null)
+const deliveryToCancel = ref(null)
 
 // Options
+const backhaulOptions = [
+  { value: '', label: 'All Backhaul Status' },
+  { value: 'backhaul', label: 'Backhaul Only' },
+  { value: 'regular', label: 'Regular Only' }
+]
+
+const assignmentTypeOptions = [
+  { value: 'all', label: 'All Types' },
+  { value: 'regular', label: 'Regular' },
+  { value: 'backhaul', label: 'Backhaul' }
+]
+
 const statusOptions = [
   { value: '', label: 'All Statuses' },
-  { value: 'ready', label: 'Ready' },
+  { value: 'pending', label: 'Pending' },
   { value: 'assigned', label: 'Assigned' },
-  { value: 'dispatched', label: 'Dispatched' },
+  { value: 'picked_up', label: 'Picked Up' },
   { value: 'in_transit', label: 'In Transit' },
   { value: 'delivered', label: 'Delivered' },
   { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
-  { value: 'pending_payment', label: 'Pending Payment' }
-];
+  { value: 'cancelled', label: 'Cancelled' }
+]
 
+// Computed Properties
 const regionOptions = computed(() => [
   { value: '', label: 'All Regions' },
-  ...regions.value.map(region => ({
-    value: region.id,
-    label: region.name
-  }))
-]);
+  ...(props.regions?.map(region => ({ value: region.id, label: region.name })) || [])
+])
 
-// Table Columns
+const hasFlashMessages = computed(() => {
+  return props.flash?.success || props.flash?.error || props.flash?.warning
+})
+
+const deliveries = computed(() => props.deliveries || { data: [] })
+
+const driverTruckSets = computed(() => {
+  if (Array.isArray(props.driverTruckSets)) {
+    return props.driverTruckSets
+  }
+  return []
+})
+
+const batchSuggestions = computed(() => {
+  if (Array.isArray(props.batchSuggestions)) {
+    return props.batchSuggestions
+  }
+  return []
+})
+
+const effectiveBatchSuggestions = computed(() => {
+  const suggestions = batchSuggestions.value
+  
+  if (backhaulFilter.value === 'backhaul') {
+    return suggestions.filter(suggestion => isBackhaulSuggestion(suggestion))
+  } else if (backhaulFilter.value === 'regular') {
+    return suggestions.filter(suggestion => !isBackhaulSuggestion(suggestion))
+  }
+  
+  return suggestions
+})
+
+const filteredDriverTruckSets = computed(() => {
+  const sets = driverTruckSets.value
+  if (!Array.isArray(sets) || sets.length === 0) {
+    return []
+  }
+  
+  return sets.map(set => {
+    const driver = set.driver || {}
+    const truck = set.truck || {}
+    
+    let initials = driver.initials || ''
+    if (!initials && driver.name) {
+      initials = driver.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+    }
+    
+    return {
+      ...set,
+      driver: {
+        ...driver,
+        delivery_orders_count: driver.delivery_orders_count ?? driver.current_assignments ?? 0,
+        current_assignments: driver.current_assignments ?? driver.delivery_orders_count ?? 0,
+        canAcceptNewAssignment: driver.canAcceptNewAssignment ?? driver.available ?? false,
+        available: driver.available ?? true,
+        initials: initials,
+        employee_id: driver.employee_id ?? driver.employeeProfile?.employee_id ?? 'N/A',
+        name: driver.name ?? 'N/A'
+      },
+      truck: {
+        ...truck,
+        volume_capacity: truck.volume_capacity ?? 0,
+        weight_capacity: truck.weight_capacity ?? 0,
+        license_plate: truck.license_plate ?? 'N/A',
+        make: truck.make ?? '',
+        model: truck.model ?? '',
+        status: truck.status ?? 'unknown'
+      },
+      current_volume: set.current_volume ?? 0,
+      current_weight: set.current_weight ?? 0,
+      available_volume: set.available_volume ?? 0,
+      available_weight: set.available_weight ?? 0,
+      is_available: set.is_available ?? true,
+      available_for_backhaul: set.available_for_backhaul ?? false,
+      region: set.region ?? { name: 'N/A' },
+      current_region: set.current_region ?? { name: 'N/A' },
+      active_orders: set.active_orders ?? []
+    }
+  }).filter(set => {
+    if (assignmentTypeFilter.value === 'all') return true
+    if (assignmentTypeFilter.value === 'backhaul') return set.available_for_backhaul
+    if (assignmentTypeFilter.value === 'regular') return !set.available_for_backhaul
+    return true
+  })
+})
+
+const transformedDeliveries = computed(() => {
+  return (deliveries.value?.data || []).map(delivery => ({
+    ...delivery,
+    packages_count: delivery.delivery_request?.packages?.length || 0,
+    assignment_type: delivery.is_backhaul ? 'Backhaul' : 'Regular'
+  }))
+})
+
+const totalSelectedVolume = computed(() => {
+  return selectedDeliveries.value.reduce((total, delivery) => {
+    const packages = delivery.delivery_request?.packages || []
+    return total + calculateTotalVolume(packages)
+  }, 0)
+})
+
+const totalSelectedWeight = computed(() => {
+  return selectedDeliveries.value.reduce((total, delivery) => {
+    const packages = delivery.delivery_request?.packages || []
+    return total + calculateTotalWeight(packages)
+  }, 0)
+})
+
+const hasAnyUnstickerizedPackages = computed(() => {
+  return selectedDeliveries.value.some(delivery => hasUnstickerizedPackages(delivery))
+})
+
+const hasMixedAssignmentTypes = computed(() => {
+  if (selectedDeliveries.value.length === 0) return false
+  const hasBackhaul = selectedDeliveries.value.some(d => d.is_backhaul)
+  const hasRegular = selectedDeliveries.value.some(d => !d.is_backhaul)
+  return hasBackhaul && hasRegular
+})
+
+const hasRegionMismatch = computed(() => {
+  if (!selectedSet.value || selectedDeliveries.value.length === 0) return false
+  
+  const homeRegionId = selectedSet.value.region?.id
+  const currentRegionId = selectedSet.value.current_region?.id
+  const isBackhaulSet = selectedSet.value.available_for_backhaul
+  
+  return selectedDeliveries.value.some(delivery => {
+    const pickupRegionId = delivery.delivery_request?.pick_up_region?.id
+    const dropoffRegionId = delivery.delivery_request?.drop_off_region?.id
+    
+    if (isBackhaulSet) {
+      // Backhaul: pickup must be from current region, dropoff to home region
+      return pickupRegionId !== currentRegionId || dropoffRegionId !== homeRegionId
+    } else {
+      // Regular: pickup must be from home region
+      return pickupRegionId !== homeRegionId
+    }
+  })
+})
+
+const canAssignSelected = computed(() => {
+  return selectedSet.value && 
+         selectedDeliveries.value.length > 0 && 
+         !hasAnyUnstickerizedPackages.value &&
+         !hasMixedAssignmentTypes.value &&
+         !hasRegionMismatch.value
+})
+
+const validationSummary = computed(() => {
+  if (!selectedSet.value || selectedDeliveries.value.length === 0) {
+    return {
+      isValid: false,
+      message: 'Please select deliveries and a driver-truck set',
+      details: [],
+      availableVolume: 0,
+      availableWeight: 0
+    }
+  }
+
+  const details = []
+  
+  const truckCapacity = selectedSet.value.truck || {}
+  const currentVolume = selectedSet.value.current_volume || 0
+  const currentWeight = selectedSet.value.current_weight || 0
+  
+  const availableVolume = (truckCapacity.volume_capacity || 0) - currentVolume
+  const availableWeight = (truckCapacity.weight_capacity || 0) - currentWeight
+
+  // Capacity checks
+  if (totalSelectedVolume.value > availableVolume) {
+    details.push(`Insufficient volume capacity: ${totalSelectedVolume.value.toFixed(2)}m³ selected vs ${availableVolume.toFixed(2)}m³ available`)
+  }
+
+  if (totalSelectedWeight.value > availableWeight) {
+    details.push(`Insufficient weight capacity: ${totalSelectedWeight.value.toFixed(2)}kg selected vs ${availableWeight.toFixed(2)}kg available`)
+  }
+
+  // Region validation
+  const homeRegionId = selectedSet.value.region?.id
+  const currentRegionId = selectedSet.value.current_region?.id
+  const isBackhaulSet = selectedSet.value.available_for_backhaul
+  
+  selectedDeliveries.value.forEach(delivery => {
+    const pickupRegionId = delivery.delivery_request?.pick_up_region?.id
+    const dropoffRegionId = delivery.delivery_request?.drop_off_region?.id
+    
+    if (isBackhaulSet) {
+      // Backhaul validation
+      if (pickupRegionId !== currentRegionId) {
+        details.push(`Backhaul: Pickup must be from current region (${selectedSet.value.current_region?.name})`)
+      }
+      if (dropoffRegionId !== homeRegionId) {
+        details.push(`Backhaul: Delivery must be to home region (${selectedSet.value.region?.name})`)
+      }
+    } else {
+      // Regular assignment validation
+      if (pickupRegionId !== homeRegionId) {
+        details.push(`Regular: Pickup must be from home region (${selectedSet.value.region?.name})`)
+      }
+    }
+  })
+
+  // Mixed assignment types
+  if (hasMixedAssignmentTypes.value) {
+    details.push('Cannot mix regular and backhaul assignments in the same batch')
+  }
+
+  // Check for packages without stickers
+  if (hasAnyUnstickerizedPackages.value) {
+    details.push('Some packages are missing stickers')
+  }
+
+  const isValid = details.length === 0
+
+  return {
+    isValid,
+    message: isValid ? 'Assignment is valid' : 'Assignment validation failed',
+    details,
+    availableVolume,
+    availableWeight
+  }
+})
+
+// Table columns
 const deliveryColumns = [
   { 
     field: 'id', 
     header: 'DO #', 
-    class: 'w-24',
     sortable: true,
-    formatter: value => value ? `DO-${value.toString().padStart(6, '0')}` : 'N/A'
+    formatter: (value) => value ? `DO-${value.toString().padStart(6, '0')}` : 'N/A'
   },
   { 
-    field: 'delivery_request', 
-    header: 'Route', 
-    formatter: (value) => {
-      if (!value) return 'N/A';
-      const pickup = value.pick_up_region?.name || 'N/A';
-      const dropoff = value.drop_off_region?.name || 'N/A';
-      return `${pickup} → ${dropoff}`;
-    },
-    sortable: true
+    field: 'delivery_request.pick_up_region.name', 
+    header: 'Pickup', 
+    sortable: true 
+  },
+  { 
+    field: 'delivery_request.drop_off_region.name', 
+    header: 'Dropoff', 
+    sortable: true 
   },
   { 
     field: 'status', 
     header: 'Status', 
-    slot: true,
-    sortable: true
+    sortable: true 
   },
   { 
-    field: 'packages', // Use a slot for packages
-    header: 'Packages',
-    slot: true,
-    class: 'text-center',
-    sortable: false
+    field: 'packages_count', 
+    header: 'Packages', 
+    sortable: false 
+  },
+  { 
+    field: 'assignment_type', 
+    header: 'Type', 
+    sortable: true 
   },
   { 
     field: 'estimated_departure', 
     header: 'Est. Departure', 
-    formatter: value => value ? formatDate(value) : 'N/A',
-    class: 'whitespace-nowrap',
-    sortable: true
+    sortable: true,
+    formatter: (value) => value ? formatDate(value) : 'N/A'
   },
   { 
     field: 'actions', 
     header: 'Actions', 
-    slot: true,
-    class: 'w-32 text-right'
+    sortable: false 
   }
-];
-
-// Computed Properties
-const hasFlashMessages = computed(() => {
-  return props.flash && (props.flash.status || props.flash.success || props.flash.error);
-});
-
-const totalSelectedVolume = computed(() => {
-  if (!selectedDeliveries.value.length) return 0;
-  return selectedDeliveries.value.reduce((total, delivery) => {
-    const packages = delivery.delivery_request?.packages || [];
-    return total + calculateTotalVolume(packages);
-  }, 0);
-});
-
-const totalSelectedWeight = computed(() => {
-  if (!selectedDeliveries.value.length) return 0;
-  return selectedDeliveries.value.reduce((total, delivery) => {
-    const packages = delivery.delivery_request?.packages || [];
-    return total + calculateTotalWeight(packages);
-  }, 0);
-});
-
-// Check if any selected delivery has packages without stickers
-const hasAnyUnstickerizedPackages = computed(() => {
-  return selectedDeliveries.value.some(delivery => hasUnstickerizedPackages(delivery));
-});
-
-// Helper function to check if a delivery has packages without stickers
-const hasUnstickerizedPackages = (delivery) => {
-  const packages = delivery.delivery_request?.packages || [];
-  return packages.some(pkg => pkg.sticker_printed_at === null);
-};
-
-// Check if a batch suggestion has deliveries with packages without stickers
-const hasUnstickerizedPackagesInSuggestion = (suggestion) => {
-  return suggestion.delivery_requests.some(delivery => hasUnstickerizedPackages(delivery));
-};
+]
 
 // Methods
-const handleSelectionChange = (selectedRows) => {
-  selectedDeliveries.value = selectedRows;
-};
+const applyFilters = () => {
+  const params = {}
+  if (searchTerm.value) params.search = searchTerm.value
+  if (statusFilter.value) params.status = statusFilter.value
+  if (regionFilter.value) params.region_id = regionFilter.value
+  if (backhaulFilter.value) params.backhaul = backhaulFilter.value
 
-const removeDelivery = (deliveryId) => {
-  selectedDeliveries.value = selectedDeliveries.value.filter(d => d.id !== deliveryId);
-};
-
-const clearSelection = () => {
-  selectedDeliveries.value = [];
-};
-
-const selectSet = (set) => {
-  selectedSet.value = set;
-};
-
-const refreshData = () => {
-  loading.value = true;
-  router.reload({
+  router.get(route('cargo-assignments.index'), params, {
     preserveState: true,
-    preserveScroll: true,
-    onFinish: () => {
-      loading.value = false;
-    }
-  });
-};
-
-const applyFilters = debounce(() => {
-  router.get(route('cargo-assignments.index'), { // Changed route name
-    search: searchTerm.value,
-    status: statusFilter.value,
-    region_id: regionFilter.value
-  }, {
-    preserveState: true,
-    preserveScroll: true,
     replace: true
-  });
-}, 300);
-
+  })
+}
 
 const resetFilters = () => {
-  searchTerm.value = '';
-  statusFilter.value = '';
-  regionFilter.value = '';
-  applyFilters();
-};
+  searchTerm.value = ''
+  statusFilter.value = ''
+  regionFilter.value = ''
+  backhaulFilter.value = ''
+  assignmentTypeFilter.value = 'all'
+  applyFilters()
+}
+
+const refreshData = () => {
+  loading.value = true
+  router.reload({
+    only: ['deliveries', 'driverTruckSets', 'batchSuggestions'],
+    onFinish: () => {
+      loading.value = false
+    }
+  })
+}
 
 const handlePageChange = (page) => {
-  router.get(route('employee.assignments.index'), {
+  router.get(route('cargo-assignments.index'), {
     ...props.filters,
     page
   }, {
     preserveState: true,
     preserveScroll: true
-  });
-};
+  })
+}
 
-const viewDetails = (deliveryId) => {
-  router.get(route('employee.delivery-orders.show', deliveryId));
-};
+const handleSelectionChange = (selected) => {
+  selectedDeliveries.value = selected
+}
 
-const confirmCancel = (delivery) => {
-  deliveryToCancel.value = delivery;
-  showCancelModal.value = true;
-};
+const selectSet = (set) => {
+  selectedSet.value = set
+}
 
-const closeCancelModal = () => {
-  showCancelModal.value = false;
-  deliveryToCancel.value = null;
-};
+const clearSelection = () => {
+  selectedDeliveries.value = []
+  selectedSet.value = null
+}
 
-const cancelAssignment = () => {
-  if (!deliveryToCancel.value) return;
+const removeDelivery = (deliveryId) => {
+  selectedDeliveries.value = selectedDeliveries.value.filter(d => d.id !== deliveryId)
+}
+
+const openAssignmentModal = () => {
+  if (validationSummary.value.isValid) {
+    showAssignmentModal.value = true
+  }
+}
+
+const closeAssignmentModal = () => {
+  showAssignmentModal.value = false
+}
+
+const submitAssignment = () => {
+  const deliveryRequestIds = selectedDeliveries.value.map(d => d.delivery_request_id || d.id)
   
-  router.delete(route('employee.delivery-orders.cancel', deliveryToCancel.value.id), {
-    preserveScroll: true,
-    onSuccess: () => {
-      toast.success('Delivery order cancelled successfully');
-      closeCancelModal();
+  // Ensure departure time is at least 1 minute in the future
+  const estimatedDeparture = new Date(Date.now() + 60000); // Now + 1 minute
+  
+  router.post(route('cargo-assignments.assign.batch'), {
+    delivery_request_ids: deliveryRequestIds,
+    driver_truck_assignment_id: selectedSet.value.id,
+    estimated_departure: estimatedDeparture.toISOString()
+  }, {
+    onStart: () => loading.value = true,
+    onFinish: () => {
+      loading.value = false
+      showAssignmentModal.value = false
+      clearSelection()
     },
     onError: (errors) => {
-      toast.error('Failed to cancel delivery order');
+      console.error('Batch assignment failed:', errors)
+      alert('Failed to assign deliveries. Please try again.')
     }
-  });
-};
+  })
+}
+
+const openDispatchModal = (set) => {
+  dispatchingSet.value = set
+  dispatchingSetId.value = set.id
+  showDispatchModal.value = true
+}
+
+const closeDispatchModal = () => {
+  showDispatchModal.value = false
+  dispatchingSet.value = null
+  dispatchingSetId.value = null
+}
+
+const handleDispatched = () => {
+  closeDispatchModal()
+  refreshData()
+}
+
+const confirmCancel = (delivery) => {
+  deliveryToCancel.value = delivery
+}
+
+const cancelDeliveryToCancel = () => {
+  deliveryToCancel.value = null
+}
+
+const cancelDelivery = () => {
+  if (!deliveryToCancel.value) return
+
+  router.post(route('cargo-assignments.deliveries.cancel', deliveryToCancel.value.id), {
+    onStart: () => loading.value = true,
+    onFinish: () => {
+      loading.value = false
+      deliveryToCancel.value = null
+    }
+  })
+}
+
+const viewDetails = (deliveryId) => {
+  router.get(route('cargo-assignments.show', deliveryId))
+}
+
+const calculateTotalVolume = (packages) => {
+  if (!packages || !Array.isArray(packages)) return 0
+  return packages.reduce((total, pkg) => total + (Number(pkg.volume) || 0), 0)
+}
+
+const calculateTotalWeight = (packages) => {
+  if (!packages || !Array.isArray(packages)) return 0
+  return packages.reduce((total, pkg) => total + (Number(pkg.weight) || 0), 0)
+}
+
+const hasUnstickerizedPackages = (delivery) => {
+  const packages = delivery.delivery_request?.packages || []
+  return packages.some(pkg => !pkg.sticker_printed_at)
+}
+
+const hasUnstickerizedPackagesInSuggestion = (suggestion) => {
+  return suggestion.delivery_requests?.some(delivery => hasUnstickerizedPackages(delivery)) || false
+}
+
+const formatDate = (dateString) => {
+  if (!dateString) return 'N/A'
+  const date = new Date(dateString)
+  return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
 
 const statusBadgeClass = (status) => {
   const classes = {
-    ready: 'bg-blue-100 text-blue-800',
-    assigned: 'bg-yellow-100 text-yellow-800',
-    dispatched: 'bg-purple-100 text-purple-800',
-    in_transit: 'bg-indigo-100 text-indigo-800',
+    pending: 'bg-yellow-100 text-yellow-800',
+    assigned: 'bg-blue-100 text-blue-800',
+    picked_up: 'bg-indigo-100 text-indigo-800',
+    in_transit: 'bg-purple-100 text-purple-800',
     delivered: 'bg-green-100 text-green-800',
-    completed: 'bg-green-100 text-green-800',
-    cancelled: 'bg-red-100 text-red-800',
-    pending_payment: 'bg-orange-100 text-orange-800'
-  };
-  return classes[status] || 'bg-gray-100 text-gray-800';
-};
+    completed: 'bg-gray-100 text-gray-800',
+    cancelled: 'bg-red-100 text-red-800'
+  }
+  return classes[status] || 'bg-gray-100 text-gray-800'
+}
 
 const formatStatusText = (status) => {
   const statusMap = {
-    ready: 'Ready',
+    pending: 'Pending',
     assigned: 'Assigned',
-    dispatched: 'Dispatched',
+    picked_up: 'Picked Up',
     in_transit: 'In Transit',
     delivered: 'Delivered',
     completed: 'Completed',
-    cancelled: 'Cancelled',
-    pending_payment: 'Pending Payment'
-  };
-  return statusMap[status] || status;
-};
-
-// Watch for filter changes
-watch([searchTerm, statusFilter, regionFilter], applyFilters);
-
-// Batch Assignment Suggestions - ensure they only include sets that match the delivery's region
-const batchSuggestions = computed(() => {
-  const readyDeliveries = deliveries.value.data?.filter(d => d.status === 'ready') || [];
-  const suggestions = {};
-  
-  readyDeliveries.forEach(delivery => {
-    const regionId = delivery.delivery_request?.drop_off_region?.id;
-    const pickupRegionId = delivery.delivery_request?.pick_up_region?.id;
-    
-    if (!regionId || !pickupRegionId) return;
-    
-    if (!suggestions[regionId]) {
-      suggestions[regionId] = {
-        destination_region: delivery.delivery_request.drop_off_region,
-        pickup_region: delivery.delivery_request.pick_up_region, // Store pickup region too
-        delivery_requests: [],
-        total_volume: 0,
-        total_weight: 0
-      };
-    }
-    
-    suggestions[regionId].delivery_requests.push(delivery);
-    const packages = delivery.delivery_request?.packages || [];
-    suggestions[regionId].total_volume += calculateTotalVolume(packages);
-    suggestions[regionId].total_weight += calculateTotalWeight(packages);
-  });
-  
-  return Object.values(suggestions);
-});
-
-// Suitable driver-truck sets should consider region matching even when "All Regions" is selected
-const suitableDriverTruckSets = (suggestion) => {
-  // Get the pickup region ID from the first delivery in the suggestion
-  const pickupRegionId = suggestion.delivery_requests[0]?.delivery_request?.pick_up_region_id;
-  
-  if (!pickupRegionId) return [];
-  
-  return driverTruckSets.value.filter(set => {
-    // The set must be in the same region as the delivery's pickup region
-    const regionMatch = set.region?.id == pickupRegionId;
-    
-    const availableVolume = (set.truck?.volume_capacity || 0) - (set.current_volume || 0);
-    const availableWeight = (set.truck?.weight_capacity || 0) - (set.current_weight || 0);
-    
-    return regionMatch && 
-           set.is_available && 
-           availableVolume >= suggestion.total_volume && 
-           availableWeight >= suggestion.total_weight;
-  });
-};
+    cancelled: 'Cancelled'
+  }
+  return statusMap[status] || status
+}
 
 const prepareBatchAssignment = (suggestion) => {
-  selectedDeliveries.value = suggestion.delivery_requests;
-  const suitableSets = suitableDriverTruckSets(suggestion);
+  if (!suggestion || !suggestion.delivery_requests) {
+    return
+  }
+  
+  selectedDeliveries.value = suggestion.delivery_requests || []
+  
+  const suitableSets = suitableDriverTruckSets(suggestion)
   if (suitableSets.length > 0) {
-    selectedSet.value = suitableSets[0];
-    openAssignmentModal();
-  } else {
-    toast.error('No suitable driver-truck sets available for this batch');
+    selectedSet.value = suitableSets[0]
   }
-};
-
-// Assignment Modal
-const showAssignmentModal = ref(false);
-const validationSummary = ref({
-  isValid: false,
-  message: '',
-  details: [],
-  availableVolume: 0,
-  availableWeight: 0,
-  etaWarning: ''
-});
-
-const openAssignmentModal = () => {
-  if (!selectedSet.value || selectedDeliveries.value.length === 0) {
-    toast.error('Please select both deliveries and a driver-truck set');
-    return;
-  }
-
-  // Check if any selected delivery has packages without stickers (sticker_printed_at is null)
-  if (hasAnyUnstickerizedPackages.value) {
-    validationSummary.value = {
-      isValid: false,
-      message: 'Cannot assign deliveries with packages missing stickers',
-      details: ['One or more packages have not been labeled (sticker_printed_at is null)'],
-      availableVolume: selectedSet.value.truck.volume_capacity - selectedSet.value.current_volume,
-      availableWeight: selectedSet.value.truck.weight_capacity - selectedSet.value.current_weight
-    };
-    showAssignmentModal.value = true;
-    return;
-  }
-
-  // Validate capacity
-  const availableVolume = selectedSet.value.truck.volume_capacity - selectedSet.value.current_volume;
-  const availableWeight = selectedSet.value.truck.weight_capacity - selectedSet.value.current_weight;
   
-  const volumeValid = totalSelectedVolume.value <= availableVolume;
-  const weightValid = totalSelectedWeight.value <= availableWeight;
-  const driverAvailable = selectedSet.value.driver.canAcceptNewAssignment;
+  openAssignmentModal()
+}
 
-  validationSummary.value = {
-    isValid: volumeValid && weightValid && driverAvailable,
-    message: volumeValid && weightValid && driverAvailable 
-      ? 'Assignment is valid' 
-      : 'Assignment validation failed',
-    details: [
-      volumeValid ? null : `Volume exceeds capacity by ${(totalSelectedVolume.value - availableVolume).toFixed(2)} m³`,
-      weightValid ? null : `Weight exceeds capacity by ${(totalSelectedWeight.value - availableWeight).toFixed(2)} kg`,
-      driverAvailable ? null : 'Driver cannot accept new assignments'
-    ].filter(Boolean),
-    availableVolume,
-    availableWeight
-  };
-
-  showAssignmentModal.value = true;
-};
-
-const closeAssignmentModal = () => {
-  showAssignmentModal.value = false;
-};
-
-const submitAssignment = () => {
-  if (!selectedSet.value || selectedDeliveries.value.length === 0) {
-    toast.error('Please select both deliveries and a driver-truck set');
-    return;
+const suitableDriverTruckSets = (suggestion) => {
+  const sets = filteredDriverTruckSets.value
+  if (!Array.isArray(sets) || sets.length === 0) {
+    return []
   }
-
-  assignmentForm.driver_truck_assignment_id = selectedSet.value.id;
-  assignmentForm.delivery_request_ids = selectedDeliveries.value.map(d => d.id);
-
-  // Use the correct route for batch assignment
-  assignmentForm.post(route('cargo-assignments.assign.batch'), {
-    preserveScroll: true,
-    onSuccess: () => {
-      toast.success('Assignment created successfully');
-      closeAssignmentModal();
-      selectedDeliveries.value = [];
-      selectedSet.value = null;
-    },
-    onError: (errors) => {
-      toast.error('Failed to create assignment');
-    }
-  });
-};
-
-// Dispatch Modal
-const showDispatchModal = ref(false);
-const dispatchingSetId = ref(null);
-const dispatchValidation = ref({
-  can_dispatch: false,
-  has_manifest: false,
-  missing_waybills: [],
-  message: '',
-  loading: false
-});
-
-const openDispatchModal = async (set) => {
-  selectedSet.value = set;
-  showDispatchModal.value = true;
-  dispatchValidation.value.loading = true;
-  
-  try {
-    // Use the correct route name from your list
-    const response = await fetch(route('cargo-assignments.dispatch.driver-truck-set.validate', set.id));
-    const data = await response.json();
+  return sets.filter(set => {
+    const isInRegion = set.region?.id === suggestion.pickup_region?.id || 
+                      (set.available_for_backhaul && set.current_region?.id === suggestion.pickup_region?.id)
     
-    dispatchValidation.value = {
-      can_dispatch: data.can_dispatch,
-      has_manifest: data.has_manifest, // This might need adjustment based on actual response
-      missing_waybills: data.missing_waybills || [],
-      message: data.message || '',
-      loading: false
-    };
-  } catch (error) {
-    toast.error('Failed to validate dispatch');
-    dispatchValidation.value.loading = false;
-  }
-};
+    const truckCapacity = set.truck || {}
+    const currentVolume = set.current_volume || 0
+    const currentWeight = set.current_weight || 0
+    const availableVolume = (truckCapacity.volume_capacity || 0) - currentVolume
+    const availableWeight = (truckCapacity.weight_capacity || 0) - currentWeight
+    const totalVolume = Number(suggestion.total_volume) || 0
+    const totalWeight = Number(suggestion.total_weight) || 0
+    const hasCapacity = availableVolume >= totalVolume && availableWeight >= totalWeight
+    
+    return set.is_available && isInRegion && hasCapacity
+  })
+}
 
-const closeDispatchModal = () => {
-  showDispatchModal.value = false;
-  dispatchValidation.value = {
-    can_dispatch: false,
-    has_manifest: false,
-    missing_waybills: [],
-    message: '',
-    loading: false
-  };
-};
+const isBackhaulSuggestion = (suggestion) => {
+  const homeRegionId = suggestion.pickup_region?.id
+  const currentRegionId = suggestion.destination_region?.id
+  return suggestion.delivery_requests?.every(delivery => {
+    const pickupRegionId = delivery.delivery_request?.pick_up_region?.id
+    const dropoffRegionId = delivery.delivery_request?.drop_off_region?.id
+    return pickupRegionId === currentRegionId && dropoffRegionId === homeRegionId
+  }) || false
+}
 
-const confirmDispatch = () => {
-  if (!selectedSet.value) return;
+const setAssignmentTypeFilter = (type) => {
+  assignmentTypeFilter.value = type
+}
+
+const enableBackhaul = (set) => {
+  if (!canEnableBackhaul(set)) return
   
-  dispatchingSetId.value = selectedSet.value.id;
-  
-  // Use the correct route name from your list
-  router.post(route('cargo-assignments.dispatch.driver-truck-set', selectedSet.value.id), {}, {
-    preserveScroll: true,
-    onSuccess: () => {
-      toast.success('Driver-truck set dispatched successfully');
-      closeDispatchModal();
-      dispatchingSetId.value = null;
-      refreshData();
+  router.post(route('cargo-assignments.backhaul.enable', set.id), {}, {
+    onStart: () => loading.value = true,
+    onFinish: () => {
+      loading.value = false
+      refreshData()
     },
     onError: (errors) => {
-      toast.error('Failed to dispatch driver-truck set');
-      dispatchingSetId.value = null;
+      console.error('Failed to enable backhaul:', errors)
+      alert('Failed to enable backhaul. Please try again.')
     }
-  });
-};
+  })
+}
 
-// Validation Modal
-const showValidationModal = ref(false);
+const canEnableBackhaul = (set) => {
+  return set.is_available && 
+         !set.available_for_backhaul && 
+         (set.driver?.canAcceptNewAssignment ?? set.driver?.available) &&
+         set.truck?.status === 'available'
+}
 
-const openValidationModal = () => {
-  showValidationModal.value = true;
-};
+// Watchers
+watch([searchTerm, statusFilter, regionFilter, backhaulFilter], () => {
+  applyFilters()
+})
 
-const closeValidationModal = () => {
-  showValidationModal.value = false;
-};
-
-// ETA Calculation
-const calculatedETA = computed(() => {
-  if (!assignmentForm.estimated_departure) return null;
-  
-  const departure = new Date(assignmentForm.estimated_departure);
-  // Add average transit time (e.g., 2 days)
-  departure.setDate(departure.getDate() + 2);
-  
-  return departure;
-});
-
-const minDepartureDateTime = computed(() => {
-  const now = new Date();
-  // Set minimum to current time
-  return now.toISOString().slice(0, 16);
-});
-
-const autoDepartureNote = computed(() => {
-  const now = new Date();
-  const selected = new Date(assignmentForm.estimated_departure);
-  
-  // If departure is set to default (tomorrow)
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  
-  if (selected.toDateString() === tomorrow.toDateString()) {
-    return 'Default departure time set to tomorrow';
+onMounted(() => {
+  if (props.filters) {
+    searchTerm.value = props.filters.search || ''
+    statusFilter.value = props.filters.status || ''
+    regionFilter.value = props.filters.region_id || ''
+    backhaulFilter.value = props.filters.backhaul || ''
   }
-  
-  return null;
-});
+})
 </script>
-
-<style scoped>
-/* Add any custom styles here */
-</style>

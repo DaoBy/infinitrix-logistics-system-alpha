@@ -12,125 +12,116 @@ use Inertia\Inertia;
 
 class DeliveryRequestController extends Controller
 {
-   public function index(Request $request)
-{
-    $customerId = auth()->user()->customer->id;
+    public function index(Request $request)
+    {
+        $customerId = auth()->user()->customer->id;
 
-    // Delivery Requests: Draft & Pending
-    $requests = DeliveryRequest::with([
-            'receiver', 
-            'packages', 
-            'pickUpRegion:id,name', 
-            'dropOffRegion:id,name'
-        ])
-        ->where('sender_id', $customerId)
-        ->whereIn('status', ['pending', 'draft'])
-        ->when($request->filled('request_search'), function ($query) use ($request) {
-            $query->whereHas('receiver', function ($q) use ($request) {
-                $q->where('first_name', 'like', '%' . $request->request_search . '%')
-                  ->orWhere('last_name', 'like', '%' . $request->request_search . '%')
-                  ->orWhere('company_name', 'like', '%' . $request->request_search . '%');
-            });
-        })
-        ->latest()
-        ->paginate(5, ['*'], 'requests_page')
-        ->withQueryString()
-        ->through(fn($req) => [
-            'id' => $req->id,
-            'receiver' => $req->receiver,
-            'pick_up_region' => $req->pickUpRegion ? [
-                'id' => $req->pickUpRegion->id,
-                'name' => $req->pickUpRegion->name
-            ] : ['name' => 'Not specified'],
-            'drop_off_region' => $req->dropOffRegion ? [
-                'id' => $req->dropOffRegion->id,
-                'name' => $req->dropOffRegion->name
-            ] : ['name' => 'Not specified'],
-            'total_price' => $req->total_price,
-            'status' => $req->status,
-            'created_at' => $req->created_at->format('Y-m-d H:i'),
-            'package_count' => $req->packages->count(),
-        ]);
-
-    // Approved & Delivered Transactions (show all completed/approved/delivered)
-    $transactions = DeliveryRequest::with([
-            'receiver', 
-            'deliveryOrder', 
-            'pickUpRegion:id,name', 
-            'dropOffRegion:id,name',
-            'payment' // Add this to load payment relationship
-        ])
-        ->where('sender_id', $customerId)
-        ->whereIn('status', ['approved', 'delivered', 'completed'])
-        ->when($request->filled('transaction_search'), function ($query) use ($request) {
-            $query->whereHas('receiver', function ($q) use ($request) {
-                $q->where('first_name', 'like', '%' . $request->transaction_search . '%')
-                  ->orWhere('last_name', 'like', '%' . $request->transaction_search . '%')
-                  ->orWhere('company_name', 'like', '%' . $request->transaction_search . '%');
-            });
-        })
-        ->latest()
-        ->paginate(5, ['*'], 'transactions_page')
-        ->withQueryString()
-        ->through(fn($req) => [
-            'id' => $req->deliveryOrder?->id ?? $req->id,
-            'delivery_request' => [
-                'id' => $req->id,
-                'receiver' => $req->receiver,
-                'pick_up_region' => $req->pickUpRegion ? [
-                    'id' => $req->pickUpRegion->id,
-                    'name' => $req->pickUpRegion->name
+        // Get ALL delivery requests in one query - both pending and completed
+        $deliveries = DeliveryRequest::with([
+                'receiver', 
+                'packages', 
+                'pickUpRegion:id,name', 
+                'dropOffRegion:id,name',
+                'deliveryOrder',
+                'payment'
+            ])
+            ->where('sender_id', $customerId)
+            ->when($request->filled('search'), function ($query) use ($request) {
+                $query->where(function($q) use ($request) {
+                    $q->whereHas('receiver', function ($q) use ($request) {
+                        $q->where('first_name', 'like', '%' . $request->search . '%')
+                          ->orWhere('last_name', 'like', '%' . $request->search . '%')
+                          ->orWhere('company_name', 'like', '%' . $request->search . '%');
+                    })
+                    ->orWhere('id', 'like', '%' . $request->search . '%');
+                });
+            })
+            ->when($request->filled('status_filter') && $request->status_filter !== 'all', function ($query) use ($request) {
+                if ($request->status_filter === 'active') {
+                    $query->whereIn('status', ['draft', 'pending', 'approved', 'in_transit']);
+                } else {
+                    $query->where('status', $request->status_filter);
+                }
+            })
+            ->latest()
+            ->paginate(10)
+            ->withQueryString()
+            ->through(fn($delivery) => [
+                'id' => $delivery->id,
+                'reference_number' => $delivery->reference_number,
+                'receiver' => [
+                    'name' => $delivery->receiver->name ?? 
+                             ($delivery->receiver->company_name ?? 'N/A'),
+                    'company_name' => $delivery->receiver->company_name,
+                    'first_name' => $delivery->receiver->first_name,
+                    'last_name' => $delivery->receiver->last_name,
+                ],
+                'pick_up_region' => $delivery->pickUpRegion ? [
+                    'id' => $delivery->pickUpRegion->id,
+                    'name' => $delivery->pickUpRegion->name
                 ] : ['name' => 'Not specified'],
-                'drop_off_region' => $req->dropOffRegion ? [
-                    'id' => $req->dropOffRegion->id,
-                    'name' => $req->dropOffRegion->name
+                'drop_off_region' => $delivery->dropOffRegion ? [
+                    'id' => $delivery->dropOffRegion->id,
+                    'name' => $delivery->dropOffRegion->name
                 ] : ['name' => 'Not specified'],
-                'payment_status' => $req->payment_status, // Add payment_status
-                'payment' => $req->payment ? [ // Add payment data
-                    'id' => $req->payment->id,
-                    'status' => $req->payment->status
+                'total_price' => $delivery->total_price,
+                'status' => $delivery->status,
+                'payment_status' => $delivery->payment_status,
+                'payment_method' => $delivery->payment_method,
+                'created_at' => $delivery->created_at->format('Y-m-d H:i'),
+                'updated_at' => $delivery->updated_at->format('Y-m-d H:i'),
+                'package_count' => $delivery->packages->count(),
+                'delivery_order_id' => $delivery->deliveryOrder?->id,
+                'delivery_date' => $delivery->deliveryOrder?->actual_arrival,
+                'is_approved' => in_array($delivery->status, ['approved', 'in_transit', 'delivered', 'completed']),
+                'is_completed' => in_array($delivery->status, ['delivered', 'completed']),
+                'payment' => $delivery->payment ? [
+                    'id' => $delivery->payment->id,
+                    'status' => $delivery->payment->status
                 ] : null
-            ],
-            // Use actual_arrival as the delivery date if available, else null
-            'delivery_date' => $req->deliveryOrder?->actual_arrival,
-            // Set status to 'completed' if deliveryOrder status is 'completed'
-            'status' => $req->deliveryOrder?->status === 'completed'
-                ? 'completed'
-                : ($req->deliveryOrder?->status ?? $req->status ?? 'pending'),
-            'total_amount' => $req->total_price,
-            'payment_status' => $req->payment_status, // Add payment_status at root level too
-            'payment' => $req->payment ? [ // Add payment at root level too
-                'id' => $req->payment->id,
-                'status' => $req->payment->status
-            ] : null
-        ]);
+            ]);
 
-    return Inertia::render('Customer/DeliveryRequests/DeliveryDashboard', [
-        'requests' => $requests,
-        'transactions' => $transactions,
-        'filters' => $request->only(['request_search', 'transaction_search']),
-        'status' => session('status'),
-        'success' => session('success'),
-        'error' => session('error'),
-    ]);
-}
+        // Quick stats for the dashboard cards
+        $stats = [
+            'total' => DeliveryRequest::where('sender_id', $customerId)->count(),
+            'pending' => DeliveryRequest::where('sender_id', $customerId)
+                        ->whereIn('status', ['draft', 'pending'])->count(),
+            'approved' => DeliveryRequest::where('sender_id', $customerId)
+                         ->whereIn('status', ['approved', 'in_transit'])->count(),
+            'completed' => DeliveryRequest::where('sender_id', $customerId)
+                          ->whereIn('status', ['delivered', 'completed'])->count(),
+            'awaiting_payment' => DeliveryRequest::where('sender_id', $customerId)
+                                ->where('payment_status', 'unpaid')
+                                ->whereIn('status', ['approved', 'in_transit', 'delivered'])
+                                ->count(),
+        ];
+
+        return Inertia::render('Customer/DeliveryRequests/DeliveryDashboard', [
+            'deliveries' => $deliveries,
+            'stats' => $stats,
+            'filters' => $request->only(['search', 'status_filter']),
+            'status' => session('status'),
+            'success' => session('success'),
+            'error' => session('error'),
+        ]);
+    }
 
     public function show(DeliveryRequest $deliveryRequest)
-{
-    // Simple loading of relationships
-    $deliveryRequest->load([
-        'sender',
-        'receiver',
-        'packages',
-        'pickUpRegion', 
-        'dropOffRegion',
-        'payment'
-    ]);
+    {
+        // Simple loading of relationships
+        $deliveryRequest->load([
+            'sender',
+            'receiver',
+            'packages',
+            'pickUpRegion', 
+            'dropOffRegion',
+            'payment'
+        ]);
 
-    return Inertia::render('Customer/DeliveryRequests/Show', [
-        'delivery' => $deliveryRequest,
-    ]);
-}
+        return Inertia::render('Customer/DeliveryRequests/Show', [
+            'delivery' => $deliveryRequest,
+        ]);
+    }
 
     public function edit(DeliveryRequest $deliveryRequest)
     {

@@ -28,7 +28,7 @@
           <div v-if="error" class="p-3 bg-red-100 text-red-800 rounded">{{ error }}</div>
         </div>
 
-        <!-- Search Bar -->
+        <!-- Search and Filters -->
         <div class="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div class="w-full sm:w-96">
             <SearchInput 
@@ -37,32 +37,25 @@
               class="w-full"
             />
           </div>
-          
-          <!-- Filters and Info Row -->
-          <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
-            <!-- Dropdown Filters -->
-            <div class="flex flex-wrap gap-2">
-              <SelectInput 
-                v-model="customerCategoryFilter" 
-                :options="customerCategoryOptions" 
-                option-value="value"
-                option-label="text"
-                placeholder="All Types"
-                class="w-full sm:w-48"
-              />
-              <SelectInput 
-                v-model="frequencyTypeFilter" 
-                :options="frequencyTypeOptions" 
-                option-value="value"
-                option-label="text"
-                placeholder="All Frequencies"
-                class="w-full sm:w-48"
-              />
-            </div>
-            
-            <!-- Info Counter -->
+          <div class="flex items-center gap-3">
+            <SelectInput 
+              v-model="customerCategoryFilter" 
+              :options="customerCategoryOptions" 
+              option-value="value"
+              option-label="text"
+              placeholder="All Types"
+              class="w-full sm:w-48"
+            />
+            <SelectInput 
+              v-model="frequencyTypeFilter" 
+              :options="frequencyTypeOptions" 
+              option-value="value"
+              option-label="text"
+              placeholder="All Frequencies"
+              class="w-full sm:w-48"
+            />
             <div class="text-sm text-gray-500 bg-blue-50 px-3 py-1 rounded border border-blue-100 whitespace-nowrap">
-              📋 Showing {{ customers.data?.length || 0 }} of {{ customers.total }} customers
+              📋 Showing {{ customers.data?.length || 0 }} active {{ customers.data?.length === 1 ? 'customer' : 'customers' }}
               <span v-if="customers.data && customers.data.length < customers.total" class="ml-1">
                 (Page {{ customers.current_page }} of {{ customers.last_page }})
               </span>
@@ -70,12 +63,12 @@
           </div>
         </div>
 
-        <!-- Data Table Container with proper spacing -->
+        <!-- Data Table Container -->
         <div class="justify-center flex items-center">
           <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg w-full max-w-[95vw]">
             <div class="p-4 bg-white border-b border-gray-200">
-              <DataTable 
-                :columns="columns" 
+              <DataTable
+                :columns="columns"
                 :data="customers.data || []"
                 :sort-field="sortField"
                 :sort-direction="sortDirection"
@@ -106,15 +99,19 @@
                   <span class="text-gray-700">{{ row.mobile || 'No phone' }}</span>
                 </template>
                 <template #customer_category="{ row }">
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" 
-                        :class="getCategoryClass(row.customer_category)">
-                    {{ row.customer_category ? row.customer_category.charAt(0).toUpperCase() + row.customer_category.slice(1) : 'N/A' }}
+                  <span 
+                    class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full capitalize"
+                    :class="getCategoryClass(row.customer_category)"
+                  >
+                    {{ row.customer_category || 'N/A' }}
                   </span>
                 </template>
                 <template #frequency_type="{ row }">
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" 
-                        :class="getFrequencyClass(row.frequency_type)">
-                    {{ row.frequency_type ? row.frequency_type.charAt(0).toUpperCase() + row.frequency_type.slice(1) : 'N/A' }}
+                  <span 
+                    class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full capitalize"
+                    :class="getFrequencyClass(row.frequency_type)"
+                  >
+                    {{ row.frequency_type || 'N/A' }}
                   </span>
                 </template>
                 <template #total_orders="{ row }">
@@ -122,6 +119,7 @@
                 </template>
                 <template #actions="{ row }">
                   <div class="flex space-x-2">
+                    <SecondaryButton @click="viewCustomer(row.id)" class="text-xs py-1 px-2">View</SecondaryButton>
                     <PrimaryButton @click="editCustomer(row.id)" class="text-xs py-1 px-2">Edit</PrimaryButton>
                     <DangerButton @click="confirmArchiveCustomer(row)" class="text-xs py-1 px-2">Disable</DangerButton>
                   </div>
@@ -132,7 +130,7 @@
                   <div class="text-center py-8">
                     <div class="bg-gray-50 rounded-lg p-6 max-w-md mx-auto">
                       <UserGroupIcon class="h-10 w-10 text-gray-400 mx-auto mb-3" />
-                      <h3 class="text-lg font-medium text-gray-900 mb-2">No customers found</h3>
+                      <h3 class="text-lg font-medium text-gray-900 mb-2">No active customers found</h3>
                       <p class="text-gray-500 mb-3">
                         {{ search ? 'Try adjusting your search terms' : 'Get started by adding your first customer' }}
                       </p>
@@ -143,11 +141,10 @@
               </DataTable>
 
               <!-- Pagination Component -->
-              <div class="mt-4">
+              <div v-if="customers.links?.length > 3" class="mt-4">
                 <Pagination 
                   :pagination="customers" 
-                  @page-changed="handlePageChange"
-                  :per-page="10"
+                  @page-changed="handlePageChange" 
                 />
               </div>
             </div>
@@ -168,7 +165,7 @@
         <div class="mt-4 flex justify-end space-x-3">
           <SecondaryButton @click="closeArchiveModal">Cancel</SecondaryButton>
           <DangerButton @click="handleArchive" :disabled="isArchiving">
-            <span v-if="isArchiving">Disabling...</span>
+            <span v-if="isArchiving">Processing...</span>
             <span v-else>Disable Customer</span>
           </DangerButton>
         </div>
@@ -178,6 +175,8 @@
 </template>
 
 <script setup>
+import { ref, watch, computed } from 'vue';
+import { router } from '@inertiajs/vue3';
 import EmployeeLayout from '@/Layouts/EmployeeLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -188,8 +187,6 @@ import DataTable from '@/Components/DataTable.vue';
 import Modal from '@/Components/Modal.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { UserGroupIcon } from '@heroicons/vue/24/outline';
-import { ref, onMounted, watch } from 'vue';
-import { router } from '@inertiajs/vue3';
 
 const props = defineProps({ 
   customers: Object, 
@@ -205,7 +202,7 @@ const isArchiving = ref(false);
 const search = ref(props.customers.filters?.search || '');
 const customerCategoryFilter = ref(props.customers.filters?.customer_category || '');
 const frequencyTypeFilter = ref(props.customers.filters?.frequency_type || '');
-const sortField = ref(props.customers.filters?.sort_field || 'name');
+const sortField = ref(props.customers.filters?.sort_field || 'first_name');
 const sortDirection = ref(props.customers.filters?.sort_direction || 'asc');
 
 // Constants
@@ -221,6 +218,16 @@ const frequencyTypeOptions = [
   { value: 'occasional', text: 'Occasional' }
 ];
 
+const categoryClasses = {
+  individual: 'bg-purple-100 text-purple-800',
+  company: 'bg-blue-100 text-blue-800'
+};
+
+const frequencyClasses = {
+  regular: 'bg-green-100 text-green-800',
+  occasional: 'bg-yellow-100 text-yellow-800'
+};
+
 const columns = [
   { field: 'name', header: 'Customer Name', sortable: true },
   { field: 'email', header: 'Email', sortable: true },
@@ -230,6 +237,42 @@ const columns = [
   { field: 'total_orders', header: 'Total Orders', sortable: true },
   { field: 'actions', header: 'Actions', sortable: false }
 ];
+
+// Computed
+const filteredCustomers = computed(() => {
+  const customersData = props.customers.data || [];
+  
+  return customersData.filter(customer => {
+    const matchesSearch = search.value === '' || 
+      customer.first_name?.toLowerCase().includes(search.value.toLowerCase()) ||
+      customer.last_name?.toLowerCase().includes(search.value.toLowerCase()) ||
+      customer.email?.toLowerCase().includes(search.value.toLowerCase()) ||
+      customer.company_name?.toLowerCase().includes(search.value.toLowerCase()) ||
+      customer.mobile?.toLowerCase().includes(search.value.toLowerCase());
+    
+    const matchesCategory = !customerCategoryFilter.value || customer.customer_category === customerCategoryFilter.value;
+    const matchesFrequency = !frequencyTypeFilter.value || customer.frequency_type === frequencyTypeFilter.value;
+    
+    return matchesSearch && matchesCategory && matchesFrequency;
+  }).sort((a, b) => {
+    const modifier = sortDirection.value === 'asc' ? 1 : -1;
+    
+    let aValue = a[sortField.value];
+    let bValue = b[sortField.value];
+    
+    // Handle null/undefined values
+    if (aValue == null) aValue = '';
+    if (bValue == null) bValue = '';
+    
+    // Convert to string for case-insensitive comparison
+    aValue = String(aValue).toLowerCase();
+    bValue = String(bValue).toLowerCase();
+
+    if (aValue < bValue) return -1 * modifier;
+    if (aValue > bValue) return 1 * modifier;
+    return 0;
+  });
+});
 
 // Methods
 const getInitials = (firstName, lastName, companyName) => {
@@ -243,29 +286,19 @@ const getInitials = (firstName, lastName, companyName) => {
 };
 
 const getCategoryClass = (category) => {
-  switch (category) {
-    case 'individual': return 'bg-purple-100 text-purple-800';
-    case 'company': return 'bg-blue-100 text-blue-800';
-    default: return 'bg-gray-100 text-gray-800';
-  }
+  return categoryClasses[category] || 'bg-gray-100 text-gray-800';
 };
 
 const getFrequencyClass = (frequency) => {
-  switch (frequency) {
-    case 'regular': return 'bg-green-100 text-green-800';
-    case 'occasional': return 'bg-yellow-100 text-yellow-800';
-    default: return 'bg-gray-100 text-gray-800';
-  }
+  return frequencyClasses[frequency] || 'bg-gray-100 text-gray-800';
 };
 
-// Fixed handleSort function to properly handle the sort event (from Warehouse page)
-function handleSort(sortParams) {
-  // The DataTable emits an object with field and direction properties
+const handleSort = (sortParams) => {
   sortField.value = sortParams.field;
   sortDirection.value = sortParams.direction;
-}
+};
 
-function handlePageChange(page) {
+const handlePageChange = (page) => {
   router.get(route('admin.customers.index'), { 
     page: page,
     search: search.value,
@@ -278,34 +311,20 @@ function handlePageChange(page) {
     preserveScroll: true,
     replace: true
   });
-}
+};
 
-function createCustomer() {
-  router.get(route('admin.customers.create'));
-}
-
-function editCustomer(id) {
-  router.get(route('admin.customers.edit', id));
-}
-
-function viewArchived() {
-  router.get(route('admin.customers.archived'));
-}
-
-function confirmArchiveCustomer(customer) {
+const confirmArchiveCustomer = (customer) => {
   customerToArchive.value = customer;
   showArchiveModal.value = true;
-}
+};
 
-function closeArchiveModal() {
+const closeArchiveModal = () => {
   showArchiveModal.value = false;
-  setTimeout(() => { 
-    customerToArchive.value = null; 
-    isArchiving.value = false; 
-  }, 300);
-}
+  customerToArchive.value = null;
+  isArchiving.value = false;
+};
 
-function handleArchive() {
+const handleArchive = () => {
   if (!customerToArchive.value) return;
   
   isArchiving.value = true;
@@ -315,7 +334,13 @@ function handleArchive() {
     onError: () => alert('Failed to disable customer'),
     onFinish: () => closeArchiveModal()
   });
-}
+};
+
+// Navigation
+const createCustomer = () => router.get(route('admin.customers.create'));
+const viewCustomer = (id) => router.get(route('admin.customers.show', id));
+const editCustomer = (id) => router.get(route('admin.customers.edit', id));
+const viewArchived = () => router.get(route('admin.customers.archived'));
 
 // Watchers
 watch([search, customerCategoryFilter, frequencyTypeFilter, sortField, sortDirection], () => {
@@ -345,22 +370,18 @@ watch([search, customerCategoryFilter, frequencyTypeFilter, sortField, sortDirec
   overflow: hidden;
 }
 
-/* Override DataTable's left padding if needed */
-:deep(.datatable) {
-  margin-left: 2rem;
-}
-
+/* DataTable styling adjustments */
 :deep(.datatable-table) {
   width: 100%;
 }
 
-/* Further reduce table row padding for more compact rows */
+/* Reduce table row padding for more compact rows */
 :deep(.datatable-table td) {
   padding-top: 0.375rem !important;
   padding-bottom: 0.375rem !important;
 }
 
-/* Further reduce table header padding */
+/* Reduce table header padding */
 :deep(.datatable-table th) {
   padding-top: 0.5rem !important;
   padding-bottom: 0.5rem !important;
@@ -371,5 +392,11 @@ watch([search, customerCategoryFilter, frequencyTypeFilter, sortField, sortDirec
 :deep(.datatable-table .btn) {
   padding: 0.25rem 0.5rem !important;
   font-size: 0.75rem !important;
+}
+
+/* Style for disabled disable button */
+:deep(.datatable-table .btn:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

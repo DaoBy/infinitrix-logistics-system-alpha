@@ -12,11 +12,10 @@ use Illuminate\Validation\Rule;
 
 class PackageController extends Controller
 {
-    public function index()
+   public function index()
     {
         $packages = Package::with(['deliveryRequest', 'currentRegion', 'transfers'])
             ->whereHas('deliveryRequest', function($query) {
-                // FIX: Remove ->approved() so ALL requests (approved, completed, etc.) are included
                 if (!auth()->user()->isAdmin()) {
                     $query->where(function($q) {
                         $q->where('sender_id', Auth::id())
@@ -25,21 +24,20 @@ class PackageController extends Controller
                     });
                 }
             })
-            // DO NOT filter out delivered or completed packages here!
-            // If you have a filter like ->where('status', '!=', 'delivered') or similar, REMOVE IT.
             ->latest()
-            ->get()
-            ->map(function ($package) {
+            ->paginate(10) // Add pagination here
+            ->through(function ($package) {
                 return $this->formatPackage($package);
             });
 
         return Inertia::render('Admin/Packages/Index', [
-            'packages' => $packages,
+            'packages' => $packages, // This now returns paginated data
             'package_statuses' => Package::getStatuses(),
             'status' => session('status'),
             'success' => session('success'),
         ]);
     }
+
 
     public function show(Package $package)
     {
@@ -63,8 +61,8 @@ class PackageController extends Controller
             'success' => session('success'),
         ]);
     }
-
-    public function transfer(Request $request, Package $package)
+    
+      public function transfer(Request $request, Package $package)
     {
         $this->authorizePackageAccess($package);
         

@@ -26,17 +26,18 @@ class StickerController extends Controller
         $stickerStatus = $request->input('sticker_status', 'not_printed');
         $regionId = $request->input('region_id', '');
 
-        $query = Package::with([
-                'deliveryRequest.receiver',
-                'deliveryRequest.dropOffRegion',
-                'deliveryRequest.waybill',
-                'currentRegion',
-                'printedBy'
-            ])
-            ->whereHas('deliveryRequest.waybill') // Only packages with waybills
-            ->whereHas('deliveryRequest', function ($q) {
-                $q->whereIn('status', ['approved', 'completed']);
-            });
+       $query = Package::with([
+        'deliveryRequest.receiver',
+        'deliveryRequest.dropOffRegion',
+        'deliveryRequest.waybill',
+        'currentRegion',
+        'printedBy'
+    ])
+    ->whereHas('deliveryRequest.waybill') // Only packages with waybills
+    ->whereHas('deliveryRequest', function ($q) {
+        // Only check if delivery request is approved (completed is optional)
+        $q->where('status', 'approved');
+    });
 
         // Apply search filter
         if ($search) {
@@ -102,29 +103,35 @@ class StickerController extends Controller
     /**
      * Print sticker for a single package.
      */
-    public function print(Package $package)
-    {
-        // Validate that package has a waybill
-        if (!$package->deliveryRequest || !$package->deliveryRequest->waybill) {
-            return redirect()->back()
-                ->with('error', 'Cannot print sticker - package does not have a waybill');
-        }
-
-        // Generate PDF
-        $pdf = $this->generateStickerPdf($package);
-
-        // Update sticker tracking
-        $package->update([
-            'sticker_printed_at' => now(),
-            'sticker_printed_by' => auth()->id(),
-        ]);
-
-        // Return PDF with proper headers - FOLLOWING WAYBILL PATTERN
-        return response($pdf->output(), 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="sticker-'.$package->item_code.'.pdf"',
-        ]);
+   public function print(Package $package)
+{
+    // Only validate that package has a waybill and approved delivery request
+    if (!$package->deliveryRequest || !$package->deliveryRequest->waybill) {
+        return redirect()->back()
+            ->with('error', 'Cannot print sticker - package does not have a waybill');
     }
+
+    // Check if delivery request is approved (allow both prepaid and postpaid)
+    if ($package->deliveryRequest->status !== 'approved') {
+        return redirect()->back()
+            ->with('error', 'Cannot print sticker - delivery request is not approved');
+    }
+
+    // Generate PDF
+    $pdf = $this->generateStickerPdf($package);
+
+    // Update sticker tracking
+    $package->update([
+        'sticker_printed_at' => now(),
+        'sticker_printed_by' => auth()->id(),
+    ]);
+
+    // Return PDF with proper headers
+    return response($pdf->output(), 200, [
+        'Content-Type' => 'application/pdf',
+        'Content-Disposition' => 'inline; filename="sticker-'.$package->item_code.'.pdf"',
+    ]);
+}
 
     /**
      * Bulk print stickers for multiple packages.

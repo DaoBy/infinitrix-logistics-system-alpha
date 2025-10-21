@@ -74,14 +74,13 @@
                   <slot name="actions" :row="row"></slot>
                 </div>
               </template>
-              <template v-else-if="column.field === 'status' && column.formatter">
-                <span :class="column.formatter(row[column.field]).class">
-                  {{ column.formatter(row[column.field]).text }}
-                </span>
+              <template v-else-if="column.formatter">
+                <!-- Pass the actual field value to formatter, not the entire row -->
+                {{ column.formatter(getFieldValue(row, column.field)) }}
               </template>
               <template v-else>
                 <slot :name="column.field" :row="row">
-                  {{ column.formatter ? column.formatter(row[column.field]) : row[column.field] }}
+                  {{ getFieldValue(row, column.field) }}
                 </slot>
               </template>
             </td>
@@ -123,6 +122,11 @@ const props = defineProps({
   sortDirection: {
     type: String,
     default: 'asc'
+  },
+  // Add numeric fields prop for proper numerical sorting
+  numericFields: {
+    type: Array,
+    default: () => ['id', 'total_price', 'package_count']
   }
 });
 
@@ -132,21 +136,42 @@ const emit = defineEmits(['selection-change', 'sort']);
 const internalSortField = ref(props.sortField);
 const internalSortDirection = ref(props.sortDirection);
 
-// Sort data based on current sort field/direction
+// Helper function to get field value from row (handles nested properties)
+const getFieldValue = (row, field) => {
+  if (!field) return '';
+  
+  // Handle nested properties with dot notation
+  if (field.includes('.')) {
+    return field.split('.').reduce((obj, key) => obj?.[key], row);
+  }
+  
+  return row[field];
+};
+
+// Enhanced sort function with numerical sorting support
 const sortedData = computed(() => {
   if (!internalSortField.value) return props.data;
 
   return [...props.data].sort((a, b) => {
-    let aValue = a[internalSortField.value];
-    let bValue = b[internalSortField.value];
+    let aValue = getFieldValue(a, internalSortField.value);
+    let bValue = getFieldValue(b, internalSortField.value);
     
     // Handle null/undefined values
     if (aValue == null) aValue = '';
     if (bValue == null) bValue = '';
     
-    // Convert to string for case-insensitive comparison
-    aValue = String(aValue).toLowerCase();
-    bValue = String(bValue).toLowerCase();
+    // Check if this is a numeric field
+    const isNumericField = props.numericFields.includes(internalSortField.value);
+    
+    if (isNumericField) {
+      // Convert to numbers for numerical sorting
+      aValue = parseFloat(aValue) || 0;
+      bValue = parseFloat(bValue) || 0;
+    } else {
+      // Convert to string for case-insensitive comparison for non-numeric fields
+      aValue = String(aValue).toLowerCase();
+      bValue = String(bValue).toLowerCase();
+    }
 
     let modifier = internalSortDirection.value === 'desc' ? -1 : 1;
 

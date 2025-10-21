@@ -6,7 +6,7 @@
           Review & Verify Collection
         </h2>
         <Link 
-          :href="route('staff.payments.index')"
+          :href="route('staff.payments.dashboard')"  
           class="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -77,7 +77,7 @@
           </div>
         </div>
       </div>
-
+      </div>
       <!-- Collection Details Card -->
       <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
         <div class="p-3 md:p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
@@ -111,18 +111,18 @@
             </div>
           </div>
         </div>
-        <div class="flex justify-end p-4 border-t border-gray-200 dark:border-gray-700">
-          <PrimaryButton
-            color="success"
-            :disabled="verifying || payment.verified_by"
-            @click="verifyPayment"
-          >
-            <span v-if="verifying">Verifying...</span>
-            <span v-else-if="payment.verified_by">Already Verified</span>
-            <span v-else>Verify Collection</span>
-          </PrimaryButton>
-        </div>
       </div>
+         <!-- Action Button -->
+    <div class="flex justify-end p-4 border-t border-gray-200 dark:border-gray-700">
+      <PrimaryButton
+        color="success"
+        :disabled="verifying || payment.verified_by"
+        @click="verifyPayment"
+      >
+        <span v-if="verifying">Verifying...</span>
+        <span v-else-if="payment.verified_by">Already Verified</span>
+        <span v-else>Verify Collection</span>
+      </PrimaryButton>
     </div>
   </EmployeeLayout>
 </template>
@@ -142,10 +142,10 @@ const verifying = ref(false);
 function verifyPayment() {
   if (props.payment.verified_by) return;
   verifying.value = true;
-  router.post(route('staff.payments.verify.action', props.payment.id), {}, {
+  router.post(route('staff.payments.verify.action', props.payment.id), {}, { 
     onFinish: () => { verifying.value = false; },
     onSuccess: () => {
-      router.visit(route('staff.payments.index'));
+      router.visit(route('staff.payments.dashboard')); 
     }
   });
 }

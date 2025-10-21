@@ -1,59 +1,61 @@
 <template>
   <EmployeeLayout>
     <template #header>
-      <div class="flex justify-between items-center px-6">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">Employee Details</h2>
-        <div class="flex space-x-2">
-          <Link :href="route('admin.employees.edit', employee.id)" as="button">
-            <PrimaryButton>Edit Profile</PrimaryButton>
-          </Link>
-          <Link :href="route('admin.employees.index')" as="button">
-            <SecondaryButton>Back to List</SecondaryButton>
-          </Link>
+      <div class="flex justify-between items-center w-full px-6 md:px-8">
+        <!-- Left: Title & Subtitle -->
+        <div>
+          <h2 class="text-xl font-semibold leading-tight text-gray-800">Employee Details</h2>
+          <p class="mt-1 text-sm text-gray-500">
+            View and manage employee information and profile
+          </p>
+        </div>
+
+        <!-- Right: Buttons -->
+        <div class="flex gap-2">
+          <SecondaryButton @click="$inertia.visit(route('admin.employees.index'))">
+            Back to List
+          </SecondaryButton>
+          <PrimaryButton @click="editEmployee">
+            Edit Profile
+          </PrimaryButton>
         </div>
       </div>
     </template>
 
-    <div class="px-6">
-      <!-- Status Messages -->
-      <div v-if="$page.props.status || $page.props.success || $page.props.error" class="mb-6 max-w-7xl mx-auto">
-        <div v-if="$page.props.status" class="p-4 bg-blue-100 text-blue-800 rounded">
-          {{ $page.props.status }}
+    <!-- ZOOM CONTENT WRAPPER -->
+    <div class="zoom-content">
+      <!-- MAIN CONTENT CONTAINER WITH PROPER PADDING -->
+      <div class="px-6 py-4">
+        <div v-if="status || success || error" class="mb-4">
+          <div v-if="status" class="p-3 bg-blue-100 text-blue-800 rounded">{{ status }}</div>
+          <div v-if="success" class="p-3 bg-green-100 text-green-800 rounded">{{ success }}</div>
+          <div v-if="error" class="p-3 bg-red-100 text-red-800 rounded">{{ error }}</div>
         </div>
-        <div v-if="$page.props.success" class="p-4 bg-green-100 text-green-800 rounded">
-          {{ $page.props.success }}
-        </div>
-        <div v-if="$page.props.error" class="p-4 bg-red-100 text-red-800 rounded">
-          {{ $page.props.error }}
-        </div>
-      </div>
 
-      <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg max-w-7xl mx-auto">
-        <div class="p-6 bg-white border-b border-gray-200">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <!-- Basic Information Section -->
-            <div class="space-y-6">
-              <div>
-                <h3 class="text-lg font-medium text-gray-900 mb-4 pb-2 border-b border-gray-200">
-                  Basic Information
-                </h3>
-                <div class="space-y-4">
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Employee ID</label>
-                    <p class="mt-1 text-sm text-gray-900">
+        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+          <div class="p-6 bg-white border-b border-gray-200">
+            <!-- Main Information Cards -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6 max-w-4xl mx-auto">
+              <!-- Basic Information Card -->
+              <div class="bg-white border border-gray-200 rounded-lg p-4">
+                <h3 class="text-lg font-medium text-gray-900 mb-3">Basic Information</h3>
+                <div class="space-y-2">
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[100px]">Employee ID</span>
+                    <span class="text-sm text-gray-900 font-semibold text-right">
                       {{ employee.employee_profile?.employee_id || 'Not specified' }}
-                    </p>
+                    </span>
                   </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Full Name</label>
-                    <p class="mt-1 text-sm text-gray-900">{{ employee.name }}</p>
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[100px]">Full Name</span>
+                    <span class="text-sm text-gray-900 text-right">{{ capitalizeWords(employee.name) }}</span>
                   </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Email</label>
-                    <p class="mt-1 text-sm text-gray-900">{{ employee.email }}</p>
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[100px]">Email</span>
+                    <span class="text-sm text-gray-900 text-right">{{ employee.email }}</span>
                   </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Status</label>
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[100px]">Status</span>
                     <span :class="employee.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'" 
                           class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full">
                       {{ employee.is_active ? 'Active' : 'Inactive' }}
@@ -62,72 +64,67 @@
                 </div>
               </div>
 
-              <!-- Contact Information Section -->
-              <div>
-                <h3 class="text-lg font-medium text-gray-900 mb-4 pb-2 border-b border-gray-200">
-                  Contact Information
-                </h3>
-                <div class="space-y-4">
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Phone</label>
-                    <p class="mt-1 text-sm text-gray-900">
+              <!-- Contact Information Card -->
+              <div class="bg-white border border-gray-200 rounded-lg p-4">
+                <h3 class="text-lg font-medium text-gray-900 mb-3">Contact Information</h3>
+                <div class="space-y-2">
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[100px]">Phone</span>
+                    <span class="text-sm text-gray-900 text-right">
                       {{ employee.employee_profile?.phone || 'Not specified' }}
-                    </p>
+                    </span>
                   </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Mobile</label>
-                    <p class="mt-1 text-sm text-gray-900">
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[100px]">Mobile</span>
+                    <span class="text-sm text-gray-900 text-right">
                       {{ employee.employee_profile?.mobile || 'Not specified' }}
-                    </p>
+                    </span>
                   </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Address</label>
-                    <p class="mt-1 text-sm text-gray-900">
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[100px]">Address</span>
+                    <span class="text-sm text-gray-900 text-right break-words whitespace-normal">
                       {{ formatAddress(employee.employee_profile) }}
-                    </p>
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- Employment Information Section -->
-            <div class="space-y-6">
-              <div>
-                <h3 class="text-lg font-medium text-gray-900 mb-4 pb-2 border-b border-gray-200">
-                  Employment Details
-                </h3>
-                <div class="space-y-4">
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Role</label>
-                    <p class="mt-1 text-sm text-gray-900 capitalize">{{ employee.role }}</p>
+            <!-- Additional Information Cards -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-4xl mx-auto">
+              <!-- Employment Details Card -->
+              <div class="bg-white border border-gray-200 rounded-lg p-4">
+                <h3 class="text-lg font-medium text-gray-900 mb-3">Employment Details</h3>
+                <div class="space-y-2">
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[100px]">Role</span>
+                    <span class="text-sm text-gray-900 text-right capitalize">{{ capitalizeWords(employee.role) }}</span>
                   </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Assigned Region/Branch</label>
-                    <p class="mt-1 text-sm text-gray-900">
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[100px]">Assigned Region</span>
+                    <span class="text-sm text-gray-900 text-right">
                       {{ employee.employee_profile?.region?.name || 'Not assigned' }}
-                    </p>
+                    </span>
                   </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-500">Hire Date</label>
-                    <p class="mt-1 text-sm text-gray-900">
+                  <div class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[100px]">Hire Date</span>
+                    <span class="text-sm text-gray-900 text-right">
                       {{ employee.employee_profile?.hire_date ? formatDate(employee.employee_profile.hire_date) : 'Not specified' }}
-                    </p>
+                    </span>
                   </div>
-                  <div v-if="employee.employee_profile?.termination_date">
-                    <label class="block text-sm font-medium text-gray-500">Termination Date</label>
-                    <p class="mt-1 text-sm text-gray-900">
+                  <div v-if="employee.employee_profile?.termination_date" class="flex justify-between items-center py-1">
+                    <span class="text-sm font-medium text-gray-500 min-w-[100px]">Termination Date</span>
+                    <span class="text-sm text-gray-900 text-right">
                       {{ formatDate(employee.employee_profile.termination_date) }}
-                    </p>
+                    </span>
                   </div>
                 </div>
               </div>
 
-              <!-- Notes Section -->
-              <div v-if="employee.employee_profile?.notes">
-                <h3 class="text-lg font-medium text-gray-900 mb-4 pb-2 border-b border-gray-200">
-                  Notes
-                </h3>
-                <p class="mt-2 text-sm text-gray-700 whitespace-pre-line">
+              <!-- Notes Card -->
+              <div v-if="employee.employee_profile?.notes" class="bg-white border border-gray-200 rounded-lg p-4">
+                <h3 class="text-lg font-medium text-gray-900 mb-3">Notes</h3>
+                <p class="text-sm text-gray-700 whitespace-pre-line">
                   {{ employee.employee_profile.notes }}
                 </p>
               </div>
@@ -143,15 +140,28 @@
 import EmployeeLayout from '@/Layouts/EmployeeLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
-import { Link } from '@inertiajs/vue3';
+import { router } from '@inertiajs/vue3';
 
 const props = defineProps({
   employee: Object,
+  status: String,
+  success: String,
+  error: String,
 });
 
+// Helper function to capitalize words
+const capitalizeWords = (str) => {
+  if (!str) return '';
+  return str.replace(/\b\w/g, char => char.toUpperCase());
+};
+
 const formatDate = (dateString) => {
-  const options = { year: 'numeric', month: 'long', day: 'numeric' };
-  return new Date(dateString).toLocaleDateString(undefined, options);
+  if (!dateString) return 'Not specified';
+  try {
+    return new Date(dateString).toLocaleDateString();
+  } catch (e) {
+    return 'Invalid Date';
+  }
 };
 
 const formatAddress = (profile) => {
@@ -168,4 +178,21 @@ const formatAddress = (profile) => {
 
   return parts.length > 0 ? parts.join(', ') : 'Not specified';
 };
+
+const editEmployee = () => {
+  router.get(route('admin.employees.edit', props.employee.id));
+};
 </script>
+
+<style scoped>
+.zoom-content {
+  zoom: 0.80;
+}
+
+/* Add tighter spacing for desktop */
+@media (min-width: 1024px) {
+  .zoom-content {
+    zoom: 0.90; /* Slightly less zoom on desktop */
+  }
+}
+</style>
