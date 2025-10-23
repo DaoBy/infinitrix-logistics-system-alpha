@@ -48,6 +48,39 @@ use App\Http\Controllers\PaymentController;
 // =============================================================================
 // PUBLIC ROUTES
 // =============================================================================
+
+Route::get('/debug/skip-cooldown-direct', function() {
+    $driver = auth()->user();
+    $assignment = $driver->currentTruckAssignment;
+    
+    if (!$assignment) {
+        return response()->json(['error' => 'No assignment found']);
+    }
+    
+    \Log::info("🧪 DIRECT TEST: Skip cooldown", [
+        'assignment_id' => $assignment->id,
+        'current_status' => $assignment->current_status
+    ]);
+    
+    try {
+        $result = $assignment->skipCooldown();
+        
+        return response()->json([
+            'success' => $result,
+            'assignment' => [
+                'id' => $assignment->id,
+                'status' => $assignment->current_status,
+                'available_for_backhaul' => $assignment->available_for_backhaul
+            ]
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+    }
+});
+
 Route::get('/debug/assignment-state', function() {
     $driver = auth()->user();
     $assignment = $driver->currentTruckAssignment;
