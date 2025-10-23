@@ -227,7 +227,6 @@ class DriverTruckAssignment extends Model
         ]);
 
         if ($this->truck) {
-            $this->truck->update(['status' => Truck::STATUS_RETURNING]);
             $this->truck->updateStatus();
         }
 
@@ -238,13 +237,11 @@ class DriverTruckAssignment extends Model
     }
 
     // Complete assignment (when driver arrives at home region) - OPTION B COMPLETION
-      public function completeAssignment(): void
+    public function completeAssignment(): void
 {
     \Log::info("Completing assignment - Option B", [
         'assignment_id' => $this->id,
-        'current_status' => $this->current_status,
-        'driver_region' => $this->driver->current_region_id,
-        'home_region' => $this->region_id
+        'current_status' => $this->current_status
     ]);
 
     if ($this->current_status !== self::STATUS_RETURNING) {
@@ -263,13 +260,12 @@ class DriverTruckAssignment extends Model
     $this->is_final_cooldown = true;
     $this->save();
 
-    // FIX: Only use updateStatus() - don't manually set truck status
-    if ($this->truck) {
-        $this->truck->updateStatus(); // This will automatically handle the status
-    }
-
+    // NO TRUCK STATUS UPDATE - let the system handle it automatically
     \Log::info("Assignment completion successful - now in final cooldown");
 }
+
+
+
     // Complete cooldown period - FINISHES ASSIGNMENT
 public function completeCooldown(): void
 {
@@ -292,12 +288,7 @@ public function completeCooldown(): void
     $this->completed_at = now();
     $this->save();
 
-    // FIX: Use valid truck status - set to "available"
-    if ($this->truck) {
-        $this->truck->update(['status' => Truck::STATUS_AVAILABLE]); // Use valid status
-        $this->truck->updateStatus();
-    }
-
+    // NO TRUCK STATUS UPDATE - the assignment status change will trigger automatic updates
     $this->driver->current_region_id = $this->region_id;
     $this->driver->save();
 
@@ -364,11 +355,7 @@ public function completeCooldown(): void
 
       if ($this->truck) {
     // Let the truck's automatic updateStatus handle the mapping
-    // Don't manually set any status except for completed assignments
-    if ($newStatus === self::STATUS_COMPLETED) {
-        // Only for completed assignments, explicitly set to available
-        $this->truck->update(['status' => Truck::STATUS_AVAILABLE]);
-    }
+    // Don't manually set any status except for completed assignment
     $this->truck->updateStatus();
 }
 

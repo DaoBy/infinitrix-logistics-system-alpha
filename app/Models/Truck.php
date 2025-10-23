@@ -136,30 +136,22 @@ class Truck extends Model
     }
 
     // MODIFIED: SIMPLIFIED Status auto-update to mirror assignment status
-    public function updateStatus(): void
-    {
-        if (!$this->is_active) {
-            $this->status = self::STATUS_UNAVAILABLE;
-            $this->save();
-            return;
-        }
+   public function updateStatus(): void
+{
+    if (!$this->is_active) {
+        $this->status = self::STATUS_UNAVAILABLE;
+        $this->save();
+        return;
+    }
 
-        // SIMPLIFIED: Check assignment status and mirror it
-        $assignment = $this->currentDriverAssignment;
-        if ($assignment) {
-            // Truck status directly mirrors assignment status
-            $this->status = match($assignment->current_status) {
-                \App\Models\DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE => self::STATUS_AVAILABLE_FOR_BACKHAUL,
-                \App\Models\DriverTruckAssignment::STATUS_IN_TRANSIT => self::STATUS_IN_TRANSIT,
-                \App\Models\DriverTruckAssignment::STATUS_COOLDOWN => self::STATUS_COOLDOWN,
-                \App\Models\DriverTruckAssignment::STATUS_RETURNING => self::STATUS_RETURNING,
-                \App\Models\DriverTruckAssignment::STATUS_ACTIVE => self::STATUS_AVAILABLE,
-                \App\Models\DriverTruckAssignment::STATUS_COMPLETED => self::STATUS_AVAILABLE,
-                default => self::STATUS_AVAILABLE
-            };
-            $this->save();
-            return;
-        }
+    // TEMPORARY FIX: Never set truck status to "cooldown"
+    $assignment = $this->currentDriverAssignment;
+    if ($assignment && $assignment->current_status === \App\Models\DriverTruckAssignment::STATUS_COOLDOWN) {
+        $this->status = self::STATUS_AVAILABLE;
+        $this->save();
+        return;
+    }
+
 
         // Fallback to capacity-based status for unassigned trucks
         if ($this->volume_capacity <= 0 || $this->weight_capacity <= 0) {
