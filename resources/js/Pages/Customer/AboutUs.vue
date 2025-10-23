@@ -85,153 +85,112 @@ import peopleicon from '@/assets/peopleicon.png';
   </div>
 </div>
 
-<div class="relative flex flex-col items-center justify-center text-center pt-1 pb-[30rem] overflow-hidden">
-
-  <p class="max-w-3xl text-gray-700 text-lg mb-5 px-6">
-    "Infinitrix Express Cargo is committed to delivering reliable land freight services that ensure every package reaches its destination safely and on time.
-    We aim to simplify logistics through digital solutions, strengthen customer trust through transparency and care, and continuously improve our operations to support the growing needs of our clients."
-  </p>
-
-  <h1 class="font-black text-[180px] leading-none bg-gradient-to-t from-green-900 to-green-300 bg-clip-text text-transparent select-none z-0">
-    OUR MISSION
-  </h1>
-
-  <img :src="missionIcon" alt="Our Mission Icon"
-    class="absolute bottom-10 h-[30rem] z-10 pointer-events-none mb-10" />
+<div class="relative flex flex-col items-center justify-center text-center pt-1 pb-[15rem] sm:pb-[20rem] md:pb-[20rem] lg:pb-[30rem] overflow-hidden"> 
+  <p class="max-w-3xl text-gray-700 text-base sm:text-lg md:text-xl mb-5 px-4 md:px-6"> 
+    "Infinitrix Express Cargo is committed to delivering reliable land freight services that ensure every package reaches its destination safely and on time. We aim to simplify logistics through digital solutions, strengthen customer trust through transparency and care, and continuously improve our operations to support the growing needs of our clients." 
+  </p> 
+  <h1 class="font-black text-[5rem] sm:text-[6rem] md:text-[9rem] lg:text-[11rem] xl:text-[12rem] leading-none bg-gradient-to-t from-green-900 to-green-300 bg-clip-text text-transparent select-none z-0"> 
+    OUR MISSION 
+  </h1> 
+  <img :src="missionIcon" alt="Our Mission Icon" class="absolute bottom-10 sm:bottom-16 md:bottom-20 h-[15rem] sm:h-[20rem] md:h-[25rem] lg:h-[30rem] z-10 pointer-events-none mb-0 sm:mb-10 md:mb-20 lg:mb-10" /> 
+</div> 
+<div class="relative flex flex-col items-center justify-center text-center pt-1 pb-[15rem] sm:pb-[20rem] md:pb-[20rem] lg:pb-[30rem] overflow-hidden"> 
+  <p class="max-w-3xl text-gray-700 text-base sm:text-lg md:text-xl mb-5 px-4 md:px-6"> "To become a trusted logistics partner in the Philippines by providing fast, secure, and convenient cargo delivery services that connect communities and businesses through innovation and dedication." </p> 
+  <h1 class="font-black text-[6rem] sm:text-[6rem] md:text-[9rem] lg:text-[11rem] xl:text-[12rem] leading-none bg-gradient-to-t from-green-900 to-green-300 bg-clip-text text-transparent select-none z-0"> OUR VISION </h1> 
+  <img :src="visionIcon" alt="Our Vision Icon" class="absolute bottom-10 sm:bottom-16 md:bottom-20 h-[15rem] sm:h-[20rem] md:h-[25rem] lg:h-[30rem] z-10 pointer-events-none mb-0 sm:mb-10 md:mb-20 lg:mb-10" /> 
 </div>
 
-<div class="relative flex flex-col items-center justify-center text-center pt-1 pb-[30rem] overflow-hidden">
+<!-- Section Title -->
+<h2
+  class="text-3xl sm:text-4xl md:text-5xl font-bold text-green-700 uppercase tracking-wide mb-6 md:mb-10 drop-shadow-md text-center"
+  v-motion-slide-visible-right
+  :duration="600"
+>
+  Our Core Values
+</h2>
 
-  <p class="max-w-3xl text-gray-700 text-lg mb-5 px-6">
-    "To become a trusted logistics partner in the Philippines by providing fast, secure, and convenient cargo delivery services that connect communities and businesses through innovation and dedication."
-  </p>
+<!-- Cards Container -->
+<div class="flex flex-wrap justify-center items-center gap-6 sm:gap-8 md:gap-10 bg-gray-100 py-10">
 
-  <h1 class="font-black text-[180px] leading-none bg-gradient-to-t from-green-900 to-green-300 bg-clip-text text-transparent select-none z-0">
-    OUR VISION
-  </h1>
+  <!-- Card 1 -->
+  <div
+    v-motion
+    :initial="{ rotateY: 0 }"
+    :hovered="{ rotateY: 180 }"
+    :transition="{ duration: 5.0, ease: 'easeInOut' }"
+    class="relative w-72 sm:w-80 h-[25rem] sm:h-[28rem] md:h-[30rem] [transform-style:preserve-3d] cursor-pointer"
+  >
+    <!-- Front -->
+    <div class="absolute inset-0 flex flex-col items-center justify-center bg-white rounded-xl shadow-lg [backface-visibility:hidden] p-4">
+      <img :src="customerfocus" alt="Customer Focus Icon" class="h-34 sm:h-42 md:h-50 object-contain" />
+      <h2 class="absolute bottom-16 text-lg sm:text-xl md:text-2xl font-semibold text-green-700 drop-shadow-md">Customer-Centered</h2>
+      <h2 class="absolute bottom-8 text-lg sm:text-xl md:text-2xl font-semibold text-green-700 drop-shadow-md">Innovation</h2>
+    </div>
 
-  <img :src="visionIcon" alt="Our Vision Icon"
-    class="absolute bottom-20 h-[30rem] z-10 pointer-events-none mb-10" />
+    <!-- Back -->
+    <div class="absolute inset-0 flex items-center justify-center bg-green-600 rounded-xl text-white [backface-visibility:hidden] [transform:rotateY(180deg)] p-4">
+      <p class="text-center text-sm sm:text-base md:text-lg">We relentlessly innovate, always with our customers' evolving needs at the forefront, to deliver solutions that simplify and enhance their logistics experience.</p>
+    </div>
+  </div>
+
+  <!-- Card 2 -->
+  <div
+    v-motion
+    :initial="{ rotateY: 0 }"
+    :hovered="{ rotateY: 180 }"
+    :transition="{ duration: 5.0, ease: 'easeInOut' }"
+    class="relative w-72 sm:w-80 h-[25rem] sm:h-[28rem] md:h-[30rem] [transform-style:preserve-3d] cursor-pointer"
+  >
+    <div class="absolute inset-0 flex flex-col items-center justify-center bg-white rounded-xl shadow-lg [backface-visibility:hidden] p-4">
+      <img :src="operationfocus" alt="Operational Excellence Icon" class="h-34 sm:h-42 md:h-50 object-contain" />
+      <h2 class="absolute bottom-12 text-lg sm:text-xl md:text-2xl font-semibold text-green-700 drop-shadow-md">Operational Excellence</h2>
+    </div>
+
+    <div class="absolute inset-0 flex items-center justify-center bg-green-600 rounded-xl text-white [backface-visibility:hidden] [transform:rotateY(180deg)] p-4">
+      <p class="text-center text-sm sm:text-base md:text-lg">We commit to the highest standards in every operation, ensuring effectiveness and continuous improvement across our entire network.</p>
+    </div>
+  </div>
+
+  <!-- Card 3 -->
+  <div
+    v-motion
+    :initial="{ rotateY: 0 }"
+    :hovered="{ rotateY: 180 }"
+    :transition="{ duration: 5.0, ease: 'easeInOut' }"
+    class="relative w-72 sm:w-80 h-[25rem] sm:h-[28rem] md:h-[30rem] [transform-style:preserve-3d] cursor-pointer"
+  >
+    <div class="absolute inset-0 flex flex-col items-center justify-center bg-white rounded-xl shadow-lg [backface-visibility:hidden] p-4">
+      <img :src="trusticon" alt="Transparency and Trust Icon" class="h-34 sm:h-42 md:h-50 object-contain" />
+      <h2 class="absolute bottom-12 text-lg sm:text-xl md:text-2xl font-semibold text-green-700 drop-shadow-md">Transparency & Trust</h2>
+    </div>
+
+    <div class="absolute inset-0 flex items-center justify-center bg-green-600 rounded-xl text-white [backface-visibility:hidden] [transform:rotateY(180deg)] p-4">
+      <p class="text-center text-sm sm:text-base md:text-lg">Open communication and integrity build strong, lasting relationships founded on trust.</p>
+    </div>
+  </div>
+
+  <!-- Card 4 -->
+  <div
+    v-motion
+    :initial="{ rotateY: 0 }"
+    :hovered="{ rotateY: 180 }"
+    :transition="{ duration: 5.0, ease: 'easeInOut' }"
+    class="relative w-72 sm:w-80 h-[25rem] sm:h-[28rem] md:h-[30rem] [transform-style:preserve-3d] cursor-pointer"
+  >
+    <div class="absolute inset-0 flex flex-col items-center justify-center bg-white rounded-xl shadow-lg [backface-visibility:hidden] p-4">
+      <img :src="peopleicon" alt="Team Culture Icon" class="h-34 sm:h-42 md:h-50 object-contain" />
+      <h2 class="absolute bottom-16 text-lg sm:text-xl md:text-2xl font-semibold text-green-700 drop-shadow-md">Team Culture with</h2>
+      <h2 class="absolute bottom-8 text-lg sm:text-xl md:text-2xl font-semibold text-green-700 drop-shadow-md">Personality</h2>
+    </div>
+
+    <div class="absolute inset-0 flex items-center justify-center bg-green-600 rounded-xl text-white [backface-visibility:hidden] [transform:rotateY(180deg)] p-4">
+      <p class="text-center text-sm sm:text-base md:text-lg">We create a positive, inclusive team environment where collaboration and creativity thrive.</p>
+    </div>
+  </div>
 </div>
 
-<h2 class="text-4xl md:text-5xl font-bold text-green-700 uppercase tracking-wide mb-4 drop-shadow-md text-center" v-motion-slide-visible-right :duration="600">
-            Our Core Values
-          </h2>
-<div class="flex justify-center items-center h-max bg-gray-100 gap-10 pt-10">
-    <!-- Card 1 -->
-    <div
-      v-motion
-      :initial="{ rotateY: 0 }"
-      :hovered="{ rotateY: 180 }"
-      :transition="{ duration: 5.0, ease: 'easeInOut' }"
-      class="relative w-80 h-[30rem] [transform-style:preserve-3d] cursor-pointer"
-    >
-      <!-- Front -->
-      <div class="absolute inset-0 flex flex-col items-center justify-center bg-white rounded-xl shadow-lg [backface-visibility:hidden]">
-        <img :src="customerfocus" alt="Customer Focus Icon" class="h-min" />
-        <h2 class="absolute bottom-16 text-2xl font-semibold text-green-700 drop-shadow-md">Customer-Centered</h2>
-        <h2 class="absolute bottom-10 text-2xl font-semibold text-green-700 drop-shadow-md">Innovation</h2>
-      </div>
 
-      <!-- Back -->
-      <div
-        class="absolute inset-0 flex items-center justify-center bg-green-600 rounded-xl text-white [backface-visibility:hidden] [transform:rotateY(180deg)]"
-      >
-        <p class="text-center mx-8">We relentlessly innovate, always with our customers' evolving needs at the forefront, to deliver solutions that simplify and enhance their logistics experience.</p>
-      </div>
-    </div>
-
-    <!-- Card 2 -->
-    <div
-      v-motion
-      :initial="{ rotateY: 0 }"
-      :hovered="{ rotateY: 180 }"
-      :transition="{ duration: 5.0, ease: 'easeInOut' }"
-      class="relative w-80 h-[30rem] [transform-style:preserve-3d] cursor-pointer"
-    >
-      <!-- Front -->
-      <div class="absolute inset-0 flex flex-col items-center justify-center bg-white rounded-xl shadow-lg [backface-visibility:hidden]">
-        <img :src="operationfocus" alt="Our Vision Icon" class="h-min" />
-        <h2 class="absolute bottom-16 text-2xl font-semibold text-green-700 drop-shadow-md">Operational Excellence</h2>
-      </div>
-
-      <!-- Back -->
-      <div
-        class="absolute inset-0 flex items-center justify-center bg-green-600 rounded-xl text-white [backface-visibility:hidden] [transform:rotateY(180deg)]"
-      >
-        <p class="text-center mx-8">We commit to the highest standards in every operation, ensuring efficiency, accuracy, and continuous improvement across our entire network.</p>
     
-      </div>
-    </div>
-
-    <!-- Card 2 -->
-    <div
-      v-motion
-      :initial="{ rotateY: 0 }"
-      :hovered="{ rotateY: 180 }"
-      :transition="{ duration: 5.0, ease: 'easeInOut' }"
-      class="relative w-80 h-[30rem] [transform-style:preserve-3d] cursor-pointer"
-    >
-      <!-- Front -->
-      <div class="absolute inset-0 flex flex-col items-center justify-center bg-white rounded-xl shadow-lg [backface-visibility:hidden]">
-        <img :src="trusticon" alt="Our Vision Icon" class="h-min" />
-        <h2 class="absolute bottom-16 text-2xl font-semibold text-green-700 drop-shadow-md">Transparency & Trust</h2>
-      </div>
-
-      <!-- Back -->
-      <div
-        class="absolute inset-0 flex items-center justify-center bg-green-600 rounded-xl text-white [backface-visibility:hidden] [transform:rotateY(180deg)]"
-      >
-        <p class="text-center mx-8">Open communication and unwavering integrity are the cornerstones of our relationships, fostering complete trust with every interaction.</p>
-    
-      </div>
-    </div>
-    <!-- Card 2 -->
-    <div
-      v-motion
-      :initial="{ rotateY: 0 }"
-      :hovered="{ rotateY: 180 }"
-      :transition="{ duration: 5.0, ease: 'easeInOut' }"
-      class="relative w-80 h-[30rem] [transform-style:preserve-3d] cursor-pointer"
-    >
-      <!-- Front -->
-      <div class="absolute inset-0 flex flex-col items-center justify-center bg-white rounded-xl shadow-lg [backface-visibility:hidden]">
-        <img :src="peopleicon" alt="Our Vision Icon" class="h-min" />
-        <h2 class="absolute bottom-16 text-2xl font-semibold text-green-700 drop-shadow-md">Team Culture with </h2>
-        <h2 class="absolute bottom-10 text-2xl font-semibold text-green-700 drop-shadow-md">Personality</h2>
-      </div>
-
-      <!-- Back -->
-      <div
-        class="absolute inset-0 flex items-center justify-center bg-green-600 rounded-xl text-white [backface-visibility:hidden] [transform:rotateY(180deg)]"
-      >
-        <p class="text-center mx-8">We foster a vibrant and supportive team environment where diverse perspectives are celebrated, encouraging creativity and collaboration.</p>
-    
-      </div>
-    </div>
-  </div>
-
-    <!-- 
-<div class="mt-16 grid grid-cols-1 md:grid-cols-2 gap-8">
-  
-  <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-green-700">Our Mission</h3>
-    <p class="mt-4 text-gray-600 max-w-md">
-      To revolutionize nationwide logistics with fast, transparent, and secure delivery services—while keeping things efficient, human, and just a little bit fun.
-    </p>
-  </div>
-
-  
-  <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-green-700">Our Values</h3>
-    <ul class="mt-4 list-disc list-inside text-gray-600 space-y-1 text-left max-w-md">
-      <li>Customer-Centered Innovation</li>
-      <li>Transparency & Trust</li>
-      <li>Operational Excellence</li>
-      <li>Team Culture with Personality</li>
-    </ul>
-  </div>
-</div> -->
 
 
 
