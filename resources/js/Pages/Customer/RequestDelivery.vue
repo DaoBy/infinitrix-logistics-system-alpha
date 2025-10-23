@@ -45,6 +45,12 @@ window.addEventListener('popstate', (event) => {
   console.log('🧭 Browser history changed:', event);
   console.log('   Current URL:', window.location.href);
 });
+
+const clearPhotoErrors = (index) => {
+  form.clearErrors(`packages.${index}.photos`);
+  showSizeWarning.value[index] = false;
+};
+
 const props = defineProps({
     authCustomer: Object,
     categories: Array,
@@ -60,10 +66,12 @@ const PICKUP_REGIONS = [
   { value: 2, label: 'Legazpi' }
 ];
 
-const showPackageNotices = ref(true); // Default to showing details
+const showPackageNotices = ref(true);
 const showAdvisoryNotice = ref(true);
 const showPhotoRequirements = ref(true);
 const showPackageGuide = ref(true);
+const showSizeWarning = ref({});
+
 // Container Presets with corrected dimension display (Length × Height × Width)
 const containerPresets = [
   {
@@ -160,6 +168,7 @@ const currentStep = ref(1);
 const isLoading = ref(false);
 const isUsingMyInfo = ref(false);
 const deliveryRequestId = ref(null);
+const showSuccessScreen = ref(false);
 
 // For dropdown options 
 const branches = ref([]);
@@ -203,8 +212,7 @@ const fetchRegions = async () => {
       form.pick_up_region_id = 1;
       selectedRegionInfo.value = regionsDataMap.value[1];
       
-      // ADD THIS: Set default drop-off region if needed
-      // For example, set to the second region if available
+      // Set default drop-off region if needed
       if (regionsData.length > 1) {
         form.drop_off_region_id = 2;
         selectedDropoffRegionInfo.value = regionsDataMap.value[2];
@@ -215,6 +223,7 @@ const fetchRegions = async () => {
     branches.value = [];
   }
 };
+
 const regionsDataMap = ref({});
 
 const getDefaultRate = (key) => {
@@ -275,6 +284,20 @@ const formatCurrency = (value) => {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
+};
+
+const formatFileSize = (bytes) => {
+  if (!bytes) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+const calculateTotalSize = (files) => {
+  if (!files || !files.length) return '0 B';
+  const totalBytes = files.reduce((total, file) => total + (file.size || 0), 0);
+  return formatFileSize(totalBytes);
 };
 
 const customerCategoryOptions = [
@@ -422,6 +445,8 @@ const calculatePrice = async () => {
   try {
     let totalPackages = 0;
     const packagesData = [];
+
+
 
     form.packages.forEach(pkg => {
       const quantity = parseInt(pkg.quantity) || 1;
@@ -886,19 +911,16 @@ const validateStep = () => {
 
       // Photo validation
       if (!pkg.photos || pkg.photos.length === 0) {
-        form.setError(`packages.${index}.photos`, 'Package photos are required. Minimum 6 photos for single package, 2 for multiple packages.');
-        isValid = false;
-      } else {
-        const requiredPhotos = form.packages.length === 1 ? 6 : 2;
-        if (pkg.photos.length < requiredPhotos) {
-          form.setError(`packages.${index}.photos`, 
-            form.packages.length === 1 
-              ? `Minimum 6 photos required for single package (all sides + weighing scale).`
-              : `Minimum 2 photos required for multiple packages (group photo + weighing scale).`
-          );
-          isValid = false;
-        }
-      }
+  form.setError(`packages.${index}.photos`, 'Package photos are required. Minimum 6 photos for all packages.');
+  isValid = false;
+} else if (pkg.photos.length < 6) {
+  // Always require 6 photos regardless of quantity
+  form.setError(`packages.${index}.photos`, 
+    `Minimum 6 photos required for all packages. You have ${pkg.photos.length}/6 photos.` +
+    (pkg.quantity > 1 ? ' Must include group photo and weighing scale.' : ' Must include all sides and weighing scale.')
+  );
+  isValid = false;
+}
     });
   }
   
@@ -922,38 +944,144 @@ const validateStep = () => {
   return isValid;
 };
 
-const handlePhotoUpload = (event, index) => {
-  const files = event.target.files;
-  if (files && files.length > 0) {
+const compressImage = (file, maxWidth = 1200, quality = 0.7) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Calculate new dimensions
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        canvas.toBlob(
+          (blob) => {
+            resolve(new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now()
+            }));
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+    };
+  });
+};
+
+const handlePhotoUpload = async (event, index) => {
+  const newFiles = Array.from(event.target.files);
+  if (newFiles && newFiles.length > 0) {
     form.clearErrors(`packages.${index}.photos`);
     
-    const validFiles = [];
-    const fileUrls = [];
+    // Get existing files and URLs
+    const existingFiles = form.packages[index].photos || [];
+    const existingUrls = form.packages[index].photo_urls || [];
     
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    const validFiles = [...existingFiles];
+    const fileUrls = [...existingUrls];
+    
+    let hasLargeFiles = false;
+    let hasSizeError = false;
+    
+    for (let i = 0; i < newFiles.length; i++) {
+      const file = newFiles[i];
       
       if (!file.type.match('image.*')) {
         form.setError(`packages.${index}.photos`, 'Only image files are allowed');
-        return;
+        hasSizeError = true;
+        break;
       }
       
-      if (file.size > 5 * 1024 * 1024) {
-        form.setError(`packages.${index}.photos`, `File ${file.name} exceeds 5MB limit`);
-        return;
+      // Enhanced size validation
+      if (file.size > 5 * 1024 * 1024) { // 5MB hard limit
+        form.setError(`packages.${index}.photos`, `File "${file.name}" exceeds 5MB limit. Please choose a smaller image.`);
+        hasSizeError = true;
+        break;
       }
       
-      validFiles.push(file);
-      fileUrls.push(URL.createObjectURL(file));
+      // Check for duplicate files (by name and size)
+      const isDuplicate = validFiles.some(existingFile => 
+        existingFile.name === file.name && existingFile.size === file.size
+      );
+      
+      if (isDuplicate) {
+        console.log(`Skipping duplicate file: ${file.name}`);
+        continue;
+      }
+      
+      // Check if file is large (for compression warning)
+      if (file.size > 1024 * 1024) {
+        hasLargeFiles = true;
+      }
+      
+      try {
+        let processedFile = file;
+        
+        // Compress image if it's larger than 1MB
+        if (file.size > 1024 * 1024) {
+          processedFile = await compressImage(file);
+          console.log(`Compressed ${file.name}: ${formatFileSize(file.size)} → ${formatFileSize(processedFile.size)}`);
+        }
+        
+        validFiles.push(processedFile);
+        fileUrls.push(URL.createObjectURL(processedFile));
+        
+      } catch (error) {
+        console.error('Image processing failed:', error);
+        // Fallback to original file
+        validFiles.push(file);
+        fileUrls.push(URL.createObjectURL(file));
+      }
     }
     
-    form.packages[index].photos = validFiles;
-    form.packages[index].photo_urls = fileUrls;
+    // Only update if no size errors occurred
+    if (!hasSizeError) {
+      form.packages[index].photos = validFiles;
+      form.packages[index].photo_urls = fileUrls;
+      showSizeWarning.value[index] = hasLargeFiles;
+      
+      // Clear size warning after 5 seconds
+      if (hasLargeFiles) {
+        setTimeout(() => {
+          showSizeWarning.value[index] = false;
+        }, 5000);
+      }
+    }
     
-    form.packages[index].photo = null;
-    form.packages[index].photo_url = null;
+    // Clear the file input to allow selecting the same files again
+    event.target.value = '';
   }
 };
+
+const removePhoto = (packageIndex, photoIndex) => {
+  if (form.packages[packageIndex].photo_urls && form.packages[packageIndex].photo_urls[photoIndex]) {
+    // Revoke the object URL to prevent memory leaks
+    URL.revokeObjectURL(form.packages[packageIndex].photo_urls[photoIndex]);
+  }
+  
+  // Remove the photo from both arrays
+  form.packages[packageIndex].photos.splice(photoIndex, 1);
+  form.packages[packageIndex].photo_urls.splice(photoIndex, 1);
+  
+  console.log(`🗑️ Removed photo ${photoIndex + 1} from package ${packageIndex + 1}`);
+};
+
 
 const addPackage = () => {
   form.packages.push({
@@ -1074,7 +1202,41 @@ const expandPackagesByQuantity = () => {
   return expandedPackages;
 };
 
-const submitRequest = () => {
+const uploadPhotosSequentially = async (files, packageIndex) => {
+  const uploadedPaths = [];
+  
+  for (const file of files) {
+    try {
+      const formData = new FormData();
+      formData.append('photos[]', file);
+      
+      const response = await axios.post(
+        route('customer.delivery-requests.upload-photos'), 
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          timeout: 30000 // 30 second timeout
+        }
+      );
+      
+      if (response.data.photo_paths && response.data.photo_paths.length > 0) {
+        uploadedPaths.push(...response.data.photo_paths);
+        console.log(`✅ Uploaded: ${file.name} (${formatFileSize(file.size)})`);
+      }
+    } catch (error) {
+      console.error(`❌ Failed to upload ${file.name}:`, error);
+      throw new Error(`Failed to upload ${file.name}: ${error.message}`);
+    }
+  }
+  
+  return uploadedPaths;
+};
+
+const submitRequest = async () => {
   console.log('🔍 SUBMIT REQUEST STARTED - currentStep:', currentStep.value);
   
   if (!validateStep()) {
@@ -1116,110 +1278,122 @@ const submitRequest = () => {
     formData.append('price_breakdown', JSON.stringify(form.priceBreakdown));
   }
 
-  const photoUploadPromises = [];
-  const uploadedPhotoPaths = {};
-  
-  for (let originalIndex = 0; originalIndex < form.packages.length; originalIndex++) {
-    const originalPkg = form.packages[originalIndex];
+  try {
+    const uploadedPhotoPaths = {};
+
+    // Sequential photo upload for each package
+    for (let originalIndex = 0; originalIndex < form.packages.length; originalIndex++) {
+      const originalPkg = form.packages[originalIndex];
+      
+      if (originalPkg.photos && originalPkg.photos.length > 0) {
+        console.log(`📸 Uploading ${originalPkg.photos.length} photos for package ${originalIndex}`);
+        
+        // Use sequential upload
+        uploadedPhotoPaths[originalIndex] = await uploadPhotosSequentially(originalPkg.photos, originalIndex);
+        
+        console.log(`✅ Successfully uploaded ${uploadedPhotoPaths[originalIndex].length} photos for package ${originalIndex}`);
+      } else {
+        uploadedPhotoPaths[originalIndex] = [];
+        console.log(`ℹ️ No photos to upload for package ${originalIndex}`);
+      }
+    }
+
+    // Expand packages and add to formData
+    const expandedPackages = [];
     
-    if (originalPkg.photos && originalPkg.photos.length > 0) {
-      console.log(`📸 Uploading ${originalPkg.photos.length} photos for package ${originalIndex}`);
-      const photoFormData = new FormData();
-      originalPkg.photos.forEach((photo, photoIndex) => {
-        photoFormData.append(`photos[]`, photo);
-      });
+    form.packages.forEach((originalPkg, originalIndex) => {
+      const quantity = parseInt(originalPkg.quantity) || 1;
+      const photoPaths = uploadedPhotoPaths[originalIndex] || [];
       
-      const uploadPromise = axios.post(route('customer.delivery-requests.upload-photos'), photoFormData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'X-CSRF-TOKEN': csrfToken
-        }
-      }).then(response => {
-        uploadedPhotoPaths[originalIndex] = response.data.photo_paths;
-      }).catch(error => {
-        throw error;
-      });
+      for (let i = 0; i < quantity; i++) {
+        const packageCopy = {
+          item_name: originalPkg.item_name,
+          category: originalPkg.category,
+          description: originalPkg.description || '',
+          value: originalPkg.value || 0,
+          height: originalPkg.height,
+          width: originalPkg.width,
+          length: originalPkg.length,
+          weight: originalPkg.weight,
+          preset: originalPkg.preset || '',
+          photo_path: [...photoPaths]
+        };
+        
+        expandedPackages.push(packageCopy);
+      }
+    });
+
+    expandedPackages.forEach((pkg, index) => {
+      formData.append(`packages[${index}][item_name]`, pkg.item_name);
+      formData.append(`packages[${index}][category]`, pkg.category);
+      formData.append(`packages[${index}][description]`, pkg.description || '');
+      formData.append(`packages[${index}][value]`, pkg.value || 0);
+      formData.append(`packages[${index}][height]`, pkg.height);
+      formData.append(`packages[${index}][width]`, pkg.width);
+      formData.append(`packages[${index}][length]`, pkg.length);
+      formData.append(`packages[${index}][weight]`, pkg.weight);
       
-      photoUploadPromises.push(uploadPromise);
+      if (pkg.photo_path && pkg.photo_path.length > 0) {
+        pkg.photo_path.forEach((photoPath, pathIndex) => {
+          formData.append(`packages[${index}][photo_path][${pathIndex}]`, photoPath);
+        });
+      }
+    });
+
+    console.log('🚀 Making final submission with CSRF token...');
+    
+    // Final submission
+    const response = await axios.post(route('customer.delivery-requests.store'), formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'X-CSRF-TOKEN': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    });
+
+    console.log('✅ Success response:', response.data);
+    deliveryRequestId.value = response.data.delivery_request_id;
+    showSuccessScreen.value = true;
+    isLoading.value = false;
+
+  } catch (error) {
+    console.error('❌ Error response:', error.response?.data || error.message);
+    isLoading.value = false;
+    
+    // Handle validation errors
+    if (error.response?.data?.errors) {
+      form.errors = error.response.data.errors;
     } else {
-      uploadedPhotoPaths[originalIndex] = [];
+      // Show generic error for upload issues
+      form.setError('photos', 'Failed to upload photos. Please try again with smaller images or contact support.');
     }
   }
+};
 
-  Promise.all(photoUploadPromises)
-    .then(() => {
-      const expandedPackages = [];
-      
-      form.packages.forEach((originalPkg, originalIndex) => {
-        const quantity = parseInt(originalPkg.quantity) || 1;
-        const photoPaths = uploadedPhotoPaths[originalIndex] || [];
-        
-        for (let i = 0; i < quantity; i++) {
-          const packageCopy = {
-            item_name: originalPkg.item_name,
-            category: originalPkg.category,
-            description: originalPkg.description || '',
-            value: originalPkg.value || 0,
-            height: originalPkg.height,
-            width: originalPkg.width,
-            length: originalPkg.length,
-            weight: originalPkg.weight,
-            preset: originalPkg.preset || '',
-            photo_path: [...photoPaths]
-          };
-          
-          expandedPackages.push(packageCopy);
-        }
-      });
+const generateRequestId = () => {
+  return 'DR-' + Date.now().toString().slice(-6);
+};
 
-      expandedPackages.forEach((pkg, index) => {
-        formData.append(`packages[${index}][item_name]`, pkg.item_name);
-        formData.append(`packages[${index}][category]`, pkg.category);
-        formData.append(`packages[${index}][description]`, pkg.description || '');
-        formData.append(`packages[${index}][value]`, pkg.value || 0);
-        formData.append(`packages[${index}][height]`, pkg.height);
-        formData.append(`packages[${index}][width]`, pkg.width);
-        formData.append(`packages[${index}][length]`, pkg.length);
-        formData.append(`packages[${index}][weight]`, pkg.weight);
-        
-        if (pkg.photo_path && pkg.photo_path.length > 0) {
-          pkg.photo_path.forEach((photoPath, pathIndex) => {
-            formData.append(`packages[${index}][photo_path][${pathIndex}]`, photoPath);
-          });
-        }
-      });
-
-      console.log('🚀 Making final submission with CSRF token...');
-      
-      // OPTION 1: Use axios with proper CSRF token (recommended)
-      axios.post(route('customer.delivery-requests.store'), formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'X-CSRF-TOKEN': csrfToken,
-          'X-Requested-With': 'XMLHttpRequest'
-        }
-      })
-      .then(response => {
-        console.log('✅ Success response:', response.data);
-        deliveryRequestId.value = response.data.delivery_request_id;
-        showSuccessScreen.value = true;
-        isLoading.value = false;
-      })
-      .catch(error => {
-        console.error('❌ Error response:', error.response?.data || error.message);
-        isLoading.value = false;
-        
-        // Handle validation errors
-        if (error.response?.data?.errors) {
-          form.errors = error.response.data.errors;
-        }
-      });
-
-    })
-    .catch(error => {
-      console.error('💥 Photo upload error:', error);
-      isLoading.value = false;
-    });
+const createSimilarDelivery = () => {
+  // Keep sender/receiver info, reset packages
+  form.packages = [{
+    item_name: '',
+    description: '',
+    category: '',
+    length: '',
+    height: '',
+    width: '',
+    weight: '',
+    value: '',
+    quantity: 1,
+    photos: [],
+    photo_urls: [],
+    preset: ''
+  }];
+  form.priceBreakdown = null;
+  form.total_price = 0;
+  showSuccessScreen.value = false;
+  currentStep.value = 3; // Go back to package step
 };
 
 onMounted(() => {
@@ -1227,6 +1401,17 @@ onMounted(() => {
   fetchPriceMatrix();
 });
 
+
+onUnmounted(() => {
+  // Clean up all object URLs to prevent memory leaks
+  form.packages.forEach(pkg => {
+    if (pkg.photo_urls) {
+      pkg.photo_urls.forEach(url => {
+        URL.revokeObjectURL(url);
+      });
+    }
+  });
+});
 watch(() => form.pick_up_region_id, (newRegionId) => {
   if (newRegionId && regionsDataMap.value[newRegionId]) {
     selectedRegionInfo.value = regionsDataMap.value[newRegionId];
@@ -1242,7 +1427,6 @@ watch(() => form.drop_off_region_id, (newRegionId) => {
     selectedDropoffRegionInfo.value = null;
   }
 });
-
 
 watch(() => [
   form.pick_up_region_id,
@@ -1275,35 +1459,6 @@ watch(() => form.payment_type, (val) => {
     form.payment_method = 'postpaid';
   }
 });
-
-const showSuccessScreen = ref(false);
-
-const generateRequestId = () => {
-  return 'DR-' + Date.now().toString().slice(-6);
-};
-
-const createSimilarDelivery = () => {
-  // Keep sender/receiver info, reset packages
-  form.packages = [{
-    item_name: '',
-    description: '',
-    category: '',
-    length: '',
-    height: '',
-    width: '',
-    weight: '',
-    value: '',
-    quantity: 1,
-    photos: [],
-    photo_urls: [],
-    preset: ''
-  }];
-  form.priceBreakdown = null;
-  form.total_price = 0;
-  showSuccessScreen.value = false;
-  currentStep.value = 3; // Go back to package step
-};
-
 </script>
 
 <template>
@@ -2068,30 +2223,32 @@ const createSimilarDelivery = () => {
       </div>
 
       <!-- Photo Requirements -->
-      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div class="flex items-center justify-between cursor-pointer" @click="showPhotoRequirements = !showPhotoRequirements">
-          <h3 class="font-semibold text-blue-800 flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Photo Requirements
-          </h3>
-          <svg :class="['w-4 h-4 transition-transform', showPhotoRequirements ? 'rotate-180' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-          </svg>
-        </div>
-        <div v-if="showPhotoRequirements" class="text-sm text-blue-700 mt-2 space-y-2">
-          <p><strong>Package photos are mandatory for documentation and verification purposes.</strong></p>
-          
-          <div class="ml-4 space-y-1">
-            <p>• <strong>Single Package:</strong> Minimum 6 images required - front, back, left, right, top, bottom views, plus at least 1 image showing the package on a weighing scale.</p>
-            <p>• <strong>Multiple Packages (2 or more):</strong> Minimum 2 images required - 1 group photo showing all packages together, and 1 image showing a single package on a weighing scale.</p>
-            <p>• <strong>Important Note:</strong> All packages in a multiple package shipment should be of close to equal weight. Significant weight variations may incur additional handling fees.</p>
-          </div>
-          
-          <p class="font-semibold mt-2">Ensure photos are clear, well-lit, and show all sides of the package for proper documentation.</p>
-        </div>
-      </div>
+<div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+  <div class="flex items-center justify-between cursor-pointer" @click="showPhotoRequirements = !showPhotoRequirements">
+    <h3 class="font-semibold text-blue-800 flex items-center">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      Photo Requirements
+    </h3>
+    <svg :class="['w-4 h-4 transition-transform', showPhotoRequirements ? 'rotate-180' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+    </svg>
+  </div>
+  <div v-if="showPhotoRequirements" class="text-sm text-blue-700 mt-2 space-y-2">
+    <p><strong>Package photos are mandatory for documentation and verification purposes.</strong></p>
+    
+    <div class="ml-4 space-y-1">
+      <p>• <strong>All Packages:</strong> Minimum 6 images required regardless of quantity</p>
+      <p>• <strong>Single Package (quantity = 1):</strong> Front, back, left, right, top, bottom views, plus weighing scale</p>
+      <p>• <strong>Multiple Packages (quantity > 1):</strong> Must include 1 group photo showing all packages together, 1 weighing scale photo, plus 4 detailed photos</p>
+      <p>• <strong>File Size:</strong> Maximum 5MB per image (automatically compressed if larger)</p>
+      <p>• <strong>Format:</strong> JPEG, PNG, GIF</p>
+    </div>
+    
+    <p class="font-semibold mt-2">Ensure photos are clear, well-lit, and show all packages properly for documentation.</p>
+  </div>
+</div>
 
       <!-- Package Type Guide -->
       <div class="bg-green-50 border border-green-200 rounded-lg p-4">
@@ -2344,42 +2501,107 @@ const createSimilarDelivery = () => {
         </div>
 
         <!-- Photo Upload -->
-        <div>
-          <InputLabel 
-            :value="form.packages.length === 1 
-              ? 'Package Photos * (Minimum 6 photos: all sides + weighing scale)'
-              : 'Package Photos * (Minimum 2 photos: group photo + weighing scale)'
-            " 
-          />
-          <div class="mt-2">
-            <input
-              type="file"
-              @change="handlePhotoUpload($event, index)"
-              multiple
-              accept="image/*"
-              class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-            />
-            <p class="text-xs text-gray-500 mt-1">Required: See photo requirements above (Max 5MB each)</p>
-            <InputError :message="form.errors[`packages.${index}.photos`]" />
-          </div>
-          
-          <!-- Display uploaded photos -->
-          <div v-if="pkg.photo_urls && pkg.photo_urls.length > 0" class="mt-3 flex flex-wrap gap-2">
-            <div
-              v-for="(photoUrl, photoIndex) in pkg.photo_urls"
-              :key="photoIndex"
-              class="relative"
-            >
-              <img
-                :src="photoUrl"
-                :alt="`Package ${index + 1} photo ${photoIndex + 1}`"
-                class="w-20 h-20 object-cover rounded-lg border border-gray-300"
-              />
-            </div>
-          </div>
-        </div>
+       <div>
+  <InputLabel 
+    value="Package Photos * (Minimum 6 photos required for all packages)" 
+  />
+  <div class="mt-2">
+    <input
+      type="file"
+      @change="handlePhotoUpload($event, index)"
+      multiple
+      accept="image/*"
+      class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+    />
+    <p class="text-xs text-gray-500 mt-1">
+      Required: Minimum 6 photos for all packages. 
+      <span v-if="pkg.quantity > 1" class="font-semibold">Must include group photo and weighing scale.</span>
+      <span v-else class="font-semibold">Must include all sides and weighing scale.</span>
+      Max 5MB each, will be automatically compressed.
+    </p>
+    <InputError :message="form.errors[`packages.${index}.photos`]" />
+    
+    <!-- File Size Warning -->
+    <div v-if="showSizeWarning[index]" class="mt-2 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+      <div class="flex items-center">
+        <svg class="w-4 h-4 text-yellow-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <p class="text-sm text-yellow-700">
+          Large images detected. They will be compressed automatically for faster upload.
+        </p>
       </div>
+    </div>
+  </div>
+  
+  <!-- Display uploaded photos with file sizes and remove buttons -->
+<div v-if="pkg.photo_urls && pkg.photo_urls.length > 0" class="mt-3">
+  <div class="flex flex-wrap gap-2 mb-2">
+    <div
+      v-for="(photoUrl, photoIndex) in pkg.photo_urls"
+      :key="photoIndex"
+      class="relative group"
+    >
+      <img
+        :src="photoUrl"
+        :alt="`Package ${index + 1} photo ${photoIndex + 1}`"
+        class="w-20 h-20 object-cover rounded-lg border border-gray-300"
+      />
+      <!-- File size overlay -->
+      <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 text-center">
+        {{ formatFileSize(pkg.photos[photoIndex]?.size) }}
+      </div>
+      <!-- Remove button -->
+      <button
+        type="button"
+        @click="removePhoto(index, photoIndex)"
+        class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-red-600"
+        title="Remove this photo"
+      >
+        ×
+      </button>
+      <!-- Photo number badge -->
+      <div class="absolute -top-2 -left-2 bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs text-white">
+        {{ photoIndex + 1 }}
+      </div>
+    </div>
+  </div>
+  
+  <!-- Photo management controls -->
+  <div class="flex items-center justify-between text-xs text-gray-500">
+    <div>
+      <span class="font-medium">Total: {{ pkg.photo_urls.length }} photo(s)</span> • 
+      {{ calculateTotalSize(pkg.photos) }}
+    </div>
+    <div class="flex gap-2">
+  
+      <button
+        type="button"
+        @click="form.packages[index].photos = []; form.packages[index].photo_urls = []; clearPhotoErrors(index);"
+        class="text-red-600 hover:text-red-700 font-medium"
+      >
+        Remove All
+      </button>
+    </div>
+  </div>
+</div>
 
+
+<!-- ADD THE MULTIPLE PACKAGE CHECKLIST HERE -->
+<div v-if="pkg.quantity > 1 && pkg.photo_urls && pkg.photo_urls.length > 0" class="mt-2 bg-blue-50 border border-blue-200 rounded-lg p-2">
+  <p class="text-xs text-blue-700">
+    💡 <strong>Multiple Package Checklist:</strong> 
+    Make sure your 6+ photos include:
+    <span class="block ml-2 mt-1">
+      • 1 group photo showing all {{ pkg.quantity }} packages together<br>
+      • 1 weighing scale photo<br>
+      • 4+ detailed photos of individual packages
+    </span>
+  </p>
+</div>
+
+  </div>
+      </div>
       <!-- Price Preview -->
       <div v-if="form.priceBreakdown" class="bg-green-50 border border-green-200 rounded-lg p-4 mt-6">
         <h3 class="text-lg font-semibold text-green-800 mb-3">Price Estimate</h3>
