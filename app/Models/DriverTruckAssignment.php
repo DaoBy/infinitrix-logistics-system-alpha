@@ -528,7 +528,7 @@ class DriverTruckAssignment extends Model
             && $this->is_active;
     }
 
-    public function skipCooldown(): bool
+   public function skipCooldown(): bool
 {
     \Log::info("🚀 MODEL: Skip cooldown method called", [
         'assignment_id' => $this->id,
@@ -572,10 +572,16 @@ class DriverTruckAssignment extends Model
             'available_for_backhaul' => $this->available_for_backhaul
         ]);
         
-        $this->save();
+        $saveResult = $this->save();
+        
+        \Log::info("💾 MODEL: Save result", [
+            'assignment_id' => $this->id,
+            'save_result' => $saveResult,
+            'changes' => $this->getChanges()
+        ]);
 
         // Create status log manually (bypass updateStatus method)
-        DriverStatusLog::create([
+        $logResult = DriverStatusLog::create([
             'driver_truck_assignment_id' => $this->id,
             'previous_status' => self::STATUS_COOLDOWN,
             'new_status' => self::STATUS_BACKHAUL_ELIGIBLE,
@@ -584,7 +590,8 @@ class DriverTruckAssignment extends Model
         ]);
 
         \Log::info("✅ MODEL: Status log created", [
-            'assignment_id' => $this->id
+            'assignment_id' => $this->id,
+            'log_created' => !is_null($logResult)
         ]);
 
         // Update truck status if exists
@@ -611,6 +618,7 @@ class DriverTruckAssignment extends Model
             'new_status' => $this->current_status
         ]);
 
+        // Explicitly return true
         return true;
 
     } catch (\Exception $e) {

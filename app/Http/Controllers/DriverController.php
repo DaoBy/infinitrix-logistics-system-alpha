@@ -94,7 +94,7 @@ class DriverController extends Controller
         ]);
     }
 
-    public function skipCooldown()
+   public function skipCooldown()
 {
     $driver = auth()->user();
     $assignment = $driver->currentTruckAssignment;
@@ -102,31 +102,18 @@ class DriverController extends Controller
     \Log::info("🎯 CONTROLLER: Skip cooldown requested", [
         'driver_id' => $driver->id,
         'assignment_id' => $assignment?->id,
-        'assignment_status' => $assignment?->current_status,
-        'is_final_cooldown' => $assignment?->is_final_cooldown
+        'assignment_status' => $assignment?->current_status
     ]);
 
     if (!$assignment) {
-        \Log::warning('❌ CONTROLLER: No assignment found', [
-            'driver_id' => $driver->id
-        ]);
         return back()->with('error', 'No active assignment found');
     }
 
     if ($assignment->current_status !== DriverTruckAssignment::STATUS_COOLDOWN) {
-        \Log::warning('❌ CONTROLLER: Not in cooldown status', [
-            'assignment_id' => $assignment->id,
-            'current_status' => $assignment->current_status,
-            'required_status' => DriverTruckAssignment::STATUS_COOLDOWN
-        ]);
         return back()->with('error', 'Cannot skip cooldown from current status');
     }
 
     if ($assignment->is_final_cooldown) {
-        \Log::warning('❌ CONTROLLER: This is final cooldown', [
-            'assignment_id' => $assignment->id,
-            'is_final_cooldown' => $assignment->is_final_cooldown
-        ]);
         return back()->with('error', 'Cannot skip final cooldown. Please complete the assignment.');
     }
 
@@ -140,44 +127,50 @@ class DriverController extends Controller
         
         $success = $assignment->skipCooldown();
         
-        \Log::info("📋 CONTROLLER: skipCooldown method returned", [
+        // Refresh the assignment to get the latest state
+        $assignment->refresh();
+        
+        \Log::info("📋 CONTROLLER: After skipCooldown method", [
             'assignment_id' => $assignment->id,
-            'success' => $success,
-            'new_status' => $assignment->current_status
+            'method_return' => $success,
+            'actual_status' => $assignment->current_status,
+            'available_for_backhaul' => $assignment->available_for_backhaul
         ]);
         
-        if ($success) {
-            DriverStatusLog::create([
-                'driver_truck_assignment_id' => $assignment->id,
-                'previous_status' => $previousStatus,
-                'new_status' => $assignment->current_status,
-                'remarks' => "COOLDOWN SKIPPED: Driver opted to skip regular cooldown period. Status changed from {$previousStatus} to {$assignment->current_status}. Now eligible for backhaul assignments.",
-                'changed_at' => now()
-            ]);
+        // Check if the status actually changed, even if method returned false
+        $actuallySucceeded = ($assignment->current_status === DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE);
+        
+        if ($success || $actuallySucceeded) {
+            // Only create log if not already created in the model
+            if ($success) {
+                DriverStatusLog::create([
+                    'driver_truck_assignment_id' => $assignment->id,
+                    'previous_status' => $previousStatus,
+                    'new_status' => $assignment->current_status,
+                    'remarks' => "COOLDOWN SKIPPED: Driver opted to skip regular cooldown period. Status changed from {$previousStatus} to {$assignment->current_status}. Now eligible for backhaul assignments.",
+                    'changed_at' => now()
+                ]);
+            }
 
             \Log::info('✅ CONTROLLER: Driver skipped cooldown successfully', [
                 'driver_id' => $driver->id,
                 'assignment_id' => $assignment->id,
-                'previous_status' => $previousStatus,
-                'new_status' => $assignment->current_status
+                'method_return' => $success,
+                'actual_result' => $actuallySucceeded
             ]);
             
             return back()->with('success', 'Cooldown skipped! You are now eligible for backhaul assignments.');
         } else {
-            \Log::warning('❌ CONTROLLER: skipCooldown method returned false', [
+            \Log::warning('❌ CONTROLLER: skipCooldown failed', [
                 'driver_id' => $driver->id,
                 'assignment_id' => $assignment->id,
-                'current_status' => $assignment->current_status
+                'method_return' => $success,
+                'actual_status' => $assignment->current_status
             ]);
             return back()->with('error', 'Cannot skip cooldown at this time.');
         }
     } catch (\Exception $e) {
-        \Log::error('💥 CONTROLLER: Exception in skipCooldown: ' . $e->getMessage(), [
-            'driver_id' => $driver->id,
-            'assignment_id' => $assignment->id,
-            'exception' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
+        \Log::error('💥 CONTROLLER: Exception in skipCooldown: ' . $e->getMessage());
         return back()->with('error', 'Failed to skip cooldown: ' . $e->getMessage());
     }
 }
