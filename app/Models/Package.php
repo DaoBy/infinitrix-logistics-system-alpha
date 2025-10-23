@@ -311,9 +311,29 @@ public static function booted()
     static::saved(function ($package) {
         // When a package reaches final status
         if (in_array($package->status, ['delivered', 'damaged_in_transit', 'lost_in_transit', 'completed', 'returned'])) {
-            $driver = $package->deliveryRequest->deliveryOrder->driver ?? null;
             
-            if ($driver) {
+            try {
+                // Load relationships safely
+                $package->load([
+                    'deliveryRequest.deliveryOrder.driver',
+                    'deliveryRequest.packages'
+                ]);
+
+                // Check if all required relationships exist
+                if (!$package->deliveryRequest || 
+                    !$package->deliveryRequest->deliveryOrder || 
+                    !$package->deliveryRequest->deliveryOrder->driver) {
+                    \Log::warning('Missing relationships for package auto-update', [
+                        'package_id' => $package->id,
+                        'has_delivery_request' => !is_null($package->deliveryRequest),
+                        'has_delivery_order' => $package->deliveryRequest && !is_null($package->deliveryRequest->deliveryOrder),
+                        'has_driver' => $package->deliveryRequest && $package->deliveryRequest->deliveryOrder && !is_null($package->deliveryRequest->deliveryOrder->driver)
+                    ]);
+                    return;
+                }
+
+                $driver = $package->deliveryRequest->deliveryOrder->driver;
+                
                 $activeOrders = $driver->deliveryOrders()
                     ->whereIn('status', ['assigned', 'dispatched', 'in_transit', 'needs_review'])
                     ->with(['packages', 'deliveryRequest'])
@@ -354,6 +374,16 @@ public static function booted()
                 if ($assignment && $assignment->allPackagesDelivered()) {
                     $assignment->completeDeliveries();
                 }
+
+            } catch (\Exception $e) {
+                \Log::error('Error in package booted method: ' . $e->getMessage(), [
+                    'package_id' => $package->id,
+                    'status' => $package->status,
+                    'trace' => $e->getTraceAsString()
+                ]);
+                
+                // Don't rethrow the exception to prevent breaking the package update
+                return;
             }
         }
     });

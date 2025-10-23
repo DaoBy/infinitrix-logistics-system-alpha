@@ -465,10 +465,10 @@ async function submitStatusUpdate() {
     // Create FormData for the entire request (including files)
     const formData = new FormData();
     
-    // Add the package update data
+    // Add the package update data as JSON structure
     formData.append('package_updates[0][package_id]', selectedPackage.value.id);
     formData.append('package_updates[0][status]', statusUpdate.status);
-    formData.append('package_updates[0][remarks]', statusUpdate.remarks);
+    formData.append('package_updates[0][remarks]', statusUpdate.remarks || '');
     
     // Add evidence files
     uploadedFiles.value.forEach((file, index) => {
@@ -476,7 +476,8 @@ async function submitStatusUpdate() {
     });
 
     // Use Inertia's post method with FormData
-    router.post(route('driver.packages.update-destination-status'), formData, {
+    await router.post(route('driver.packages.update-destination-status'), formData, {
+      forceFormData: true, // Add this line
       onFinish: () => {
         submitting.value = false;
         closeStatusModal();
@@ -484,6 +485,7 @@ async function submitStatusUpdate() {
       onError: (errors) => {
         console.error('Status update errors:', errors);
         alert('Failed to update status. Please check your inputs.');
+        submitting.value = false;
       }
     });
 

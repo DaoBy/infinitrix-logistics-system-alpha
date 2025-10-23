@@ -1274,9 +1274,18 @@ onMounted(() => {
 });
 
 // Show/hide logic for cooldown options
+// In your UpdateStatus.vue component
 const showCooldownOptions = computed(() => {
-  return props.currentAssignment?.current_status === 'cooldown' && 
-         !props.currentAssignment.is_final_cooldown;
+  const assignment = props.currentAssignment;
+  if (!assignment) return false;
+  
+  console.log('Cooldown debug:', {
+    status: assignment.current_status,
+    is_final_cooldown: assignment.is_final_cooldown,
+    can_skip: assignment.current_status === 'cooldown' && !assignment.is_final_cooldown
+  });
+  
+  return assignment.current_status === 'cooldown' && !assignment.is_final_cooldown;
 });
 
 const showSkipCooldownButton = computed(() => {

@@ -48,6 +48,60 @@ use App\Http\Controllers\PaymentController;
 // =============================================================================
 // PUBLIC ROUTES
 // =============================================================================
+Route::get('/debug/assignment-state', function() {
+    $driver = auth()->user();
+    $assignment = $driver->currentTruckAssignment;
+
+    if (!$assignment) {
+        return response()->json(['error' => 'No active assignment']);
+    }
+
+    return response()->json([
+        'assignment' => [
+            'id' => $assignment->id,
+            'current_status' => $assignment->current_status,
+            'is_final_cooldown' => $assignment->is_final_cooldown,
+            'cooldown_ends_at' => $assignment->cooldown_ends_at,
+            'available_for_backhaul' => $assignment->available_for_backhaul,
+            'all_packages_delivered' => $assignment->allPackagesDelivered(),
+            'driver_region_id' => $driver->current_region_id,
+            'home_region_id' => $assignment->region_id,
+        ],
+        'can_skip_cooldown' => (
+            $assignment->current_status === \App\Models\DriverTruckAssignment::STATUS_COOLDOWN &&
+            !$assignment->is_final_cooldown
+        )
+    ]);
+});
+// In routes/web.php
+Route::get('/debug/package-relationships', function() {
+    $driver = auth()->user();
+    
+    $packages = \App\Models\Package::with([
+        'deliveryRequest.deliveryOrder',
+        'deliveryRequest.dropOffRegion',
+        'currentRegion'
+    ])
+    ->whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
+        $query->where('driver_id', $driver->id);
+    })
+    ->where('status', 'in_transit')
+    ->get();
+    
+    return response()->json([
+        'packages_count' => $packages->count(),
+        'packages' => $packages->map(function($pkg) {
+            return [
+                'id' => $pkg->id,
+                'has_delivery_request' => !is_null($pkg->deliveryRequest),
+                'has_delivery_order' => $pkg->deliveryRequest && !is_null($pkg->deliveryRequest->deliveryOrder),
+                'current_region_id' => $pkg->current_region_id,
+                'driver_region_id' => auth()->user()->current_region_id
+            ];
+        })
+    ]);
+});
+
 
 // Home & Static Pages
 Route::get('/', fn() => Inertia::render('Customer/Home'))->name('customer.home');
