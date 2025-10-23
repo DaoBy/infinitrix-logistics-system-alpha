@@ -989,6 +989,14 @@ const handlePhotoUpload = async (event, index) => {
   if (newFiles && newFiles.length > 0) {
     form.clearErrors(`packages.${index}.photos`);
     
+    // Check for any large files first - BEFORE processing
+    const oversizedFile = newFiles.find(file => file.size > 5 * 1024 * 1024);
+    if (oversizedFile) {
+      form.setError(`packages.${index}.photos`, `File "${oversizedFile.name}" exceeds 5MB limit. Please choose a smaller image.`);
+      event.target.value = ''; // Clear the input
+      return; // Stop processing immediately
+    }
+    
     // Get existing files and URLs
     const existingFiles = form.packages[index].photos || [];
     const existingUrls = form.packages[index].photo_urls || [];
@@ -997,21 +1005,13 @@ const handlePhotoUpload = async (event, index) => {
     const fileUrls = [...existingUrls];
     
     let hasLargeFiles = false;
-    let hasSizeError = false;
-    
+    let uploadError = null;
+
     for (let i = 0; i < newFiles.length; i++) {
       const file = newFiles[i];
       
       if (!file.type.match('image.*')) {
-        form.setError(`packages.${index}.photos`, 'Only image files are allowed');
-        hasSizeError = true;
-        break;
-      }
-      
-      // Enhanced size validation
-      if (file.size > 5 * 1024 * 1024) { // 5MB hard limit
-        form.setError(`packages.${index}.photos`, `File "${file.name}" exceeds 5MB limit. Please choose a smaller image.`);
-        hasSizeError = true;
+        uploadError = 'Only image files are allowed';
         break;
       }
       
@@ -1044,14 +1044,15 @@ const handlePhotoUpload = async (event, index) => {
         
       } catch (error) {
         console.error('Image processing failed:', error);
-        // Fallback to original file
-        validFiles.push(file);
-        fileUrls.push(URL.createObjectURL(file));
+        uploadError = 'Failed to process some images. Please try again.';
+        break;
       }
     }
     
-    // Only update if no size errors occurred
-    if (!hasSizeError) {
+    if (uploadError) {
+      form.setError(`packages.${index}.photos`, uploadError);
+    } else {
+      // Only update if no errors occurred
       form.packages[index].photos = validFiles;
       form.packages[index].photo_urls = fileUrls;
       showSizeWarning.value[index] = hasLargeFiles;
@@ -1069,6 +1070,17 @@ const handlePhotoUpload = async (event, index) => {
   }
 };
 
+const debugPhotos = (index) => {
+  const pkg = form.packages[index];
+  console.log('📸 Photo Debug for Package', index + 1);
+  console.log('Total photos:', pkg.photos?.length || 0);
+  console.log('Photo details:', pkg.photos?.map((photo, i) => ({
+    index: i,
+    name: photo.name,
+    size: formatFileSize(photo.size),
+    type: photo.type
+  })) || 'No photos');
+};
 const removePhoto = (packageIndex, photoIndex) => {
   if (form.packages[packageIndex].photo_urls && form.packages[packageIndex].photo_urls[photoIndex]) {
     // Revoke the object URL to prevent memory leaks
