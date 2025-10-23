@@ -269,54 +269,50 @@ class PaymentController extends Controller
     }
 
     // Verify payment
-    public function verify(Payment $payment)
-    {
-        if ($payment->verified_by) {
-            return back()->with('error', 'Payment already verified');
+   public function verify(Payment $payment)
+{
+    if ($payment->verified_by) {
+        return back()->with('error', 'Payment already verified');
+    }
+
+    DB::transaction(function () use ($payment) {
+        $payment->update([
+            'verified_by' => auth()->id(),
+            'verified_at' => now(),
+            'status' => 'verified',
+            'paid_at' => $payment->paid_at ?? now(),
+        ]);
+
+        // Update delivery request payment status for ALL payment types
+        $payment->deliveryRequest->update([
+            'payment_status' => 'paid',
+            'payment_verified' => true,
+        ]);
+
+        // Update delivery order based on payment type
+        if ($payment->deliveryRequest->deliveryOrder) {
+            $payment->deliveryRequest->deliveryOrder->update([
+                'status' => 'ready',
+                'payment_status' => 'paid',
+                'payment_verified_at' => now(),
+            ]);
         }
 
-        DB::transaction(function () use ($payment) {
-            $payment->update([
-                'verified_by' => auth()->id(),
-                'verified_at' => now(),
-                'status' => 'verified',
-                'paid_at' => $payment->paid_at ?? now(),
-            ]);
+        // Update packages status for prepaid payments
+        if ($payment->type === 'prepaid') {
+            $payment->deliveryRequest->packages()->update(['status' => 'preparing']);
+        }
 
-            // Update delivery request and order based on payment type
-            if ($payment->type === 'prepaid' && $payment->deliveryRequest->deliveryOrder) {
-                $payment->deliveryRequest->deliveryOrder->update([
-                    'status' => 'ready',
-                    'payment_status' => 'paid',
-                    'payment_verified_at' => now(),
-                ]);
-            }
+        NotificationService::send(
+            $payment->deliveryRequest->sender->user,
+            'Payment Verified ✅',
+            "Payment for request #{$payment->deliveryRequest->reference_number} has been verified.",
+            'payment'
+        );
+    });
 
-            if ($payment->type === 'postpaid') {
-                $payment->deliveryRequest->update([
-                    'payment_status' => 'paid',
-                    'payment_verified' => true,
-                ]);
-                
-                if ($payment->deliveryRequest->deliveryOrder) {
-                    $payment->deliveryRequest->deliveryOrder->update([
-                        'payment_status' => 'paid',
-                        'payment_verified_at' => now(),
-                        'status' => 'ready',
-                    ]);
-                }
-            }
-
-            NotificationService::send(
-                $payment->deliveryRequest->sender->user,
-                'Payment Verified ✅',
-                "Payment for request #{$payment->deliveryRequest->reference_number} has been verified.",
-                'payment'
-            );
-        });
-
-        return back()->with('success', 'Payment verified successfully');
-    }
+    return back()->with('success', 'Payment verified successfully');
+}
 
     // Show verification page
     public function verifyView(Payment $payment)

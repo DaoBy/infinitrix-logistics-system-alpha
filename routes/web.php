@@ -193,10 +193,6 @@ Route::middleware(['auth', 'role:admin,staff'])->group(function () {
         Route::post('/store', [DriverTruckAssignmentController::class, 'store'])->name('store');
         Route::get('/available-resources', [DriverTruckAssignmentController::class, 'getAvailableResources'])->name('available-resources');
         Route::get('/all-resources', [DriverTruckAssignmentController::class, 'getAllResourcesForRegion'])->name('all-resources');
-        Route::get('/by-region', [DriverTruckAssignmentController::class, 'getByRegion'])->name('by-region');
-        Route::get('/backhaul-eligible', [DriverTruckAssignmentController::class, 'getBackhaulEligibleAssignments'])->name('backhaul-eligible');
-        Route::get('/backhaul-eligible/show', [DriverTruckAssignmentController::class, 'showBackhaulEligible'])->name('backhaul-eligible.show');
-        Route::get('/by-status', [DriverTruckAssignmentController::class, 'getAssignmentsByStatus'])->name('by-status');
         Route::get('/debug/database-state', [DriverTruckAssignmentController::class, 'checkDatabaseState'])->name('debug.database-state');
 
         Route::prefix('{assignment}')->group(function () {
@@ -214,6 +210,8 @@ Route::middleware(['auth', 'role:admin,staff'])->group(function () {
             Route::post('/confirm-return', [DriverTruckAssignmentController::class, 'confirmReturnToBase'])->name('confirm-return');
             Route::post('/force-complete', [DriverTruckAssignmentController::class, 'forceCompleteAssignment'])->name('force-complete');
         });
+
+        
     });
 
     // Cargo Assignments
@@ -234,7 +232,7 @@ Route::middleware(['auth', 'role:admin,staff'])->group(function () {
         });
 
         Route::prefix('deliveries')->name('deliveries.')->group(function () {
-            Route::post('/{deliveryOrder}/cancel', [CargoAssignmentController::class, 'cancelAssignment'])->name('cancel');
+            Route::post('/{deliveryOrder}/cancel', [CargoAssignmentController::class, 'cancelDeliveryOrderAssignment'])->name('cancel');
         });
 
         Route::prefix('dispatch')->name('dispatch.')->group(function () {
@@ -275,7 +273,7 @@ Route::middleware(['auth', 'role:admin,staff'])->group(function () {
 
     // Manifests
     Route::prefix('admin')->group(function () {
-        Route::get('/manifests', [ManifestController::class, 'index'])->name('manifests.index');
+Route::get('/manifests', [ManifestController::class, 'index'])->name('manifests.index');
         Route::get('/manifests/create/{truck}', [ManifestController::class, 'create'])->name('manifests.create');
         Route::post('/manifests/{truck}', [ManifestController::class, 'store'])->name('manifests.store');
         Route::get('/manifests/{manifest}', [ManifestController::class, 'show'])->name('manifests.show');

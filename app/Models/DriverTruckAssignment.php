@@ -437,16 +437,21 @@ class DriverTruckAssignment extends Model
     }
 
     // Check if assignment can be cancelled
-    public function canBeCancelled(): bool
-    {
-        return in_array($this->current_status, [
-            self::STATUS_ACTIVE, 
-            self::STATUS_BACKHAUL_ELIGIBLE, 
-            self::STATUS_COOLDOWN
-        ]) 
-        && $this->is_active 
-        && !$this->hasActiveDeliveries();
-    }
+  public function canBeCancelled(): bool
+{
+    // Do not allow cancellation for these statuses
+    $excludedStatuses = [
+        self::STATUS_IN_TRANSIT, 
+        self::STATUS_BACKHAUL_ELIGIBLE
+    ];
+    
+    return !in_array($this->current_status, $excludedStatuses) &&
+           in_array($this->current_status, [
+               self::STATUS_ACTIVE, 
+               self::STATUS_COOLDOWN
+           ]) && 
+           $this->is_active;
+}
 
     public function canBeForceCompleted(): bool
     {
@@ -748,6 +753,165 @@ class DriverTruckAssignment extends Model
         return;
     }
 }
+
+
+/**
+ * Cancel assignment with delivery reversion - COMPLETE IMPLEMENTATION
+ */
+public function cancelAssignmentWithRevert(string $reason, int $cancelledBy): void
+{
+    \Log::info("Cancelling assignment with delivery reversion", [
+        'assignment_id' => $this->id,
+        'before_status' => $this->current_status,
+        'active_deliveries_count' => $this->deliveryOrders()
+            ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
+            ->count()
+    ]);
+
+    try {
+        DB::beginTransaction();
+
+        // 1. REVERT ACTIVE DELIVERIES FIRST
+        $this->revertActiveDeliveries($reason, $cancelledBy);
+
+        // 2. UPDATE ASSIGNMENT STATUS
+        $this->updateStatus(self::STATUS_CANCELLED, 'Assignment cancelled: ' . $reason);
+        
+        $this->is_active = false;
+        $this->available_for_backhaul = false;
+        $this->is_final_cooldown = false;
+        $this->cooldown_ends_at = null;
+        $this->backhaul_eligible_at = null;
+        $this->current_region_id = $this->region_id;
+        $this->deleted_reason = $reason;
+        $this->deleted_by = $cancelledBy;
+        $this->deleted_at = now();
+        $this->save();
+
+        // 3. UPDATE TRUCK STATUS
+        if ($this->truck) {
+            $this->truck->update(['status' => Truck::STATUS_AVAILABLE]);
+            $this->truck->updateStatus();
+        }
+
+        // 4. RESET DRIVER REGION
+        $this->driver->current_region_id = $this->region_id;
+        $this->driver->save();
+
+        DB::commit();
+
+        \Log::info("Assignment cancelled successfully with delivery reversion", [
+            'assignment_id' => $this->id,
+            'reverted_deliveries' => $this->deliveryOrders()
+                ->whereIn('status', ['ready', 'pending_payment'])
+                ->count()
+        ]);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error('Failed to cancel assignment: ' . $e->getMessage(), [
+            'assignment_id' => $this->id
+        ]);
+        throw $e;
+    }
+}
+
+/**
+ * Revert active deliveries to available status - CORRECTED
+ */
+private function revertActiveDeliveries(string $reason, int $cancelledBy): void
+{
+    $activeDeliveries = $this->deliveryOrders()
+        ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
+        ->with(['deliveryRequest.packages'])
+        ->get();
+
+    foreach ($activeDeliveries as $delivery) {
+        // Revert delivery order status back to 'ready'
+        $previousStatus = $delivery->status;
+        
+        // Determine the appropriate status to revert to
+        $revertStatus = $this->getRevertStatus($delivery); // Returns 'ready' or 'pending_payment'
+        
+        $delivery->update([
+            'status' => $revertStatus, // ← DELIVERY ORDER GOES TO READY
+            'driver_id' => null,
+            'truck_id' => null,
+            'driver_truck_assignment_id' => null,
+            'assigned_at' => null,
+            'assigned_by' => null,
+            'estimated_departure' => null,
+            'estimated_arrival' => null,
+            'actual_departure' => null,
+            'cancellation_reason' => "Assignment cancelled: " . $reason,
+            'cancelled_by' => $cancelledBy,
+            'cancelled_at' => now()
+        ]);
+
+        // Also revert related packages to 'preparing'
+        $this->revertPackagesStatus($delivery, $reason, $cancelledBy);
+
+        \Log::info("Reverted delivery order status", [
+            'delivery_order_id' => $delivery->id,
+            'from_status' => $previousStatus,
+            'to_status' => $revertStatus, // Should be 'ready'
+            'package_status' => 'preparing', // Packages went to preparing
+            'assignment_id' => $this->id
+        ]);
+    }
+}
+/**
+ * Revert package statuses with history logging - CORRECTED
+ */
+private function revertPackagesStatus(DeliveryOrder $delivery, string $reason, int $cancelledBy): void
+{
+    $packages = $delivery->deliveryRequest->packages;
+    
+    foreach ($packages as $package) {
+        $previousStatus = $package->status;
+        
+        // Update package status from 'loaded' back to 'preparing'
+        $package->update([
+            'status' => 'preparing', // ← PACKAGES GO TO PREPARING
+            'current_driver_id' => null,
+            'current_truck_id' => null,
+            'loaded_at' => null,
+            'current_region_id' => $package->deliveryRequest->pick_up_region_id
+        ]);
+        
+        // Log the status change in package_status_history
+        $package->statusHistory()->create([
+            'status' => 'preparing',
+            'remarks' => "Reverted due to assignment cancellation: " . $reason,
+            'updated_by' => $cancelledBy
+        ]);
+
+        \Log::info("Reverted package status", [
+            'package_id' => $package->id,
+            'from_status' => $previousStatus,
+            'to_status' => 'preparing',
+            'delivery_order_id' => $delivery->id
+        ]);
+    }
+}
+
+/**
+ * Determine the appropriate status to revert delivery order to - CORRECTED
+ */
+private function getRevertStatus(DeliveryOrder $delivery): string
+{
+    // Check payment status to determine if it should go back to pending_payment
+    $deliveryRequest = $delivery->deliveryRequest;
+    
+    if ($deliveryRequest->payment_method === 'postpaid' && 
+        $deliveryRequest->payment_status === 'pending') {
+        return 'pending_payment';
+    }
+    
+    // Default revert to 'ready' for Delivery Order
+    return 'ready'; // ← DELIVERY ORDER GOES TO READY
+}
+
 
     // Force complete assignment (admin override)
     public function forceCompleteAssignment(): void

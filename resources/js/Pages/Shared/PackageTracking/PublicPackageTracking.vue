@@ -1,3 +1,4 @@
+
 <template>
   <GuestLayout>
     <template #header>
@@ -209,8 +210,6 @@
           </div>
         </div>
 
-        <!-- Rest of the template remains the same... -->
-
         <!-- Right Column - Package Details -->
         <div class="space-y-4 md:space-y-6">
           <!-- Package Information - Reduced Height -->
@@ -348,20 +347,20 @@
                   </p>
                 </div>
               </div>
-              
-              <div v-if="packageData.volume" class="flex items-start">
-                <div class="flex-shrink-0 h-5 w-5 text-gray-400">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <circle cx="12" cy="12" r="10" />
-                  </svg>
-                </div>
-                <div class="ml-3">
-                  <h3 class="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Volume</h3>
-                  <p class="mt-1 text-xs md:text-sm text-gray-900 dark:text-white">
-                    {{ Number(packageData.volume || 0).toFixed(2) }} m³
-                  </p>
-                </div>
-              </div>
+            
+<div class="flex items-start">
+  <div class="flex-shrink-0 h-5 w-5 text-gray-400">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <circle cx="12" cy="12" r="10" />
+    </svg>
+  </div>
+  <div class="ml-3">
+    <h3 class="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Volume</h3>
+    <p class="mt-1 text-xs md:text-sm text-gray-900 dark:text-white">
+      {{ displayVolume }}
+    </p>
+  </div>
+</div>
 
               <div v-if="packageData.item_code" class="flex items-start">
                 <div class="flex-shrink-0 h-5 w-5 text-gray-400">
@@ -551,6 +550,48 @@ function formatDateTime(dateString) {
   }
 }
 
+// Add this computed property
+const displayVolume = computed(() => {
+  // If we have valid dimensions, calculate volume from them
+  if (packageData.value.height && packageData.value.width && packageData.value.length) {
+    const height = parseFloat(packageData.value.height);
+    const width = parseFloat(packageData.value.width);
+    const length = parseFloat(packageData.value.length);
+    
+    // Calculate volume in cubic meters (cm³ to m³ conversion)
+    const volumeM3 = (height * width * length) / 1000000;
+    
+    // Format the volume appropriately
+    return formatVolume(volumeM3);
+  }
+  
+  // Fallback to stored volume if dimensions aren't available
+  const storedVolume = parseFloat(packageData.value.volume || 0);
+  if (storedVolume > 0) {
+    return formatVolume(storedVolume);
+  }
+  
+  return 'N/A';
+});
+
+function formatVolume(volume) {
+  const vol = Number(volume || 0);
+  
+  // If volume is very small, show in cm³
+  if (vol < 0.001) {
+    const volumeCm3 = vol * 1000000;
+    return `${volumeCm3.toFixed(0)} cm³`;
+  }
+  
+  // If volume is small but measurable in m³, show with more decimals
+  if (vol < 0.01) {
+    return `${vol.toFixed(6)} m³`;
+  }
+  
+  // Normal volume, show with 2 decimals
+  return `${vol.toFixed(2)} m³`;
+}
+
 const formattedStatus = computed(() => formatStatus(packageData.value.status));
 
 // UPDATED: Status badge classes including incident statuses
@@ -667,33 +708,36 @@ function getTimelineRemarks(item) {
 
 function getTimelineActor(item) {
   if (item.type === 'status') {
-    return item.data.actor?.name || item.data.actor_name || 'System';
+    return item.data.updated_by?.name || item.data.updatedBy?.name || 'System';
   } else if (item.type === 'transfer') {
-    return item.data.actor?.name || item.data.actor_name || 'System';
+    return item.data.processor?.name || item.data.processor_name || 'System';
   }
   return 'System';
 }
 
-// Helper functions for package details
+// UPDATED: Helper functions for package details - MATCHING PackageTracking.vue
 function getSenderName() {
-  const sender = packageData.value.sender;
-  if (!sender) return 'N/A';
-  if (typeof sender === 'string') return sender;
-  return sender.name || `${sender.first_name || ''} ${sender.last_name || ''}`.trim() || 'N/A';
+  const deliveryRequest = packageData.value.delivery_request || packageData.value.deliveryRequest;
+  if (deliveryRequest?.sender?.name) return deliveryRequest.sender.name;
+  if (packageData.value.sender) return packageData.value.sender;
+  if (packageData.value.sender_name) return packageData.value.sender_name;
+  return 'N/A';
 }
 
 function getReceiverName() {
-  const receiver = packageData.value.receiver;
-  if (!receiver) return 'N/A';
-  if (typeof receiver === 'string') return receiver;
-  return receiver.name || `${receiver.first_name || ''} ${receiver.last_name || ''}`.trim() || 'N/A';
+  const deliveryRequest = packageData.value.delivery_request || packageData.value.deliveryRequest;
+  if (deliveryRequest?.receiver?.name) return deliveryRequest.receiver.name;
+  if (packageData.value.receiver) return packageData.value.receiver;
+  if (packageData.value.receiver_name) return packageData.value.receiver_name;
+  return 'N/A';
 }
 
 function getDestination() {
-  const destination = packageData.value.destination_region;
-  if (destination) {
-    return destination.name || 'N/A';
-  }
-  return packageData.value.destination_region_name || 'N/A';
+  const deliveryRequest = packageData.value.delivery_request || packageData.value.deliveryRequest;
+  if (deliveryRequest?.dropOffRegion?.name) return deliveryRequest.dropOffRegion.name;
+  if (deliveryRequest?.drop_off_region?.name) return deliveryRequest.drop_off_region.name;
+  if (packageData.value.destination) return packageData.value.destination;
+  if (packageData.value.drop_off_region) return packageData.value.drop_off_region;
+  return 'N/A';
 }
 </script>

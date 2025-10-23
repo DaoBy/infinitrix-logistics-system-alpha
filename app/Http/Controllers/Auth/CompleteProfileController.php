@@ -12,35 +12,40 @@ use Inertia\Response;
 class CompleteProfileController extends Controller
 {
     public function show(): Response
-    {
-        $user = Auth::user();
-        $customer = $user->customer ?? null;
-        
-        // Check if profile is already complete
-        if ($customer && $customer->is_profile_complete) {
-            return redirect()->route('customer.home');
-        }
-        
-        return Inertia::render('Auth/CompleteProfile', [
-            'initialValues' => [
-                'first_name' => $customer->first_name ?? '',
-                'middle_name' => $customer->middle_name ?? '',
-                'last_name' => $customer->last_name ?? '',
-                'email' => $user->email, 
-                'mobile' => $customer->mobile ?? $user->customer->mobile, 
-                'phone' => $customer->phone ?? $user->customer->phone,
-                'customer_category' => $customer->customer_category ?? 'individual',
-                'company_name' => $customer->company_name ?? '',
-                'building_number' => $customer->building_number ?? '',
-                'street' => $customer->street ?? '',
-                'barangay' => $customer->barangay ?? '',
-                'city' => $customer->city ?? '',
-                'province' => $customer->province ?? '',
-                'zip_code' => $customer->zip_code ?? '',
-            ]
-        ]);
+{
+    $user = Auth::user();
+    $customer = $user->customer ?? null;
+    
+    // Check if user is verified (safety check)
+    if (!$user->hasVerifiedEmail()) {
+        return redirect()->route('verification.notice')
+            ->with('error', 'Please verify your email first.');
     }
-
+    
+    // Check if profile is already complete
+    if ($customer && $customer->is_profile_complete) {
+        return redirect()->route('customer.home');
+    }
+    
+    return Inertia::render('Auth/CompleteProfile', [
+        'initialValues' => [
+            'first_name' => $customer->first_name ?? '',
+            'middle_name' => $customer->middle_name ?? '',
+            'last_name' => $customer->last_name ?? '',
+            'email' => $user->email, 
+            'mobile' => $customer->mobile ?? '',
+            'phone' => $customer->phone ?? '',
+            'customer_category' => $customer->customer_category ?? 'individual',
+            'company_name' => $customer->company_name ?? '',
+            'building_number' => $customer->building_number ?? '',
+            'street' => $customer->street ?? '',
+            'barangay' => $customer->barangay ?? '',
+            'city' => $customer->city ?? '',
+            'province' => $customer->province ?? '',
+            'zip_code' => $customer->zip_code ?? '',
+        ]
+    ]);
+}
     public function store(Request $request)
     {
         $validated = $request->validate([

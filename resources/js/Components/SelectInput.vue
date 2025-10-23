@@ -1,3 +1,31 @@
+<template>
+  <div class="w-full">
+    <v-select
+      :model-value="modelValue"
+      @update:model-value="handleChange"
+      :items="computedItems"
+      :label="placeholder"
+      item-title="title"
+      item-value="value"
+      :disabled="disabled"
+      :error="error"
+      :error-messages="errorMessage"
+      hide-details="auto"
+      density="comfortable"
+      variant="outlined"
+      class="w-full"
+      :menu-props="{
+        attach: 'body',
+        contentClass: 'select-dropdown-menu',
+        zIndex: 9999,
+        maxHeight: 304,
+        offset: 8,
+        eager: true
+      }"
+    />
+  </div>
+</template>
+
 <script setup>
 import { computed } from 'vue'
 
@@ -33,7 +61,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'change'])
 
 const computedItems = computed(() => {
   return props.options.map(option => {
@@ -46,32 +74,12 @@ const computedItems = computed(() => {
     return { title: option, value: option }
   })
 })
-</script>
 
-<template>
-  <v-select
-    :model-value="modelValue ?? ''"
-    @update:model-value="emit('update:modelValue', $event)"
-    :items="computedItems"
-    :label="placeholder"
-    item-title="title"
-    item-value="value"
-    :disabled="disabled"
-    :error="error"
-    :error-messages="errorMessage"
-    hide-details="auto"
-    density="comfortable"
-    class="w-full"
-    :menu-props="{
-      attach: 'body',
-      contentClass: 'select-dropdown-menu',
-      zIndex: 9999,
-      maxHeight: 304,
-      offset: 8,
-      eager: true
-    }"
-  />
-</template>
+const handleChange = (value) => {
+  emit('update:modelValue', value)
+  emit('change', value) // Emit the change event for parent component
+}
+</script>
 
 <style scoped>
 :deep(.select-dropdown-menu) {

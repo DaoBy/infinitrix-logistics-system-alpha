@@ -16,10 +16,15 @@ use Illuminate\Support\Facades\Storage;
 class ManifestController extends Controller
 {
     public function index()
-    {
+{
+    try {
+        \Log::info('ManifestController index method started');
+
         $manifests = Manifest::with(['truck', 'driver.employeeProfile'])
             ->latest()
             ->paginate(10);
+
+        \Log::info('Manifests query executed', ['count' => $manifests->count()]);
 
         // Get all trucks with active delivery orders
         $trucksWithAssignments = Truck::whereHas('deliveryOrders', function($query) {
@@ -66,13 +71,49 @@ class ManifestController extends Controller
                 ];
             });
 
-        return Inertia::render('Admin/Manifest/Index', [
+        \Log::info('Trucks with assignments processed', ['count' => $trucksWithAssignments->count()]);
+
+        $responseData = [
             'manifests' => $manifests,
             'trucksWithAssignments' => $trucksWithAssignments,
             'filters' => request()->all(['search'])
-        ]);
-    }
+        ];
 
+        \Log::info('ManifestController index method completed successfully');
+
+        return Inertia::render('Admin/Manifest/Index', $responseData);
+
+    } catch (\Exception $e) {
+        \Log::error('Manifest Controller Error Details:', [
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        // Detailed debug output
+        $debugInfo = [
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(), 
+            'line' => $e->getLine(),
+            'trace' => $e->getTrace(),
+            'previous' => $e->getPrevious() ? $e->getPrevious()->getMessage() : null
+        ];
+
+        \Log::error('Full Debug Info:', $debugInfo);
+
+        // Return the error details in development
+        if (app()->environment('local')) {
+            return response()->json([
+                'error' => 'Manifest Controller Error',
+                'details' => $debugInfo
+            ], 500);
+        }
+
+        // In production, show a generic error
+        return redirect()->back()->with('error', 'Unable to load manifests. Please try again.');
+    }
+}
     public function create(Truck $truck)
     {
         // Get all current package IDs for this truck's active delivery orders

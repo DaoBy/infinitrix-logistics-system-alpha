@@ -96,28 +96,31 @@ class PackageTrackingController extends Controller
         ]);
 
         // Load all relationships
-        $package->load([
-            'deliveryRequest.sender',
-            'deliveryRequest.receiver',
-            'deliveryRequest.pickUpRegion',
-            'deliveryRequest.dropOffRegion',
-            'currentRegion',
-            'statusHistory' => function($query) {
-                $query->with('updatedBy')->latest();
-            },
-            'transfers' => function($query) {
-                $query->with(['fromRegion', 'toRegion', 'processor'])->latest();
-            }
-        ]);
+         $package->load([
+        'deliveryRequest.sender',
+        'deliveryRequest.receiver',
+        'deliveryRequest.pickUpRegion',
+        'deliveryRequest.dropOffRegion',
+        'currentRegion',
+        'statusHistory' => function($query) {
+            $query->with('updatedBy')->latest();
+        },
+        'transfers' => function($query) {
+            $query->with(['fromRegion', 'toRegion', 'processor'])->latest();
+        }
+    ]);
 
-        return inertia('Shared/PackageTracking/PublicPackageTracking', [
-            'package' => $package,
-            'statusHistory' => $package->statusHistory,
-            'transfers' => $package->transfers,
-            'searchedCode' => $itemCode, // Pass what user searched for
-            'actualCode' => $package->item_code, // Pass actual tracking number found
-        ]);
-    }
+    // ADD THIS LINE to ensure volume is included
+    $package->makeVisible(['volume', 'height', 'width', 'length', 'weight', 'value']);
+
+    return inertia('Shared/PackageTracking/PublicPackageTracking', [
+        'package' => $package,
+        'statusHistory' => $package->statusHistory,
+        'transfers' => $package->transfers,
+        'searchedCode' => $itemCode, // Pass what user searched for
+        'actualCode' => $package->item_code, // Pass actual tracking number found
+    ]);
+}
 
     /**
      * Staff/Driver package tracking (authenticated)

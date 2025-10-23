@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Auth;
 
 class VerifyCodeController extends Controller
 {
-    public function verify(Request $request)
+   public function verify(Request $request)
 {
     $request->validate(['code' => 'required|digits:6']);
 
@@ -40,8 +40,14 @@ class VerifyCodeController extends Controller
                 ->with('status', __('Email successfully changed and verified!'));
         }
 
-        // For new registrations, go to the success page
-        return redirect()->route('verification.success')
+        // For new registrations - check if profile needs completion
+        if ($user->isCustomer() && (!$user->customer || !$user->customer->is_profile_complete)) {
+            return redirect()->route('profile.complete')
+                ->with('success', 'Email verified! Please complete your profile.');
+        }
+
+        // For verified users with complete profile
+        return redirect()->route('customer.home')
             ->with('verified', true)
             ->with('status', __('Your email has been verified!'));
     }

@@ -20,31 +20,36 @@ class RegionController extends Controller
         'success' => session('success')
     ]);
 }
-    public function getActiveRegions()
-    {
-        try {
-            $regions = Region::where('is_active', true)
-                ->orderBy('name')
-                ->get(['id', 'name', 'created_at', 'updated_at']);
-                
-            return response()->json([
-                'success' => true,
-                'data' => $regions->map(function($region) {
-                    return [
-                        'id' => $region->id,
-                        'name' => $region->name,
-                        'created_at' => $region->created_at?->toISOString(),
-                        'updated_at' => $region->updated_at?->toISOString()
-                    ];
-                })
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch regions'
-            ], 500);
-        }
+   public function getActiveRegions()
+{
+    try {
+        $regions = Region::where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'warehouse_address', 'latitude', 'longitude', 'is_active', 'color_hex', 'created_at', 'updated_at']);
+            
+        return response()->json([
+            'success' => true,
+            'data' => $regions->map(function($region) {
+                return [
+                    'id' => $region->id,
+                    'name' => $region->name,
+                    'warehouse_address' => $region->warehouse_address,
+                    'latitude' => $region->latitude,
+                    'longitude' => $region->longitude,
+                    'is_active' => $region->is_active,
+                    'color_hex' => $region->color_hex,
+                    'created_at' => $region->created_at?->toISOString(),
+                    'updated_at' => $region->updated_at?->toISOString()
+                ];
+            })
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to fetch regions'
+        ], 500);
     }
+}
 
     public function create()
     {

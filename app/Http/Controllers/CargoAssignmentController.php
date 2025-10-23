@@ -1346,51 +1346,95 @@ DriverStatusLog::create([
 }
 
 
-    /**
-     * Cancel assignment and rollback statuses
-     */
-    public function cancelAssignment(DeliveryOrder $deliveryOrder)
-    {
-        if (!in_array($deliveryOrder->status, ['assigned', 'ready'])) {
-            return back()->withErrors('Cannot cancel assignment. Order is already dispatched or in transit.');
-        }
 
-        DB::transaction(function() use ($deliveryOrder) {
-            $previousStatus = $deliveryOrder->getOriginal('status');
+public function cancelDeliveryOrderAssignment(DeliveryOrder $deliveryOrder, Request $request)
+{
+    $request->validate([
+        'reason' => 'required|string|max:500'
+    ]);
+
+    if (!in_array($deliveryOrder->status, ['assigned', 'dispatched', 'in_transit'])) {
+        return back()->withErrors('Cannot cancel assignment. Order is not in an assignable state.');
+    }
+
+    try {
+        DB::transaction(function() use ($deliveryOrder, $request) {
+            $previousStatus = $deliveryOrder->status;
+            $assignment = $deliveryOrder->driverTruckAssignment;
             
+            // Determine revert status based on payment - DELIVERY ORDER GOES TO READY
+            $revertStatus = $deliveryOrder->deliveryRequest->payment_method === 'postpaid' 
+                && $deliveryOrder->deliveryRequest->payment_status === 'pending'
+                ? 'pending_payment' 
+                : 'ready'; // ← DELIVERY ORDER GOES TO READY
+
+            // Revert delivery order to 'ready'
             $deliveryOrder->update([
                 'driver_id' => null,
                 'truck_id' => null,
                 'driver_truck_assignment_id' => null,
-                'status' => 'ready',
+                'status' => $revertStatus, // Should be 'ready'
                 'estimated_departure' => null,
                 'estimated_arrival' => null,
-                'assigned_by' => null
+                'actual_departure' => null,
+                'assigned_at' => null,
+                'assigned_by' => null,
+                'cancellation_reason' => $request->reason,
+                'cancelled_by' => auth()->id(),
+                'cancelled_at' => now()
             ]);
 
-            // Update packages status
-            $deliveryOrder->deliveryRequest->packages()->update([
-                'status' => 'ready_for_pickup'
-            ]);
+            // Revert packages to 'preparing' status
+            $deliveryOrder->deliveryRequest->packages()->each(function($package) use ($request) {
+                $package->update([
+                    'status' => 'preparing', // ← PACKAGES GO TO PREPARING
+                    'current_driver_id' => null,
+                    'current_truck_id' => null,
+                    'loaded_at' => null,
+                    'current_region_id' => $package->deliveryRequest->pick_up_region_id
+                ]);
+                
+                // Log package status change
+                $package->statusHistory()->create([
+                    'status' => 'preparing',
+                    'remarks' => "Assignment cancelled: " . $request->reason,
+                    'updated_by' => auth()->id()
+                ]);
+            });
 
-            // Update driver-truck assignment if this was the only order
-            $assignment = $deliveryOrder->driverTruckAssignment;
+            // Check if assignment should be updated
             if ($assignment) {
                 $remainingOrders = DeliveryOrder::where('driver_truck_assignment_id', $assignment->id)
                     ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
                     ->count();
 
-                if ($remainingOrders === 0) {
+                // If no more active orders, consider updating assignment status
+                if ($remainingOrders === 0 && $assignment->current_status === DriverTruckAssignment::STATUS_IN_TRANSIT) {
                     $assignment->update([
-                        'current_status' => DriverTruckAssignment::STATUS_AVAILABLE,
-                        'available_for_backhaul' => true
+                        'current_status' => DriverTruckAssignment::STATUS_ACTIVE
                     ]);
                 }
             }
+
+            \Log::info("Delivery order assignment cancelled", [
+                'delivery_order_id' => $deliveryOrder->id,
+                'previous_status' => $previousStatus,
+                'reverted_to' => $revertStatus, // Should be 'ready'
+                'package_status' => 'preparing', // Packages went to preparing
+                'reason' => $request->reason
+            ]);
         });
 
-        return back()->with('success', 'Assignment cancelled successfully.');
+        return back()->with('success', 'Delivery order assignment cancelled successfully.');
+
+    } catch (\Exception $e) {
+        \Log::error('Failed to cancel delivery order assignment: ' . $e->getMessage(), [
+            'delivery_order_id' => $deliveryOrder->id
+        ]);
+        return back()->with('error', 'Failed to cancel assignment: ' . $e->getMessage());
     }
+}
+
 
     /**
      * Get backhaul statistics and metrics

@@ -15,11 +15,11 @@ const page = usePage();
     <!-- Content area -->
     <div class="flex-1 flex flex-col pt-20"> <!-- 80px top padding for navbar spacing -->
       <!-- Header Slot -->
-      <header class="bg-white shadow">
-        <div class="max-w-7xl mx-auto py-6 px-6 lg:px-8">
-          <slot name="header" />
-        </div>
-      </header>
+      <header v-if="$slots.header" class="bg-white shadow">
+  <div class="max-w-7xl mx-auto py-4 px-6 lg:px-8">
+    <slot name="header" />
+  </div>
+</header>
 
       <!-- Main Content -->
       <main class="flex-1 w-full max-w-8xl mx-auto px-6 py-10">

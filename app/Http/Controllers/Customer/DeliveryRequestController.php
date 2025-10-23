@@ -115,7 +115,8 @@ class DeliveryRequestController extends Controller
             'packages',
             'pickUpRegion', 
             'dropOffRegion',
-            'payment'
+            'payment',
+            'deliveryOrder', // Make sure this is included!
         ]);
 
         return Inertia::render('Customer/DeliveryRequests/Show', [

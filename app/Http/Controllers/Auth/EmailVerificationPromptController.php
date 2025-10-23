@@ -13,10 +13,20 @@ class EmailVerificationPromptController extends Controller
     /**
      * Display the email verification prompt.
      */
-    public function __invoke(Request $request): RedirectResponse|Response
-    {
-        return $request->user()->hasVerifiedEmail()
-            ? redirect()->intended(route('dashboard', absolute: false))
-            : Inertia::render('Auth/VerifyCode', ['status' => session('status')]);
+  public function __invoke(Request $request): RedirectResponse|Response
+{
+    $user = $request->user();
+    
+    if ($user->hasVerifiedEmail()) {
+        // If verified, check if customer needs to complete profile
+        if ($user->isCustomer() && (!$user->customer || !$user->customer->is_profile_complete)) {
+            return redirect()->route('profile.complete');
+        }
+        
+        // Otherwise go to intended page
+        return redirect()->intended(route('customer.home', absolute: false));
     }
+
+    return Inertia::render('Auth/VerifyCode', ['status' => session('status')]);
+}
 }

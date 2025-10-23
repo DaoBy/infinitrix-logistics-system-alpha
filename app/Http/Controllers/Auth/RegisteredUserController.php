@@ -28,7 +28,7 @@ class RegisteredUserController extends Controller
     /**
      * Handle an incoming customer registration request.
      */
-    public function store(Request $request): RedirectResponse
+       public function store(Request $request): RedirectResponse
     {
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',
@@ -43,6 +43,7 @@ class RegisteredUserController extends Controller
             'password' => Hash::make($validatedData['password']),
             'role' => 'customer',
             'is_active' => true,
+            'email_verified_at' => null, // Ensure email is not verified
         ]);
 
         // Create minimal customer profile
@@ -56,12 +57,16 @@ class RegisteredUserController extends Controller
         $user->email_verification_code_expires_at = now()->addMinutes(10);
         $user->save();
 
-        // ✅ UNCOMMENT THIS LINE - Email sending is now fixed!
+        // Send verification email
         Mail::to($user->email)->send(new \App\Mail\EmailVerificationCode($code));
 
+        // Login the user FIRST
         Auth::login($user);
+        
+        // Fire the registered event AFTER login
         event(new Registered($user));
 
+        // Then redirect to verification notice
         return redirect()->route('verification.notice')
                ->with('status', __('A verification code has been sent to your email address.'));
     }

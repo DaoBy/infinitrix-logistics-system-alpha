@@ -349,19 +349,20 @@
                 </div>
               </div>
               
-              <div v-if="packageData.volume" class="flex items-start">
-                <div class="flex-shrink-0 h-5 w-5 text-gray-400">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <circle cx="12" cy="12" r="10" />
-                  </svg>
-                </div>
-                <div class="ml-3">
-                  <h3 class="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Volume</h3>
-                  <p class="mt-1 text-xs md:text-sm text-gray-900 dark:text-white">
-                    {{ Number(packageData.volume || 0).toFixed(2) }} m³
-                  </p>
-                </div>
-              </div>
+<div class="flex items-start">
+  <div class="flex-shrink-0 h-5 w-5 text-gray-400">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <circle cx="12" cy="12" r="10" />
+    </svg>
+  </div>
+  <div class="ml-3">
+    <h3 class="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Volume</h3>
+    <p class="mt-1 text-xs md:text-sm text-gray-900 dark:text-white">
+      {{ displayVolume }}
+    </p>
+  </div>
+</div>
+
 
               <div v-if="packageData.item_code" class="flex items-start">
                 <div class="flex-shrink-0 h-5 w-5 text-gray-400">
@@ -479,6 +480,47 @@ const formatDateOnly = (dateString) => {
   }
 };
 
+const displayVolume = computed(() => {
+  // If we have valid dimensions, calculate volume from them
+  if (packageData.value.height && packageData.value.width && packageData.value.length) {
+    const height = parseFloat(packageData.value.height);
+    const width = parseFloat(packageData.value.width);
+    const length = parseFloat(packageData.value.length);
+    
+    // Calculate volume in cubic meters (cm³ to m³ conversion)
+    const volumeM3 = (height * width * length) / 1000000;
+    
+    // Format the volume appropriately
+    return formatVolume(volumeM3);
+  }
+  
+  // Fallback to stored volume if dimensions aren't available
+  const storedVolume = parseFloat(packageData.value.volume || 0);
+  if (storedVolume > 0) {
+    return formatVolume(storedVolume);
+  }
+  
+  return 'N/A';
+});
+
+// Update your formatVolume function
+function formatVolume(volume) {
+  const vol = Number(volume || 0);
+  
+  // If volume is very small, show in cm³
+  if (vol < 0.001) {
+    const volumeCm3 = vol * 1000000;
+    return `${volumeCm3.toFixed(0)} cm³`;
+  }
+  
+  // If volume is small but measurable in m³, show with more decimals
+  if (vol < 0.01) {
+    return `${vol.toFixed(6)} m³`;
+  }
+  
+  // Normal volume, show with 2 decimals
+  return `${vol.toFixed(2)} m³`;
+}
 // FIXED: Combine status history and transfers into a single timeline in CHRONOLOGICAL order
 const combinedTimeline = computed(() => {
   const timeline = [];

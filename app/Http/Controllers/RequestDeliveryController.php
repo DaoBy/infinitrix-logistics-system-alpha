@@ -16,35 +16,44 @@ use Illuminate\Support\Str;
 
 class RequestDeliveryController extends Controller
 {
-    public function create()
-    {
-        $user = auth()->user();
-        $customer = $user->customer ?? null;
+ public function create()
+{
+    $user = auth()->user();
+    $customer = $user->customer ?? null;
 
-        // Check for incomplete profile
-        if ($user->isCustomer() && (!$customer || !$customer->is_profile_complete)) {
-            return redirect()->route('profile.complete')
-                ->with('show_modal', true)
-                ->with('warning', 'Please complete your profile to request a delivery.');
-        }
-
-        $regions = Region::where('is_active', true)->get();
-        $priceMatrix = PriceMatrix::first();
-        $customer = auth()->user()->customer ?? null;
-
-        // Only set completed_deliveries_count for frontend eligibility check
-        if ($customer) {
-            $customer->completed_deliveries_count = \App\Models\DeliveryRequest::where('sender_id', $customer->id)
-                ->where('status', 'completed')
-                ->count();
-        }
-
-        return Inertia::render('Customer/RequestDelivery', [
-            'regions' => $regions,
-            'priceMatrix' => $priceMatrix,
-            'authCustomer' => $customer,
-        ]);
+    // Check for incomplete profile
+    if ($user->isCustomer() && (!$customer || !$customer->is_profile_complete)) {
+        return redirect()->route('profile.complete')
+            ->with('show_modal', true)
+            ->with('warning', 'Please complete your profile to request a delivery.');
     }
+
+    $regions = Region::where('is_active', true)->get()->map(function ($region) {
+        return [
+            'id' => $region->id,
+            'name' => $region->name,
+            'warehouse_address' => $region->warehouse_address,
+            'latitude' => $region->latitude,
+            'longitude' => $region->longitude,
+            'is_active' => $region->is_active,
+            'color_hex' => $region->color_hex
+        ];
+    });
+    
+    $priceMatrix = PriceMatrix::first();
+    
+    if ($customer) {
+        $customer->completed_deliveries_count = \App\Models\DeliveryRequest::where('sender_id', $customer->id)
+            ->where('status', 'completed')
+            ->count();
+    }
+
+    return Inertia::render('Customer/RequestDelivery', [
+        'regions' => $regions,
+        'priceMatrix' => $priceMatrix,
+        'authCustomer' => $customer,
+    ]);
+}
 
    public function store(Request $request)
 {
@@ -177,7 +186,9 @@ class RequestDeliveryController extends Controller
         'original_package_count' => count($request->input('packages', [])),
     ]);
 
-    DB::transaction(function () use ($validated, $request) {
+    $deliveryRequest = null;
+
+    DB::transaction(function () use ($validated, $request, &$deliveryRequest) {
         // Find or create receiver user
         $receiverUser = User::firstOrCreate(
             ['email' => $validated['receiver']['email']],
@@ -330,9 +341,17 @@ class RequestDeliveryController extends Controller
         ]);
     });
 
-return back()->with('success', 'Delivery request created successfully!');
+    // ✅ FIXED: Return JSON response to stay on the same page
+   return response()->json([
+        'success' => true,
+        'message' => 'Delivery request created successfully!',
+        'delivery_request_id' => $deliveryRequest->id,
+        'should_not_redirect' => true
+    ], 200, [
+        'Content-Type' => 'application/json',
+        'X-Inertia' => 'false' // This tells Inertia not to handle this response
+    ]);
 }
-
 // NEW: Separate endpoint for photo uploads
 public function uploadPhotos(Request $request)
 {
