@@ -528,106 +528,32 @@ class DriverTruckAssignment extends Model
             && $this->is_active;
     }
 
-   public function skipCooldown(): bool
+  public function skipCooldown(): bool
 {
-    \Log::info("🚀 MODEL: Skip cooldown method called", [
-        'assignment_id' => $this->id,
-        'current_status' => $this->current_status,
-        'is_final_cooldown' => $this->is_final_cooldown
-    ]);
-
-    // Basic validation
-    if ($this->current_status !== self::STATUS_COOLDOWN) {
-        \Log::warning("❌ MODEL: Not in cooldown status", [
+    try {
+        \Log::info("🎯 ULTRA SIMPLE: Skip cooldown", [
             'assignment_id' => $this->id,
             'current_status' => $this->current_status
         ]);
-        return false;
-    }
 
-    if ($this->is_final_cooldown) {
-        \Log::warning("❌ MODEL: This is final cooldown", [
-            'assignment_id' => $this->id,
-            'is_final_cooldown' => $this->is_final_cooldown
-        ]);
-        return false;
-    }
-
-    try {
-        DB::beginTransaction();
-
-        \Log::info("🔄 MODEL: Starting transaction", [
-            'assignment_id' => $this->id
-        ]);
-
-        // Update the assignment directly
+        // Force the update
         $this->current_status = self::STATUS_BACKHAUL_ELIGIBLE;
         $this->available_for_backhaul = true;
         $this->is_final_cooldown = false;
         $this->cooldown_ends_at = null;
         
-        \Log::info("💾 MODEL: Saving assignment", [
-            'assignment_id' => $this->id,
-            'new_status' => $this->current_status,
-            'available_for_backhaul' => $this->available_for_backhaul
-        ]);
+        $result = $this->save();
         
-        $saveResult = $this->save();
-        
-        \Log::info("💾 MODEL: Save result", [
+        \Log::info("🎯 ULTRA SIMPLE: Result", [
             'assignment_id' => $this->id,
-            'save_result' => $saveResult,
-            'changes' => $this->getChanges()
-        ]);
-
-        // Create status log manually (bypass updateStatus method)
-        $logResult = DriverStatusLog::create([
-            'driver_truck_assignment_id' => $this->id,
-            'previous_status' => self::STATUS_COOLDOWN,
-            'new_status' => self::STATUS_BACKHAUL_ELIGIBLE,
-            'remarks' => 'Cooldown skipped - eligible for backhaul assignments',
-            'changed_at' => now()
-        ]);
-
-        \Log::info("✅ MODEL: Status log created", [
-            'assignment_id' => $this->id,
-            'log_created' => !is_null($logResult)
-        ]);
-
-        // Update truck status if exists
-        if ($this->truck) {
-            \Log::info("🚛 MODEL: Updating truck status", [
-                'truck_id' => $this->truck->id,
-                'current_truck_status' => $this->truck->status
-            ]);
-            $this->truck->updateStatus();
-            \Log::info("✅ MODEL: Truck status updated", [
-                'truck_id' => $this->truck->id,
-                'new_truck_status' => $this->truck->status
-            ]);
-        } else {
-            \Log::warning("⚠️ MODEL: No truck assigned", [
-                'assignment_id' => $this->id
-            ]);
-        }
-
-        DB::commit();
-
-        \Log::info("🎉 MODEL: Skip cooldown completed successfully", [
-            'assignment_id' => $this->id,
+            'save_result' => $result,
             'new_status' => $this->current_status
         ]);
 
-        // Explicitly return true
-        return true;
+        return (bool) $result;
 
     } catch (\Exception $e) {
-        DB::rollBack();
-        \Log::error('💥 MODEL: Exception in skipCooldown: ' . $e->getMessage(), [
-            'assignment_id' => $this->id,
-            'exception' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
+        \Log::error('🎯 ULTRA SIMPLE: Error: ' . $e->getMessage());
         return false;
     }
 }
