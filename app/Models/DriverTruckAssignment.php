@@ -239,85 +239,70 @@ class DriverTruckAssignment extends Model
 
     // Complete assignment (when driver arrives at home region) - OPTION B COMPLETION
       public function completeAssignment(): void
-    {
-        \Log::info("Completing assignment - Option B", [
-            'assignment_id' => $this->id,
-            'current_status' => $this->current_status,
-            'driver_region' => $this->driver->current_region_id,
-            'home_region' => $this->region_id
-        ]);
+{
+    \Log::info("Completing assignment - Option B", [
+        'assignment_id' => $this->id,
+        'current_status' => $this->current_status,
+        'driver_region' => $this->driver->current_region_id,
+        'home_region' => $this->region_id
+    ]);
 
-        if ($this->current_status !== self::STATUS_RETURNING) {
-            throw new \Exception('Cannot complete assignment from current status: ' . $this->current_status);
-        }
-
-        $this->load('driver');
-        
-        if ($this->driver->current_region_id != $this->region_id) {
-            \Log::error("Driver region mismatch", [
-                'assignment_id' => $this->id,
-                'driver_region' => $this->driver->current_region_id,
-                'home_region' => $this->region_id,
-                'driver_loaded_fresh' => true
-            ]);
-            throw new \Exception('Driver must be in home region to complete assignment. Current region: ' . $this->driver->current_region_id . ', Home region: ' . $this->region_id);
-        }
-
-        $this->updateStatus(self::STATUS_COOLDOWN, 'Driver arrived at home region (Option B completion)');
-        
-        $this->cooldown_ends_at = now()->addHour();
-        $this->is_final_cooldown = true;
-        $this->save();
-
-        if ($this->truck) {
-            $this->truck->updateStatus();
-        }
-
-        \Log::info("Assignment completion successful - now in final cooldown", [
-            'assignment_id' => $this->id,
-            'new_status' => $this->current_status,
-            'is_final_cooldown' => true
-        ]);
+    if ($this->current_status !== self::STATUS_RETURNING) {
+        throw new \Exception('Cannot complete assignment from current status: ' . $this->current_status);
     }
 
+    $this->load('driver');
+    
+    if ($this->driver->current_region_id != $this->region_id) {
+        throw new \Exception('Driver must be in home region to complete assignment.');
+    }
+
+    $this->updateStatus(self::STATUS_COOLDOWN, 'Driver arrived at home region (Option B completion)');
+    
+    $this->cooldown_ends_at = now()->addHour();
+    $this->is_final_cooldown = true;
+    $this->save();
+
+    // FIX: Only use updateStatus() - don't manually set truck status
+    if ($this->truck) {
+        $this->truck->updateStatus(); // This will automatically handle the status
+    }
+
+    \Log::info("Assignment completion successful - now in final cooldown");
+}
     // Complete cooldown period - FINISHES ASSIGNMENT
- public function completeCooldown(): void
-    {
-        \Log::info("Completing cooldown", [
-            'assignment_id' => $this->id,
-            'current_status' => $this->current_status,
-            'is_final_cooldown' => $this->is_final_cooldown
-        ]);
+public function completeCooldown(): void
+{
+    \Log::info("Completing cooldown", [
+        'assignment_id' => $this->id,
+        'current_status' => $this->current_status,
+        'is_final_cooldown' => $this->is_final_cooldown
+    ]);
 
-        if ($this->current_status !== self::STATUS_COOLDOWN) {
-            throw new \Exception('Cannot complete cooldown from current status: ' . $this->current_status);
-        }
-
-        if (!$this->is_final_cooldown) {
-            throw new \Exception('Cannot complete regular cooldown. Assignment must be in final cooldown status.');
-        }
-
-        $this->updateStatus(self::STATUS_COMPLETED, 'Trip completed - assignment finished');
-        $this->is_active = false;
-        $this->completed_at = now();
-        $this->save();
-
-        if ($this->truck) {
-            $this->truck->update(['status' => Truck::STATUS_AVAILABLE]);
-            $this->truck->updateStatus();
-        }
-
-        $this->driver->current_region_id = $this->region_id;
-        $this->driver->save();
-
-        \Log::info("🎯 ASSIGNMENT COMPLETED - DRIVER/TRUCK NOW AVAILABLE FOR NEW ASSIGNMENTS", [
-            'assignment_id' => $this->id,
-            'driver_id' => $this->driver_id,
-            'truck_id' => $this->truck_id,
-            'is_active' => false,
-            'completed_at' => now()
-        ]);
+    if ($this->current_status !== self::STATUS_COOLDOWN) {
+        throw new \Exception('Cannot complete cooldown from current status: ' . $this->current_status);
     }
+
+    if (!$this->is_final_cooldown) {
+        throw new \Exception('Cannot complete regular cooldown. Assignment must be in final cooldown status.');
+    }
+
+    $this->updateStatus(self::STATUS_COMPLETED, 'Trip completed - assignment finished');
+    $this->is_active = false;
+    $this->completed_at = now();
+    $this->save();
+
+    // FIX: Use valid truck status - set to "available"
+    if ($this->truck) {
+        $this->truck->update(['status' => Truck::STATUS_AVAILABLE]); // Use valid status
+        $this->truck->updateStatus();
+    }
+
+    $this->driver->current_region_id = $this->region_id;
+    $this->driver->save();
+
+    \Log::info("🎯 ASSIGNMENT COMPLETED - DRIVER/TRUCK NOW AVAILABLE");
+}
 
     // SINGLE SOURCE OF TRUTH: Update status with logging
    public function updateStatus(string $newStatus, ?string $remarks = null): void
@@ -377,9 +362,15 @@ class DriverTruckAssignment extends Model
             'changed_at' => now()
         ]);
 
-        if ($this->truck) {
-            $this->truck->updateStatus();
-        }
+      if ($this->truck) {
+    // Let the truck's automatic updateStatus handle the mapping
+    // Don't manually set any status except for completed assignments
+    if ($newStatus === self::STATUS_COMPLETED) {
+        // Only for completed assignments, explicitly set to available
+        $this->truck->update(['status' => Truck::STATUS_AVAILABLE]);
+    }
+    $this->truck->updateStatus();
+}
 
         \Log::info("Status transition completed", [
             'assignment_id' => $this->id,

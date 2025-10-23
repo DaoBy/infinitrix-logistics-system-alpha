@@ -585,7 +585,7 @@ class DriverController extends Controller
             });
     }
 
-    public function updateDestinationPackagesStatus(Request $request)
+   public function updateDestinationPackagesStatus(Request $request)
 {
     $validated = $request->validate([
         'package_updates' => 'required|array',
@@ -598,14 +598,38 @@ class DriverController extends Controller
 
     $driver = auth()->user();
     
+    \Log::info("🎯 Updating destination packages status", [
+        'driver_id' => $driver->id,
+        'updates_count' => count($validated['package_updates'])
+    ]);
+    
     try {
         DB::transaction(function () use ($validated, $driver, $request) {
             foreach ($validated['package_updates'] as $index => $update) {
-                $package = Package::with(['deliveryRequest.deliveryOrder'])->find($update['package_id']);
+                // Load package with relationships
+                $package = Package::with([
+                    'deliveryRequest.deliveryOrder.driver',
+                    'deliveryRequest.packages'
+                ])->find($update['package_id']);
                 
+                if (!$package) {
+                    \Log::warning('Package not found for update', [
+                        'package_id' => $update['package_id']
+                    ]);
+                    continue;
+                }
+                
+                \Log::info("📦 Processing package update", [
+                    'package_id' => $package->id,
+                    'new_status' => $update['status'],
+                    'current_region_id' => $package->current_region_id,
+                    'driver_region_id' => $driver->current_region_id
+                ]);
+                
+                // Validate this package belongs to the driver and is at destination
                 if (!$this->isValidDriverPackage($package, $driver)) {
                     \Log::warning('Invalid package for driver', [
-                        'package_id' => $update['package_id'],
+                        'package_id' => $package->id,
                         'driver_id' => $driver->id
                     ]);
                     continue;
@@ -637,25 +661,21 @@ class DriverController extends Controller
                     );
                 }
                 
-                \Log::info('Package status updated successfully', [
+                \Log::info("✅ Package status updated", [
                     'package_id' => $package->id,
-                    'new_status' => $update['status'],
-                    'driver_id' => $driver->id
+                    'new_status' => $update['status']
                 ]);
-            }
-            
-            $assignment = $driver->currentTruckAssignment;
-            if ($assignment) {
-                $assignment->processAutomaticTransitions();
             }
         });
 
+        \Log::info("🎉 All package updates completed successfully");
         return back()->with('success', 'Package statuses updated successfully!');
 
     } catch (\Exception $e) {
-        \Log::error('Failed to update package statuses: ' . $e->getMessage(), [
+        \Log::error('💥 Failed to update package statuses: ' . $e->getMessage(), [
             'driver_id' => $driver->id,
-            'request_data' => $validated
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
         ]);
         
         return back()->with('error', 'Failed to update package statuses: ' . $e->getMessage());

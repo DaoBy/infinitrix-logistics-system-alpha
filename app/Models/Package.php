@@ -312,38 +312,76 @@ public static function booted()
         // When a package reaches final status
         if (in_array($package->status, ['delivered', 'damaged_in_transit', 'lost_in_transit', 'completed', 'returned'])) {
             
+            \Log::info("📦 Package reached final status - Starting auto-update", [
+                'package_id' => $package->id,
+                'status' => $package->status
+            ]);
+            
             try {
-                // Load relationships safely
+                // Safely load relationships with null checks
                 $package->load([
                     'deliveryRequest.deliveryOrder.driver',
                     'deliveryRequest.packages'
                 ]);
 
                 // Check if all required relationships exist
-                if (!$package->deliveryRequest || 
-                    !$package->deliveryRequest->deliveryOrder || 
-                    !$package->deliveryRequest->deliveryOrder->driver) {
-                    \Log::warning('Missing relationships for package auto-update', [
+                if (!$package->deliveryRequest) {
+                    \Log::warning('❌ Package auto-update: No delivery request', [
+                        'package_id' => $package->id
+                    ]);
+                    return;
+                }
+
+                if (!$package->deliveryRequest->deliveryOrder) {
+                    \Log::warning('❌ Package auto-update: No delivery order', [
                         'package_id' => $package->id,
-                        'has_delivery_request' => !is_null($package->deliveryRequest),
-                        'has_delivery_order' => $package->deliveryRequest && !is_null($package->deliveryRequest->deliveryOrder),
-                        'has_driver' => $package->deliveryRequest && $package->deliveryRequest->deliveryOrder && !is_null($package->deliveryRequest->deliveryOrder->driver)
+                        'delivery_request_id' => $package->deliveryRequest->id
                     ]);
                     return;
                 }
 
                 $driver = $package->deliveryRequest->deliveryOrder->driver;
+                if (!$driver) {
+                    \Log::warning('❌ Package auto-update: No driver assigned', [
+                        'package_id' => $package->id,
+                        'delivery_order_id' => $package->deliveryRequest->deliveryOrder->id
+                    ]);
+                    return;
+                }
+
+                \Log::info("✅ Package auto-update: All relationships loaded", [
+                    'package_id' => $package->id,
+                    'driver_id' => $driver->id
+                ]);
                 
+                // Get active orders for this driver
                 $activeOrders = $driver->deliveryOrders()
                     ->whereIn('status', ['assigned', 'dispatched', 'in_transit', 'needs_review'])
-                    ->with(['packages', 'deliveryRequest'])
+                    ->with(['deliveryRequest.packages'])
                     ->get();
 
+                \Log::info("📋 Package auto-update: Processing orders", [
+                    'package_id' => $package->id,
+                    'active_orders_count' => $activeOrders->count()
+                ]);
+
                 foreach ($activeOrders as $order) {
-                    $packages = $order->packages;
+                    // Make sure packages are loaded
+                    if (!$order->deliveryRequest || !$order->deliveryRequest->packages) {
+                        continue;
+                    }
+
+                    $packages = $order->deliveryRequest->packages;
                     $deliveredCount = $packages->where('status', 'delivered')->count();
                     $totalPackages = $packages->count();
                     $finalStatusPackages = $packages->whereIn('status', ['delivered', 'damaged_in_transit', 'lost_in_transit', 'completed', 'returned'])->count();
+
+                    \Log::info("📊 Package auto-update: Order analysis", [
+                        'order_id' => $order->id,
+                        'total_packages' => $totalPackages,
+                        'final_status_packages' => $finalStatusPackages,
+                        'delivered_count' => $deliveredCount
+                    ]);
 
                     // Only update if ALL packages have final status
                     if ($finalStatusPackages === $totalPackages && $totalPackages > 0) {
@@ -360,10 +398,12 @@ public static function booted()
                                 'actual_arrival' => now(),
                             ]);
 
-                            \Log::info("Delivery order {$order->id} auto-updated to {$newOrderStatus}", [
+                            \Log::info("✅ Package auto-update: Order status updated", [
+                                'order_id' => $order->id,
+                                'old_status' => $order->getOriginal('status'),
+                                'new_status' => $newOrderStatus,
                                 'delivered' => $deliveredCount,
-                                'total' => $totalPackages,
-                                'has_issues' => $newOrderStatus === 'needs_review'
+                                'total' => $totalPackages
                             ]);
                         }
                     }
@@ -371,19 +411,30 @@ public static function booted()
 
                 // Check driver assignment for backhaul
                 $assignment = $driver->currentTruckAssignment;
-                if ($assignment && $assignment->allPackagesDelivered()) {
-                    $assignment->completeDeliveries();
+                if ($assignment) {
+                    \Log::info("🚛 Package auto-update: Checking assignment", [
+                        'assignment_id' => $assignment->id,
+                        'all_packages_delivered' => $assignment->allPackagesDelivered()
+                    ]);
+                    
+                    if ($assignment->allPackagesDelivered()) {
+                        $assignment->completeDeliveries();
+                        \Log::info("✅ Package auto-update: Assignment completed", [
+                            'assignment_id' => $assignment->id,
+                            'new_status' => $assignment->current_status
+                        ]);
+                    }
                 }
 
             } catch (\Exception $e) {
-                \Log::error('Error in package booted method: ' . $e->getMessage(), [
+                \Log::error('💥 Package auto-update failed: ' . $e->getMessage(), [
                     'package_id' => $package->id,
                     'status' => $package->status,
+                    'exception' => $e->getMessage(),
                     'trace' => $e->getTraceAsString()
                 ]);
                 
-                // Don't rethrow the exception to prevent breaking the package update
-                return;
+                // Don't rethrow - we don't want to break the package update
             }
         }
     });
