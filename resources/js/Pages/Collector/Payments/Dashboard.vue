@@ -10,108 +10,73 @@
             Overview of your collection activities and performance
           </p>
         </div>
-        <div class="flex items-center gap-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-          <ClockIcon class="h-4 w-4" />
-          <span>Updated: {{ lastUpdated }}</span>
-        </div>
+        
       </div>
     </template>
 
-    <!-- Stats Cards -->
-    <div class="px-4 md:px-6 py-4 max-w-7xl mx-auto">
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        <!-- Pending Collections Card -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
-          <div class="flex items-center">
-            <div class="flex-shrink-0">
-              <div class="w-10 h-10 sm:w-12 sm:h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
-                <ClockIcon class="h-5 w-5 sm:h-6 sm:w-6 text-yellow-600 dark:text-yellow-400" />
-              </div>
-            </div>
-            <div class="ml-3">
-              <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Pending Collections</p>
-              <p class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{{ stats.pending_collections }}</p>
-            </div>
-          </div>
-          <div class="mt-2">
-            <SecondaryButton 
-              :href="route('collector.payments.pending')"
-              class="!px-2 !py-1 !text-xs w-full justify-center"
-            >
-              View All
-            </SecondaryButton>
+   <!-- Stats Cards -->
+<div class="px-4 md:px-6 py-4 max-w-7xl mx-auto">
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+    <!-- Pending Collections Card -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
+      <div class="flex items-center">
+        <div class="flex-shrink-0">
+          <div class="w-10 h-10 sm:w-12 sm:h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
+            <ClockIcon class="h-5 w-5 sm:h-6 sm:w-6 text-yellow-600 dark:text-yellow-400" />
           </div>
         </div>
-
-        <!-- Pending Verification Card -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
-          <div class="flex items-center">
-            <div class="flex-shrink-0">
-              <div class="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                <DocumentCheckIcon class="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 dark:text-blue-400" />
-              </div>
-            </div>
-            <div class="ml-3">
-              <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Pending Verification</p>
-              <p class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{{ stats.pending_verification }}</p>
-            </div>
-          </div>
-          <div class="mt-2">
-            <SecondaryButton 
-              :href="route('collector.payments.index', { status: 'pending' })"
-              class="!px-2 !py-1 !text-xs w-full justify-center"
-            >
-              View All
-            </SecondaryButton>
-          </div>
-        </div>
-
-        <!-- Verified Payments Card -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
-          <div class="flex items-center">
-            <div class="flex-shrink-0">
-              <div class="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                <CheckCircleIcon class="h-5 w-5 sm:h-6 sm:w-6 text-green-600 dark:text-green-400" />
-              </div>
-            </div>
-            <div class="ml-3">
-              <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Verified Payments</p>
-              <p class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{{ stats.verified_payments }}</p>
-            </div>
-          </div>
-          <div class="mt-2">
-            <SecondaryButton 
-              :href="route('collector.payments.index', { status: 'verified' })"
-              class="!px-2 !py-1 !text-xs w-full justify-center"
-            >
-              View All
-            </SecondaryButton>
-          </div>
-        </div>
-
-        <!-- Rejected Payments Card -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
-          <div class="flex items-center">
-            <div class="flex-shrink-0">
-              <div class="w-10 h-10 sm:w-12 sm:h-12 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
-                <ExclamationTriangleIcon class="h-5 w-5 sm:h-6 sm:w-6 text-red-600 dark:text-red-400" />
-              </div>
-            </div>
-            <div class="ml-3">
-              <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Rejected Payments</p>
-              <p class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{{ stats.rejected_payments }}</p>
-            </div>
-          </div>
-          <div class="mt-2">
-            <SecondaryButton 
-              :href="route('collector.payments.index', { status: 'rejected' })"
-              class="!px-2 !py-1 !text-xs w-full justify-center"
-            >
-              View All
-            </SecondaryButton>
-          </div>
+        <div class="ml-3">
+          <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Pending Collections</p>
+          <p class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{{ stats.pending_collections }}</p>
         </div>
       </div>
+    </div>
+
+    <!-- Pending Verification Card -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
+      <div class="flex items-center">
+        <div class="flex-shrink-0">
+          <div class="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+            <DocumentCheckIcon class="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 dark:text-blue-400" />
+          </div>
+        </div>
+        <div class="ml-3">
+          <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Pending Verification</p>
+          <p class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{{ stats.pending_verification }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Verified Payments Card -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
+      <div class="flex items-center">
+        <div class="flex-shrink-0">
+          <div class="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+            <CheckCircleIcon class="h-5 w-5 sm:h-6 sm:w-6 text-green-600 dark:text-green-400" />
+          </div>
+        </div>
+        <div class="ml-3">
+          <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Verified Payments</p>
+          <p class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{{ stats.verified_payments }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rejected Payments Card -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
+      <div class="flex items-center">
+        <div class="flex-shrink-0">
+          <div class="w-10 h-10 sm:w-12 sm:h-12 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
+            <ExclamationTriangleIcon class="h-5 w-5 sm:h-6 sm:w-6 text-red-600 dark:text-red-400" />
+          </div>
+        </div>
+        <div class="ml-3">
+          <p class="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Rejected Payments</p>
+          <p class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{{ stats.rejected_payments }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
 
       <!-- Main Content Grid -->
       <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
@@ -312,14 +277,7 @@
                 <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">No pending collections</p>
               </div>
               
-              <div class="mt-4 text-center">
-                <SecondaryButton 
-                  :href="route('collector.payments.pending')"
-                  class="w-full justify-center"
-                >
-                  View All Pending Collections
-                </SecondaryButton>
-              </div>
+
             </div>
           </div>
 
@@ -561,14 +519,7 @@
                 <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">No recent activities</p>
               </div>
               
-              <div class="mt-4 text-center">
-                <SecondaryButton 
-                  :href="route('collector.payments.index')"
-                  class="w-full justify-center"
-                >
-                  View All Payment History
-                </SecondaryButton>
-              </div>
+              
             </div>
           </div>
 

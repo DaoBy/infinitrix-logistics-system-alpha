@@ -1,442 +1,132 @@
 <template>
-  <Modal :show="show" max-width="2xl" @close="close">
-    <div class="p-6">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">
+  <Modal :show="show" max-width="lg" @close="close">
+    <div class="p-4 max-h-[90vh] overflow-y-auto"> <!-- Added max-height and scroll -->
+      
+      <!-- Compact Header -->
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-medium text-gray-900">
           Dispatch Driver-Truck Set
         </h3>
-        <button
-          @click="close"
-          class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-        >
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <button @click="close" class="text-gray-400 hover:text-gray-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
 
-      <!-- Driver-Truck Set Information -->
-      <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mb-6">
-        <div class="flex items-center space-x-4">
-          <!-- Driver Info -->
-          <div class="flex-1">
-            <div class="flex items-center space-x-3">
-              <div class="h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-                <span class="text-blue-600 dark:text-blue-300 font-medium text-sm">
-                  {{ set?.driver?.initials || 'DR' }}
-                </span>
-              </div>
-              <div>
-                <p class="font-medium text-gray-900 dark:text-gray-100">
-                  {{ set?.driver?.name || 'N/A' }}
-                </p>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  {{ set?.driver?.employee_id || '' }}
-                </p>
-                <!-- Backhaul Badge -->
-                <span 
-                  v-if="set?.available_for_backhaul" 
-                  class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 mt-1"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clip-rule="evenodd" />
-                  </svg>
-                  Backhaul Assignment
-                </span>
-              </div>
+      <!-- Compact Driver-Truck Info -->
+      <div class="bg-gray-50 rounded-lg p-3 mb-4">
+        <div class="flex items-center space-x-3">
+          <!-- Driver -->
+          <div class="flex items-center space-x-2 flex-1">
+            <div class="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+              <span class="text-blue-600 font-medium text-xs">
+                {{ set?.driver?.initials || 'DR' }}
+              </span>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium text-gray-900 truncate">
+                {{ set?.driver?.name || 'N/A' }}
+              </p>
+            
             </div>
           </div>
 
-          <!-- Truck Info -->
-          <div class="flex-1">
-            <div class="flex items-center space-x-3">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1 1 0 11-3 0 1 1 0 013 0z" />
-                <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1v-1a1 1 0 011-1h2a1 1 0 011 1v1a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H19a1 1 0 001-1V5a1 1 0 00-1-1H3z" />
-              </svg>
-              <div>
-                <p class="font-medium text-gray-900 dark:text-gray-100">
-                  {{ set?.truck?.license_plate || 'N/A' }}
-                </p>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  {{ set?.truck?.make || '' }} {{ set?.truck?.model || '' }}
-                </p>
-              </div>
+          <!-- Truck -->
+          <div class="flex items-center space-x-2 flex-1">
+            <svg class="h-6 w-6 text-indigo-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium text-gray-900 truncate">
+                {{ set?.truck?.license_plate || 'N/A' }}
+              </p>
+              <p class="text-xs text-gray-500 truncate">
+                {{ set?.truck?.make }} {{ set?.truck?.model }}
+              </p>
             </div>
           </div>
         </div>
 
-        <!-- Current Load Information -->
-        <div class="mt-4 grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <p class="text-gray-600 dark:text-gray-400">Current Volume</p>
-            <p class="font-medium">{{ (set?.current_volume || 0).toFixed(2) }} / {{ set?.truck?.volume_capacity || 0 }} m³</p>
-            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-1">
-              <div 
-                class="bg-blue-600 h-2 rounded-full" 
-                :style="{ width: `${Math.min(100, ((set?.current_volume || 0) / (set?.truck?.volume_capacity || 1)) * 100)}%` }"
-              ></div>
-            </div>
-          </div>
-          <div>
-            <p class="text-gray-600 dark:text-gray-400">Current Weight</p>
-            <p class="font-medium">{{ (set?.current_weight || 0).toFixed(2) }} / {{ set?.truck?.weight_capacity || 0 }} kg</p>
-            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-1">
-              <div 
-                class="bg-green-600 h-2 rounded-full" 
-                :style="{ width: `${Math.min(100, ((set?.current_weight || 0) / (set?.truck?.weight_capacity || 1)) * 100)}%` }"
-              ></div>
-            </div>
-          </div>
+        <!-- Backhaul Badge -->
+        <div v-if="set?.available_for_backhaul" class="mt-2 flex justify-center">
+          <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800 border border-purple-300">
+            <svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            Backhaul Assignment
+          </span>
         </div>
       </div>
 
-      <!-- Dispatch Validation -->
-      <div class="mb-6">
-        <h4 class="text-md font-medium text-gray-900 dark:text-gray-100 mb-3">
+      <!-- Compact Validation Section -->
+      <div class="mb-4">
+        <h4 class="text-sm font-medium text-gray-900 mb-2">
           Dispatch Requirements
         </h4>
         
         <!-- Loading State -->
-        <div v-if="validationLoading" class="flex items-center justify-center py-8">
-          <LoadingSpinner size="lg" class="mr-3" />
-          <span class="text-gray-600 dark:text-gray-400">Validating dispatch requirements...</span>
+        <div v-if="validationLoading" class="flex items-center justify-center py-4">
+          <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+          <span class="text-sm text-gray-600">Validating requirements...</span>
         </div>
 
-        <!-- Validation Results -->
-        <div v-else class="space-y-3">
-          <!-- Assigned Orders Check -->
-          <div class="flex items-center justify-between p-3 border rounded-lg" :class="
-            validation.has_assigned_orders 
-              ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20' 
-              : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
-          ">
+        <!-- Compact Validation Items -->
+        <div v-else class="space-y-2">
+          <div v-for="check in compactValidationChecks" :key="check.key"
+               class="flex items-center justify-between p-2 border rounded text-sm"
+               :class="check.passed ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'">
             <div class="flex items-center">
-              <svg 
-                v-if="validation.has_assigned_orders" 
-                class="w-5 h-5 text-green-500 mr-2" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              <svg :class="check.passed ? 'text-green-500' : 'text-red-500'" 
+                   class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path v-if="check.passed" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
-              <svg 
-                v-else 
-                class="w-5 h-5 text-red-500 mr-2" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              <span class="font-medium">Assigned Deliveries</span>
+              <span>{{ check.label }}</span>
             </div>
-            <span class="text-sm" :class="validation.has_assigned_orders ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'">
-              {{ validation.has_assigned_orders ? `${validation.assigned_orders_count} orders` : 'No orders' }}
+            <span :class="check.passed ? 'text-green-700' : 'text-red-700'" class="text-xs font-medium">
+              {{ check.status }}
             </span>
           </div>
+        </div>
 
-          <!-- Truck Availability Check -->
-          <div class="flex items-center justify-between p-3 border rounded-lg" :class="
-            validation.truck_available 
-              ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20' 
-              : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
-          ">
-            <div class="flex items-center">
-              <svg 
-                v-if="validation.truck_available" 
-                class="w-5 h-5 text-green-500 mr-2" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-              <svg 
-                v-else 
-                class="w-5 h-5 text-red-500 mr-2" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              <span class="font-medium">Truck Available</span>
-            </div>
-            <span class="text-sm" :class="validation.truck_available ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'">
-              {{ validation.truck_available ? 'Available' : 'Unavailable' }}
-            </span>
-          </div>
-
-          <!-- Driver Availability Check -->
-          <div class="flex items-center justify-between p-3 border rounded-lg" :class="
-            validation.driver_available 
-              ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20' 
-              : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
-          ">
-            <div class="flex items-center">
-              <svg 
-                v-if="validation.driver_available" 
-                class="w-5 h-5 text-green-500 mr-2" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-              <svg 
-                v-else 
-                class="w-5 h-5 text-red-500 mr-2" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              <span class="font-medium">Driver Available</span>
-            </div>
-            <span class="text-sm" :class="validation.driver_available ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'">
-              {{ validation.driver_available ? 'Available' : 'Unavailable' }}
-            </span>
-          </div>
-
-          <!-- Waybills Check -->
-          <div class="flex items-center justify-between p-3 border rounded-lg" :class="
-            validation.waybills_complete 
-              ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20' 
-              : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
-          ">
-            <div class="flex items-center">
-              <svg 
-                v-if="validation.waybills_complete" 
-                class="w-5 h-5 text-green-500 mr-2" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-              <svg 
-                v-else 
-                class="w-5 h-5 text-red-500 mr-2" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              <span class="font-medium">Waybills Generated</span>
-            </div>
-            <span class="text-sm" :class="validation.waybills_complete ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'">
-              {{ validation.waybills_complete ? 'Complete' : `${validation.missing_waybills?.length || 0} missing` }}
-            </span>
-          </div>
-
-          <!-- Package Stickers Check -->
-          <div class="flex items-center justify-between p-3 border rounded-lg" :class="
-            validation.stickers_complete 
-              ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20' 
-              : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
-          ">
-            <div class="flex items-center">
-              <svg 
-                v-if="validation.stickers_complete" 
-                class="w-5 h-5 text-green-500 mr-2" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-              <svg 
-                v-else 
-                class="w-5 h-5 text-red-500 mr-2" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              <span class="font-medium">Package Stickers</span>
-            </div>
-            <span class="text-sm" :class="validation.stickers_complete ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'">
-              {{ validation.stickers_complete ? 'Complete' : `${validation.unstickerized_packages?.length || 0} missing` }}
-            </span>
-          </div>
-
-          <!-- Manifest Check -->
-          <div class="flex items-center justify-between p-3 border rounded-lg" :class="
-            validation.manifest_complete 
-              ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20' 
-              : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
-          ">
-            <div class="flex items-center">
-              <svg 
-                v-if="validation.manifest_complete" 
-                class="w-5 h-5 text-green-500 mr-2" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-              <svg 
-                v-else 
-                class="w-5 h-5 text-red-500 mr-2" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              <span class="font-medium">Manifest Finalized</span>
-            </div>
-            <span class="text-sm" :class="validation.manifest_complete ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'">
-              {{ validation.manifest_complete ? 'Complete' : 'Missing or invalid' }}
-            </span>
-          </div>
-
-          <!-- Overall Status -->
-          <div class="mt-4 p-4 rounded-lg" :class="
-            validation.can_dispatch 
-              ? 'bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800' 
-              : 'bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800'
-          ">
-            <div class="flex items-center">
-              <svg 
-                v-if="validation.can_dispatch" 
-                class="w-6 h-6 text-green-500 mr-3" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <svg 
-                v-else 
-                class="w-6 h-6 text-red-500 mr-3" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <p class="font-medium" :class="validation.can_dispatch ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'">
-                  {{ validation.can_dispatch ? 'Ready to Dispatch' : 'Cannot Dispatch' }}
-                </p>
-                <p class="text-sm mt-1" :class="validation.can_dispatch ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'">
-                  {{ validation.message || 'All requirements must be met before dispatch' }}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Manifest Details -->
-          <div v-if="validation.manifest_check && !validation.manifest_complete" class="mt-3">
-            <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Manifest Issues:</p>
-            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-              <div class="text-sm text-red-700 dark:text-red-300 space-y-2">
-                <div v-if="!validation.manifest_check.has_manifest">
-                  <p>❌ No finalized manifest found for this driver-truck set.</p>
-                </div>
-                <div v-else-if="!validation.manifest_check.manifest_valid">
-                  <p>❌ Manifest is missing {{ validation.manifest_check.missing_package_count }} packages from current assignments.</p>
-                  <p class="text-xs mt-1">Manifest ID: {{ validation.manifest_check.manifest_id }}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Missing Waybills Details -->
-          <div v-if="validation.missing_waybills?.length > 0" class="mt-3">
-            <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Missing Waybills:</p>
-            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-              <ul class="text-sm text-red-700 dark:text-red-300 list-disc list-inside space-y-1">
-                <li v-for="orderId in validation.missing_waybills" :key="orderId">
-                  Delivery Order DO-{{ orderId.toString().padStart(6, '0') }}
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <!-- Missing Stickers Details -->
-          <div v-if="validation.unstickerized_packages?.length > 0" class="mt-3">
-            <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Packages Missing Stickers:</p>
-            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-              <ul class="text-sm text-red-700 dark:text-red-300 list-disc list-inside space-y-1">
-                <li v-for="packageInfo in validation.unstickerized_packages" :key="packageInfo.package_id">
-                  Package {{ packageInfo.item_code }} (DO-{{ packageInfo.delivery_order_id }})
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <!-- Validation Errors -->
-          <div v-if="validation.errors?.length > 0" class="mt-3">
-            <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Validation Errors:</p>
-            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-              <ul class="text-sm text-red-700 dark:text-red-300 list-disc list-inside space-y-1">
-                <li v-for="error in validation.errors" :key="error">
-                  {{ error }}
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <!-- Warnings -->
-          <div v-if="validation.warnings?.length > 0" class="mt-3">
-            <p class="text-sm font-medium text-yellow-700 dark:text-yellow-300 mb-2">Warnings:</p>
-            <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
-              <ul class="text-sm text-yellow-700 dark:text-yellow-300 list-disc list-inside space-y-1">
-                <li v-for="warning in validation.warnings" :key="warning">
-                  {{ warning }}
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <!-- Capacity Information -->
-          <div v-if="validation.total_volume > 0 || validation.total_weight > 0" class="mt-3">
-            <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Load Information:</p>
-            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-              <div class="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p class="text-blue-700 dark:text-blue-300">Total Volume</p>
-                  <p class="font-medium">{{ validation.total_volume.toFixed(2) }} m³</p>
-                </div>
-                <div>
-                  <p class="text-blue-700 dark:text-blue-300">Total Weight</p>
-                  <p class="font-medium">{{ validation.total_weight.toFixed(2) }} kg</p>
-                </div>
-              </div>
-              <div v-if="validation.capacity_percentage > 0" class="mt-2">
-                <p class="text-xs text-blue-600 dark:text-blue-400">
-                  Capacity Utilization: {{ validation.capacity_percentage.toFixed(1) }}%
-                </p>
-              </div>
-            </div>
-          </div>
+        <!-- Error Summary -->
+        <div v-if="!validation.can_dispatch && !validationLoading" class="mt-3 p-2 bg-red-50 border border-red-200 rounded text-sm">
+          <p class="text-red-800 font-medium mb-1">Cannot Dispatch:</p>
+          <ul class="text-red-700 text-xs list-disc list-inside space-y-1">
+            <li v-for="error in validation.errors" :key="error">
+              {{ error }}
+            </li>
+            <li v-if="validation.missing_waybills?.length > 0">
+              Missing waybills: {{ validation.missing_waybills.length }} orders
+            </li>
+            <li v-if="validation.unstickerized_packages?.length > 0">
+              Missing stickers: {{ validation.unstickerized_packages.length }} packages
+            </li>
+            <li v-if="!validation.manifest_complete">
+              Manifest not finalized
+            </li>
+          </ul>
         </div>
       </div>
 
-      <!-- Action Buttons -->
-      <div class="flex justify-end space-x-3">
-        <SecondaryButton @click="close" :disabled="dispatching">
+      <!-- Compact Action Buttons -->
+      <div class="flex justify-end space-x-2 pt-3 border-t">
+        <SecondaryButton @click="close" :disabled="dispatching" size="sm">
           Cancel
         </SecondaryButton>
         <PrimaryButton 
           @click="dispatch" 
           :disabled="!validation.can_dispatch || dispatching"
-          class="min-w-32"
+          size="sm"
+          class="min-w-24"
         >
           <span v-if="dispatching" class="flex items-center">
-            <LoadingSpinner size="sm" class="mr-2" />
+            <div class="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
             Dispatching...
           </span>
           <span v-else>
-            Confirm Dispatch
+            Dispatch
           </span>
         </PrimaryButton>
       </div>
@@ -445,7 +135,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
 import { router } from '@inertiajs/vue3'
 import Modal from '@/Components/Modal.vue'
 import PrimaryButton from '@/Components/PrimaryButton.vue'
@@ -464,6 +154,46 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'dispatched'])
+
+const compactValidationChecks = computed(() => [
+  {
+    key: 'assigned_orders',
+    label: 'Assigned Deliveries',
+    passed: validation.value.has_assigned_orders,
+    status: validation.value.has_assigned_orders ? `${validation.value.assigned_orders_count} orders` : 'No orders'
+  },
+  {
+    key: 'truck',
+    label: 'Truck Available',
+    passed: validation.value.truck_available,
+    status: validation.value.truck_available ? 'Available' : 'Unavailable'
+  },
+  {
+    key: 'driver',
+    label: 'Driver Available',
+    passed: validation.value.driver_available,
+    status: validation.value.driver_available ? 'Available' : 'Unavailable'
+  },
+  {
+    key: 'waybills',
+    label: 'Waybills',
+    passed: validation.value.waybills_complete,
+    status: validation.value.waybills_complete ? 'Complete' : 'Missing'
+  },
+  {
+    key: 'stickers',
+    label: 'Package Stickers',
+    passed: validation.value.stickers_complete,
+    status: validation.value.stickers_complete ? 'Complete' : 'Missing'
+  },
+  {
+    key: 'manifest',
+    label: 'Manifest',
+    passed: validation.value.manifest_complete,
+    status: validation.value.manifest_complete ? 'Finalized' : 'Not ready'
+  }
+])
+
 
 // Reactive state
 const validation = ref({

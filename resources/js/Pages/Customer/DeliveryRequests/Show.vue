@@ -16,29 +16,128 @@
           </Link>
         </div>
 
-        <!-- Status Alerts -->
-        <div v-if="delivery.status === 'rejected'" class="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-          <div class="flex items-center">
-            <svg class="h-5 w-5 text-red-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <!-- Status & Next Steps Card -->
+        <div class="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <h3 class="font-semibold text-blue-800 flex items-center mb-4 text-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span class="text-red-800 font-medium">Delivery Request Rejected</span>
-          </div>
-          <p class="text-red-700 mt-1" v-if="delivery.rejection_reason">
-            <strong>Reason:</strong> {{ delivery.rejection_reason }}
-          </p>
-        </div>
+            Status & Next Steps
+          </h3>
+          
+          <div class="space-y-4 text-sm text-blue-700">
+            <!-- Rejected Status -->
+            <div v-if="delivery.status === 'rejected'" class="flex items-start">
+              <div class="w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0">!</div>
+              <div>
+                <strong class="text-red-700">Delivery Request Rejected</strong>
+                <p class="mt-1" v-if="delivery.rejection_reason">
+                  <strong>Reason:</strong> {{ delivery.rejection_reason }}
+                </p>
+                <p class="mt-1">Please contact support if you need assistance.</p>
+              </div>
+            </div>
 
-        <div v-else-if="delivery.status === 'pending'" class="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div class="flex items-center">
-            <svg class="h-5 w-5 text-yellow-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span class="text-yellow-800 font-medium">Pending Approval</span>
+            <!-- Pending Approval -->
+            <div v-else-if="delivery.status === 'pending'" class="flex items-start">
+              <div class="w-6 h-6 bg-yellow-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0">1</div>
+              <div>
+                <strong>Pending Approval</strong>
+                <p class="mt-1">Your delivery request is awaiting approval from our team. This usually takes 1-2 business days.</p>
+              </div>
+            </div>
+
+            <!-- Approved - Prepaid Payment Required -->
+            <div v-else-if="delivery.status === 'approved' && 
+                       delivery.payment_type === 'prepaid' && 
+                       delivery.payment_status !== 'paid' && 
+                       !delivery.delivery_order" class="flex items-start">
+              <div class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0">1</div>
+              <div>
+                <strong>Payment Required</strong>
+                <p class="mt-1">Complete your payment to proceed with package processing.</p>
+              </div>
+            </div>
+
+            <!-- Payment Completed - Prepaid Processing -->
+            <div v-else-if="delivery.payment_status === 'paid' && 
+                       delivery.payment_type === 'prepaid' && 
+                       !delivery.delivery_order && 
+                       delivery.status !== 'completed'" class="flex items-start">
+              <div class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0">1</div>
+              <div>
+                <strong>Package Processing</strong>
+                <p class="mt-1">Your packages will be processed and prepared for transit.</p>
+              </div>
+            </div>
+
+            <!-- Delivery Order in Progress -->
+            <div v-else-if="delivery.delivery_order && 
+                       ['assigned', 'dispatched', 'in_transit'].includes(delivery.delivery_order.status)" class="flex items-start">
+              <div class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0">1</div>
+              <div>
+                <strong>Delivery in Progress</strong>
+                <p class="mt-1">Your packages are on the way to the destination.</p>
+              </div>
+            </div>
+
+            <!-- Delivery Needs Review -->
+            <div v-else-if="delivery.delivery_order && 
+                       delivery.delivery_order.status === 'needs_review'" class="flex items-start">
+              <div class="w-6 h-6 bg-orange-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0">!</div>
+              <div>
+                <strong>Delivery Review Needed</strong>
+                <p class="mt-1">Some packages require review. Our team will contact you shortly.</p>
+              </div>
+            </div>
+
+            <!-- Postpaid Payment Due -->
+            <div v-else-if="delivery.payment_type === 'postpaid' && 
+                       delivery.status === 'completed' && 
+                       delivery.payment_status !== 'paid'" class="flex items-start">
+              <div class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0">1</div>
+              <div>
+                <strong>Payment Due</strong>
+                <p class="mt-1">
+                  <span v-if="delivery.payment_due_date">Please settle your payment by {{ formatDate(delivery.payment_due_date) }}</span>
+                  <span v-else>Your payment is now due.</span>
+                </p>
+              </div>
+            </div>
+
+            <!-- Prepaid Payment Due After Completion -->
+            <div v-else-if="delivery.payment_type === 'prepaid' && 
+                       delivery.status === 'completed' && 
+                       delivery.payment_status !== 'paid'" class="flex items-start">
+              <div class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0">1</div>
+              <div>
+                <strong>Final Payment Due</strong>
+                <p class="mt-1">
+                  <span v-if="delivery.payment_due_date">Please settle your final payment by {{ formatDate(delivery.payment_due_date) }}</span>
+                  <span v-else>Your final payment is now due.</span>
+                </p>
+              </div>
+            </div>
+
+            <!-- Completed -->
+            <div v-else-if="delivery.status === 'completed' && 
+                       delivery.payment_status === 'paid'" class="flex items-start">
+              <div class="w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0">✓</div>
+              <div>
+                <strong>Delivery Completed</strong>
+                <p class="mt-1">Your delivery has been successfully completed. Thank you for choosing our service!</p>
+              </div>
+            </div>
+
+            <!-- Default/Unknown Status -->
+            <div v-else class="flex items-start">
+              <div class="w-6 h-6 bg-gray-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0">?</div>
+              <div>
+                <strong>Processing</strong>
+                <p class="mt-1">Your delivery request is being processed. We'll update you soon.</p>
+              </div>
+            </div>
           </div>
-          <p class="text-yellow-700 mt-1">
-            Your delivery request is awaiting approval from our team. This usually takes 1-2 business days.
-          </p>
         </div>
 
         <!-- Main Content Grid -->
@@ -136,7 +235,7 @@
                     </div>
                   </div>
 
-                  <!-- Step 4: Delivery Order Status -->
+                  <!-- Step 4: Delivery Activity -->
                   <div v-if="showDeliveryOrderStep" class="relative flex items-start">
                     <div class="flex-shrink-0">
                       <div :class="[
@@ -148,7 +247,7 @@
                     </div>
                     <div class="ml-6 flex-1">
                       <div class="flex items-center justify-between">
-                        <h3 class="text-lg font-medium text-gray-900">Delivery Status</h3>
+                        <h3 class="text-lg font-medium text-gray-900">Delivery Activity</h3>
                         <span :class="deliveryOrderStatusBadgeClass" class="text-xs font-medium px-2 py-1 rounded-full">
                           {{ deliveryOrderStatusLabel }}
                         </span>
@@ -261,68 +360,6 @@
                 </div>
               </div>
             </div>
-
-            <!-- Contextual "What Happens Next" Section -->
-            <div v-if="showNextSteps" class="bg-blue-50 border border-blue-200 rounded-lg p-6">
-              <h3 class="font-semibold text-blue-800 flex items-center mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                What Happens Next
-              </h3>
-              
-              <div class="space-y-4 text-sm text-blue-700">
-                <!-- Pending Approval -->
-                <div v-if="delivery.status === 'pending'" class="flex items-start">
-                  <div class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0">1</div>
-                  <div>
-                    <strong>Request Review:</strong> Our team will review your delivery request within 24 business hours.
-                  </div>
-                </div>
-
-                <!-- Approved - Prepaid Payment -->
-                <div v-if="delivery.status === 'approved' && delivery.payment_type === 'prepaid' && delivery.payment_status !== 'paid'" class="flex items-start">
-                  <div class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0">1</div>
-                  <div>
-                    <strong>Payment Required:</strong> Complete your payment to proceed with package processing.
-                  </div>
-                </div>
-
-                <!-- Payment Completed - Prepaid -->
-                <div v-if="delivery.payment_status === 'paid' && delivery.payment_type === 'prepaid' && !['completed'].includes(delivery.status)" class="flex items-start">
-                  <div class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0">1</div>
-                  <div>
-                    <strong>Package Processing:</strong> Your packages will be processed and prepared for transit.
-                  </div>
-                </div>
-
-                <!-- Delivery Order in Progress -->
-                <div v-if="delivery.delivery_order && ['assigned', 'dispatched', 'in_transit'].includes(delivery.delivery_order.status)" class="flex items-start">
-                  <div class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0">1</div>
-                  <div>
-                    <strong>Delivery in Progress:</strong> Your packages are on the way to the destination.
-                  </div>
-                </div>
-
-                <!-- Postpaid Payment Due -->
-                <div v-if="delivery.payment_type === 'postpaid' && delivery.status === 'completed' && delivery.payment_status !== 'paid'" class="flex items-start">
-                  <div class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0">1</div>
-                  <div>
-                    <strong>Payment Due:</strong> 
-                    <span v-if="delivery.payment_due_date">Please settle your payment by {{ formatDate(delivery.payment_due_date) }}</span>
-                    <span v-else>Your payment is now due.</span>
-                  </div>
-                </div>
-
-                <!-- Completed -->
-                <div v-if="delivery.status === 'completed'" class="flex items-start">
-                  <div class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0">1</div>
-                  <div>
-                    <strong>Delivery Completed:</strong> Your delivery has been successfully completed. Thank you for choosing our service!
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
 
           <!-- Right Column - Sidebar (1/4 width) -->
@@ -420,34 +457,34 @@
               </div>
             </div>
 
-          <!-- Route Information -->
-<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-  <h3 class="text-lg font-semibold text-gray-900 mb-4 text-center">Delivery Route</h3>
-  
-  <div class="space-y-4">
-    <div class="flex items-center space-x-3 justify-center">
-      <div class="w-3 h-3 bg-green-500 rounded-full flex-shrink-0"></div>
-      <div class="text-center">
-        <p class="text-sm text-gray-600">Pickup From</p>
-        <p class="font-semibold text-green-700">{{ delivery.pick_up_region?.name || 'Not specified' }}</p>
-      </div>
-    </div>
-    
-    <div class="flex justify-center">
-      <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-      </svg>
-    </div>
-    
-    <div class="flex items-center space-x-3 justify-center">
-      <div class="w-3 h-3 bg-blue-500 rounded-full flex-shrink-0"></div>
-      <div class="text-center">
-        <p class="text-sm text-gray-600">Deliver To</p>
-        <p class="font-semibold text-blue-700">{{ delivery.drop_off_region?.name || 'Not specified' }}</p>
-      </div>
-    </div>
-  </div>
-</div>
+            <!-- Route Information -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h3 class="text-lg font-semibold text-gray-900 mb-4 text-center">Delivery Route</h3>
+              
+              <div class="space-y-4">
+                <div class="flex items-center space-x-3 justify-center">
+                  <div class="w-3 h-3 bg-green-500 rounded-full flex-shrink-0"></div>
+                  <div class="text-center">
+                    <p class="text-sm text-gray-600">Pickup From</p>
+                    <p class="font-semibold text-green-700">{{ delivery.pick_up_region?.name || 'Not specified' }}</p>
+                  </div>
+                </div>
+                
+                <div class="flex justify-center">
+                  <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                </div>
+                
+                <div class="flex items-center space-x-3 justify-center">
+                  <div class="w-3 h-3 bg-blue-500 rounded-full flex-shrink-0"></div>
+                  <div class="text-center">
+                    <p class="text-sm text-gray-600">Deliver To</p>
+                    <p class="font-semibold text-blue-700">{{ delivery.drop_off_region?.name || 'Not specified' }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -470,6 +507,17 @@ const props = defineProps({
 // Enhanced computed properties for multi-model timeline
 const currentStep = computed(() => {
   const status = props.delivery.status
+  const deliveryOrder = props.delivery.delivery_order
+
+  // Step 5: Main delivery is completed OR delivery order is completed (highest priority)
+  if (status === 'completed' || (deliveryOrder && deliveryOrder.status === 'completed')) {
+    return 5
+  }
+  
+  // Step 4: Delivery Order exists and is beyond assigned
+  if (deliveryOrder && ['dispatched', 'in_transit', 'delivered', 'needs_review'].includes(deliveryOrder.status)) {
+    return 4
+  }
   
   // Step 1: Request Submitted (always)
   if (status === 'pending') return 1
@@ -481,21 +529,6 @@ const currentStep = computed(() => {
       return 2 // Still at approval, payment pending
     }
     return 3 // Approved and payment handled
-  }
-  
-  // Step 3: Delivery Order exists and is beyond assigned
-  const deliveryOrder = props.delivery.delivery_order
-  if (deliveryOrder && deliveryOrder.status !== 'pending' && deliveryOrder.status !== 'assigned') {
-    // If delivery order is completed, go to step 5
-    if (deliveryOrder.status === 'completed') {
-      return 5
-    }
-    return 4
-  }
-  
-  // Step 5: Main delivery is completed (highest priority)
-  if (status === 'completed') {
-    return 5
   }
   
   return 1 // Default fallback
@@ -510,7 +543,7 @@ const deliveryOrderStatusLabel = computed(() => {
   const labels = {
     'not_created': 'Not Yet Created',
     'pending': 'Pending',
-    'pending_payment': 'Pending Payment', // FIXED: Add this mapping
+    'pending_payment': 'Pending Payment',
     'ready': 'Ready for Assignment',
     'assigned': 'Assigned to Driver',
     'dispatched': 'Dispatched',
@@ -524,7 +557,7 @@ const deliveryOrderStatusLabel = computed(() => {
   const status = deliveryOrderStatus.value
   return labels[status] || (status ? status.split('_').map(word => 
     word.charAt(0).toUpperCase() + word.slice(1)
-  ).join(' ') : 'Unknown')
+  ).join(' ') : 'Pending')
 })
 
 // FIXED: Delivery Order status descriptions
@@ -532,7 +565,7 @@ const deliveryOrderStatusDescription = computed(() => {
   const descriptions = {
     'not_created': 'Delivery order is being prepared',
     'pending': 'Waiting for processing',
-    'pending_payment': 'Awaiting payment confirmation', // FIXED: Add this description
+    'pending_payment': 'Awaiting payment confirmation',
     'ready': 'Ready to be assigned to a driver',
     'assigned': 'Assigned to driver, waiting for dispatch',
     'dispatched': 'Driver has departed with your packages',
@@ -553,9 +586,10 @@ const deliveryOrderStatusBadgeClass = computed(() => {
   if (status === 'dispatched' || status === 'in_transit') return 'bg-yellow-100 text-yellow-800'
   if (status === 'assigned' || status === 'ready') return 'bg-blue-100 text-blue-800'
   if (status === 'cancelled') return 'bg-red-100 text-red-800'
-  if (status === 'pending' || status === 'pending_payment') return 'bg-yellow-100 text-yellow-800' // FIXED
+  if (status === 'pending' || status === 'pending_payment') return 'bg-yellow-100 text-yellow-800'
   return 'bg-gray-100 text-gray-800'
 })
+
 // Conditional step visibility
 const showPaymentProcessingStep = computed(() => {
   return props.delivery.payment_type === 'prepaid' && 
@@ -586,7 +620,7 @@ const packageStatusSummary = computed(() => {
   if (props.delivery.status === 'completed') {
     return {
       total,
-      delivered: total, // All packages are considered delivered
+      delivered: total,
       loaded: total,
       inTransit: total,
       damaged: 0,
@@ -615,8 +649,6 @@ const packageStatusSummary = computed(() => {
   }
 })
 
-
-
 const paymentStatusBadgeClass = computed(() => {
   const status = props.delivery.payment_status?.toLowerCase()
   const baseClasses = 'px-2 py-1 rounded-full text-xs font-medium'
@@ -626,7 +658,7 @@ const paymentStatusBadgeClass = computed(() => {
     'verified': 'bg-green-100 text-green-800',
     'completed': 'bg-green-100 text-green-800',
     'unpaid': 'bg-yellow-100 text-yellow-800',
-    'pending': 'bg-yellow-100 text-yellow-800', // FIXED: This is the actual value
+    'pending': 'bg-yellow-100 text-yellow-800',
     'pending_payment': 'bg-yellow-100 text-yellow-800',
     'pending_verification': 'bg-blue-100 text-blue-800',
     'processing': 'bg-blue-100 text-blue-800',
@@ -648,7 +680,7 @@ const paymentStatusLabel = computed(() => {
   const labels = {
     'paid': 'Paid',
     'unpaid': 'Unpaid',
-    'pending': 'Pending Payment', // FIXED: This is the actual value from backend
+    'pending': 'Pending Payment',
     'pending_payment': 'Pending Payment',
     'pending_verification': 'Pending Verification',
     'rejected': 'Rejected',
@@ -665,7 +697,7 @@ const paymentStatusLabel = computed(() => {
   }
   
   const status = props.delivery.payment_status
-  if (!status) return 'Unknown'
+  if (!status) return 'Pending'
   
   // Try exact match first
   if (labels[status]) {

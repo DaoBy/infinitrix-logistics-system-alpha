@@ -50,7 +50,7 @@ public function index(Request $request)
         }
     }
 
-    // Reset query
+    // Reset query and add manifest status
     $query = DriverTruckAssignment::with([
         'driver' => function($query) {
             $query->with([
@@ -186,6 +186,12 @@ if ($request->filled('activeTab')) {
 
     $assignments = $query->paginate(10);
 
+        // ADD MANIFEST STATUS TO ASSIGNMENTS
+    $assignments->getCollection()->transform(function ($assignment) {
+        $assignment->has_finalized_manifest = $this->hasFinalizedManifest($assignment);
+        return $assignment;
+    });
+
     // DEBUG: Log the final results
     \Log::info('Final Pagination Results:', [
         'total' => $assignments->total(),
@@ -212,6 +218,40 @@ if ($request->filled('activeTab')) {
             'activeTab'
         ])
     ]);
+}
+
+public function checkManifestStatus(DriverTruckAssignment $assignment)
+{
+    try {
+        $hasFinalizedManifest = $this->hasFinalizedManifest($assignment);
+        
+        \Log::info('Manifest status check for assignment', [
+            'assignment_id' => $assignment->id,
+            'driver_id' => $assignment->driver_id,
+            'truck_id' => $assignment->truck_id,
+            'has_finalized_manifest' => $hasFinalizedManifest
+        ]);
+        
+        return response()->json([
+            'has_finalized_manifest' => $hasFinalizedManifest,
+            'assignment_id' => $assignment->id,
+            'driver_id' => $assignment->driver_id,
+            'truck_id' => $assignment->truck_id,
+            'message' => $hasFinalizedManifest 
+                ? 'Assignment has a finalized manifest and cannot be cancelled.' 
+                : 'No finalized manifest found for this assignment.'
+        ]);
+        
+    } catch (\Exception $e) {
+        \Log::error('Failed to check manifest status: ' . $e->getMessage(), [
+            'assignment_id' => $assignment->id
+        ]);
+        
+        return response()->json([
+            'error' => 'Failed to check manifest status: ' . $e->getMessage(),
+            'has_finalized_manifest' => false
+        ], 500);
+    }
 }
 
 
@@ -490,13 +530,44 @@ if ($request->filled('activeTab')) {
         }
     }
 
-    public function cancel(Request $request, DriverTruckAssignment $assignment)
+    protected function hasFinalizedManifest(DriverTruckAssignment $assignment): bool
+{
+    // Check for finalized manifest using driver_truck_assignment_id
+    $hasFinalizedManifest = \App\Models\Manifest::where('driver_truck_assignment_id', $assignment->id)
+        ->where('status', 'finalized')
+        ->exists();
+
+    // If no manifest found by assignment ID, check by driver_id and truck_id for backward compatibility
+    if (!$hasFinalizedManifest) {
+        $hasFinalizedManifest = \App\Models\Manifest::where('driver_id', $assignment->driver_id)
+            ->where('truck_id', $assignment->truck_id)
+            ->where('status', 'finalized')
+            ->exists();
+    }
+
+    return $hasFinalizedManifest;
+}
+
+   public function cancel(Request $request, DriverTruckAssignment $assignment)
 {
     $request->validate([
         'reason' => 'required|in:' . implode(',', array_keys(DriverTruckAssignment::getDeleteReasons())),
         'remarks' => 'nullable|string|max:500',
         'force_cancel' => 'sometimes|boolean'
     ]);
+
+    // Check for finalized manifest - PREVENT CANCELLATION
+    if ($this->hasFinalizedManifest($assignment)) {
+        \Log::warning('Attempted to cancel assignment with finalized manifest', [
+            'assignment_id' => $assignment->id,
+            'driver_id' => $assignment->driver_id,
+            'truck_id' => $assignment->truck_id
+        ]);
+        
+        return redirect()->back()->with('error', 
+            'Cannot cancel assignment. A finalized manifest exists for this driver-truck set. Please dispatch or cancel the manifest first.'
+        );
+    }
 
     // Additional validation for excluded statuses
     $excludedStatuses = [

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-
 use App\Models\DeliveryOrder;
 use App\Models\DeliveryRequest;
 use App\Models\Truck;
@@ -33,82 +32,123 @@ class CargoAssignmentController extends Controller
     const WORKFLOW_BACKHAUL_OPTIMIZER = 'backhaul_optimizer';
 
     public function index()
-    {
-        $perPage = request('per_page', 5);
-        $workflowMode = request('workflow_mode', self::WORKFLOW_QUICK_ASSIGN);
+{
+    $perPage = request('per_page', 5);
+    $workflowMode = request('workflow_mode', self::WORKFLOW_QUICK_ASSIGN);
 
-        $query = DeliveryOrder::with([
-            'deliveryRequest.sender',
-            'deliveryRequest.receiver', 
-            'deliveryRequest.packages',
-            'deliveryRequest.pickUpRegion',
-            'deliveryRequest.dropOffRegion',
-            'driver.employeeProfile',
-            'truck',
-            'currentRegion'
-        ]);
-
-        // Apply status filter if present
-        if ($status = request('status')) {
-            $query->where('status', $status);
+    $query = DeliveryOrder::with([
+        'deliveryRequest.sender',
+        'deliveryRequest.receiver', 
+        'deliveryRequest.packages',
+        'deliveryRequest.pickUpRegion',
+        'deliveryRequest.dropOffRegion',
+        'driver.employeeProfile',
+        'truck',
+        'currentRegion',
+        'driverTruckAssignment' => function($query) {
+            $query->with([
+                'driver' => function($q) {
+                    $q->with('employeeProfile');
+                },
+                'truck', 
+                'region', 
+                'currentRegion'
+            ]);
         }
+    ]);
 
-        // Apply search filter if present
-        if ($search = request('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('do_number', 'like', "%{$search}%")
-                  ->orWhereHas('deliveryRequest', function ($q2) use ($search) {
-                      $q2->where('dr_number', 'like', "%{$search}%");
-                  });
-            });
-        }
-
-        // Apply region filter if present
-        if ($regionId = request('region_id')) {
-            $query->whereHas('deliveryRequest', function($q) use ($regionId) {
-                $q->where('pick_up_region_id', $regionId);
-            });
-        }
-
-        // Apply backhaul filter if present
-        if ($backhaulFilter = request('backhaul_filter')) {
-            if ($backhaulFilter === 'backhaul') {
-                $query->whereHas('driverTruckAssignment', function($q) {
-                    $q->where('available_for_backhaul', true);
-                });
-            } elseif ($backhaulFilter === 'regular') {
-                $query->whereHas('driverTruckAssignment', function($q) {
-                    $q->where('available_for_backhaul', false);
-                });
-            }
-        }
-
-        $deliveries = $query->latest()->paginate($perPage)->withQueryString();
-
-        // Get driver-truck sets with capacity calculations
-        $driverTruckSets = $this->getAvailableDriverTruckSets(request('region_id')) ?? [];
-
-        $regions = Region::where('is_active', true)->get();
-
-        // Calculate backhaul opportunities for the workflow selector
-        $backhaulOpportunities = collect($driverTruckSets)->filter(function($set) {
-            return $set['available_for_backhaul'] || 
-                   $set['current_status'] === DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE;
-        })->count();
-
-        // Get batch suggestions for batch planning mode
-        $batchSuggestions = $this->getBatchSuggestions($workflowMode);
-
-        return Inertia::render('Admin/CargoAssignment/Index', [
-            'deliveries' => $deliveries,
-            'driverTruckSets' => $driverTruckSets,
-            'regions' => $regions,
-            'filters' => request()->all(['search', 'status', 'region_id', 'backhaul_filter']),
-            'backhaul_opportunities_count' => $backhaulOpportunities,
-            'workflow_mode' => $workflowMode,
-            'batch_suggestions' => $batchSuggestions,
-        ]);
+    // Apply status filter if present
+    if ($status = request('status')) {
+        $query->where('status', $status);
     }
+
+    // Apply search filter if present
+    if ($search = request('search')) {
+        $query->where(function ($q) use ($search) {
+            $q->where('do_number', 'like', "%{$search}%")
+              ->orWhereHas('deliveryRequest', function ($q2) use ($search) {
+                  $q2->where('dr_number', 'like', "%{$search}%");
+              });
+        });
+    }
+
+    // Apply region filter if present
+    if ($regionId = request('region_id')) {
+        $query->whereHas('deliveryRequest', function($q) use ($regionId) {
+            $q->where('pick_up_region_id', $regionId);
+        });
+    }
+
+    // Apply backhaul filter if present
+    if ($backhaulFilter = request('backhaul_filter')) {
+        if ($backhaulFilter === 'backhaul') {
+            $query->whereHas('driverTruckAssignment', function($q) {
+                $q->where('available_for_backhaul', true);
+            });
+        } elseif ($backhaulFilter === 'regular') {
+            $query->whereHas('driverTruckAssignment', function($q) {
+                $q->where('available_for_backhaul', false);
+            });
+        }
+    }
+
+    $deliveries = $query->latest()->paginate($perPage)->withQueryString();
+
+    // Get driver-truck sets with capacity calculations
+    $driverTruckSets = $this->getAvailableDriverTruckSets(request('region_id')) ?? [];
+
+    $regions = Region::where('is_active', true)->get();
+
+    // Get batch suggestions for batch planning mode
+    $batchSuggestions = $this->getBatchSuggestions($workflowMode);
+
+    // ✅ ADDED: Process deliveries to include manifest status
+    $processedDeliveries = $deliveries->getCollection()->map(function($delivery) {
+        // Check if this delivery's driver-truck assignment has a finalized manifest
+        if ($delivery->driver_truck_assignment) {
+            $hasFinalizedManifest = Manifest::where('driver_id', $delivery->driver_truck_assignment->driver_id)
+                ->where('truck_id', $delivery->driver_truck_assignment->truck_id)
+                ->where('status', 'finalized')
+                ->exists();
+            
+            // Add the manifest status to the delivery object
+            $delivery->driver_truck_assignment->has_finalized_manifest = $hasFinalizedManifest;
+            $delivery->driver_truck_assignment->manifest_status = $hasFinalizedManifest ? 'finalized' : 'none';
+        }
+        
+        return $delivery;
+    });
+
+    $deliveries->setCollection($processedDeliveries);
+
+    return Inertia::render('Admin/CargoAssignment/Index', [
+        'deliveries' => $deliveries,
+        'driverTruckSets' => $driverTruckSets,
+        'regions' => $regions,
+        'filters' => request()->all(['search', 'status', 'region_id', 'backhaul_filter']),
+        'workflow_mode' => $workflowMode,
+        'batch_suggestions' => $batchSuggestions,
+    ]);
+}
+
+
+    protected function hasFinalizedManifest(DriverTruckAssignment $assignment): bool
+{
+    // Check for finalized manifest using driver_truck_assignment_id
+    $hasFinalizedManifest = Manifest::where('driver_truck_assignment_id', $assignment->id)
+        ->where('status', 'finalized')
+        ->exists();
+
+    // If no manifest found by assignment ID, check by driver_id and truck_id for backward compatibility
+    if (!$hasFinalizedManifest) {
+        $hasFinalizedManifest = Manifest::where('driver_id', $assignment->driver_id)
+            ->where('truck_id', $assignment->truck_id)
+            ->where('status', 'finalized')
+            ->exists();
+    }
+
+    return $hasFinalizedManifest;
+}
 
     /**
      * Get batch suggestions based on workflow mode
@@ -162,6 +202,25 @@ class CargoAssignmentController extends Controller
         
         return array_values($suggestions);
     }
+
+
+// Add this method to your CargoAssignmentController
+public function checkManifestStatus(DeliveryOrder $deliveryOrder)
+{
+    if (!$deliveryOrder->driver_truck_assignment) {
+        return response()->json(['has_finalized_manifest' => false]);
+    }
+
+    $hasFinalizedManifest = Manifest::where('driver_id', $deliveryOrder->driver_truck_assignment->driver_id)
+        ->where('truck_id', $deliveryOrder->driver_truck_assignment->truck_id)
+        ->where('status', 'finalized')
+        ->exists();
+
+    return response()->json([
+        'has_finalized_manifest' => $hasFinalizedManifest,
+        'delivery_order_id' => $deliveryOrder->id
+    ]);
+}
 
     /**
      * Batch Planning suggestions - multiple grouping strategies
@@ -325,129 +384,146 @@ class CargoAssignmentController extends Controller
    /**
      * Get available driver-truck assignments with capacity information
      */
-    protected function getAvailableDriverTruckSets(?int $regionId = null)
-    {
-        $sets = DriverTruckAssignment::with([
-            'driver', 
-            'truck', 
-            'region', 
-            'currentRegion',
-            'driver.employeeProfile'
-        ])
-        ->where('is_active', true)
-        ->where(function($query) use ($regionId) {
-            // Include both regular and backhaul eligible assignments
-            $query->whereIn('current_status', [
-                DriverTruckAssignment::STATUS_ACTIVE,
-                DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE
-            ]);
-        })
-        ->whereHas('truck', function($q) {
-            $q->where('is_active', true)
-              ->whereIn('status', [
-                  Truck::STATUS_AVAILABLE, 
-                  Truck::STATUS_AVAILABLE_FOR_BACKHAUL, 
-                  Truck::STATUS_NEARLY_FULL,
-                  Truck::STATUS_ASSIGNED
-              ]);
-        })
-        ->whereHas('driver', function($q) {
-            $q->where('is_active', true)
-              ->where('role', 'driver');
-        })
-        ->when($regionId, function($query) use ($regionId) {
-            // For regular assignments, match home region
-            // For backhaul assignments, match current region
-            $query->where(function($q) use ($regionId) {
-                $q->where(function($q2) use ($regionId) {
-                    $q2->where('current_status', DriverTruckAssignment::STATUS_ACTIVE)
-                       ->where('region_id', $regionId);
-                })->orWhere(function($q2) use ($regionId) {
-                    $q2->where('current_status', DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE)
-                       ->where('current_region_id', $regionId);
-                });
+   protected function getAvailableDriverTruckSets(?int $regionId = null)
+{
+    $sets = DriverTruckAssignment::with([
+        'driver' => function($query) {
+            $query->with('employeeProfile');
+        },
+        'truck',
+        'region',
+        'currentRegion'
+    ])
+    ->where('is_active', true)
+    ->where(function($query) use ($regionId) {
+        $query->whereIn('current_status', [
+            DriverTruckAssignment::STATUS_ACTIVE,
+            DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE
+        ]);
+    })
+    ->whereHas('truck', function($q) {
+        $q->where('is_active', true)
+          ->whereIn('status', [
+              Truck::STATUS_AVAILABLE, 
+              Truck::STATUS_AVAILABLE_FOR_BACKHAUL, 
+              Truck::STATUS_NEARLY_FULL,
+              Truck::STATUS_ASSIGNED
+          ]);
+    })
+    ->whereHas('driver', function($q) {
+        $q->where('is_active', true)
+          ->where('role', 'driver');
+    })
+    ->when($regionId, function($query) use ($regionId) {
+        $query->where(function($q) use ($regionId) {
+            $q->where(function($q2) use ($regionId) {
+                $q2->where('current_status', DriverTruckAssignment::STATUS_ACTIVE)
+                   ->where('region_id', $regionId);
+            })->orWhere(function($q2) use ($regionId) {
+                $q2->where('current_status', DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE)
+                   ->where('current_region_id', $regionId);
             });
-        })
-        ->get();
+        });
+    })
+    ->get();
 
-        $result = $sets->map(function($assignment) {
-            $truck = $assignment->truck;
-            $driver = $assignment->driver;
+    $result = $sets->map(function($assignment) {
+        $truck = $assignment->truck;
+        $driver = $assignment->driver;
 
-            if (!$truck || !$driver) {
-                return null;
-            }
+        if (!$truck || !$driver) {
+            return null;
+        }
 
-            // Get ALL active orders (assigned, in_transit) for this set
-            $activeOrders = DeliveryOrder::where('truck_id', $truck->id)
-                ->where('driver_id', $driver->id)
-                ->whereIn('status', ['assigned', 'in_transit'])
-                ->with(['deliveryRequest.packages'])
-                ->get();
+        // ✅ FIXED: Check for finalized manifest using driver_id and truck_id
+        $hasFinalizedManifest = Manifest::where('driver_id', $assignment->driver_id)
+            ->where('truck_id', $assignment->truck_id)
+            ->where('status', 'finalized')
+            ->exists();
 
-            $currentVolume = $activeOrders->sum(fn($order) => 
-                $order->deliveryRequest->packages->sum('volume')
-            );
+        // ✅ DEBUG: Log the manifest check
+        \Log::info("Manifest check for DriverTruckAssignment", [
+            'assignment_id' => $assignment->id,
+            'driver_id' => $assignment->driver_id,
+            'truck_id' => $assignment->truck_id,
+            'has_finalized_manifest' => $hasFinalizedManifest
+        ]);
 
-            $currentWeight = $activeOrders->sum(fn($order) => 
-                $order->deliveryRequest->packages->sum('weight')
-            );
+        // Get ALL active orders (assigned, in_transit) for this set
+        $activeOrders = DeliveryOrder::where('truck_id', $truck->id)
+            ->where('driver_id', $driver->id)
+            ->whereIn('status', ['assigned', 'in_transit'])
+            ->with(['deliveryRequest.packages'])
+            ->get();
 
-            // Check if driver can accept new assignments
-            $driver->canAcceptNewAssignment = $this->canDriverAcceptAssignment($driver);
-            $driver->available = $driver->isActive();
-            $driver->current_assignments = $driver->deliveryOrders()
-                ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
-                ->count();
-            $driver->delivery_orders_count = $driver->current_assignments;
-            $driver->last_assigned_at = $driver->last_assigned_at;
+        $currentVolume = $activeOrders->sum(fn($order) => 
+            $order->deliveryRequest->packages->sum('volume')
+        );
 
-            // Calculate capacity percentages for warnings
-            $volumePercentage = $truck->volume_capacity > 0 ? ($currentVolume / $truck->volume_capacity) * 100 : 0;
-            $weightPercentage = $truck->weight_capacity > 0 ? ($currentWeight / $truck->weight_capacity) * 100 : 0;
-            $maxPercentage = max($volumePercentage, $weightPercentage);
+        $currentWeight = $activeOrders->sum(fn($order) => 
+            $order->deliveryRequest->packages->sum('weight')
+        );
 
-            // Determine capacity status
-            $capacityStatus = 'normal';
-            if ($maxPercentage >= 90) {
-                $capacityStatus = 'critical';
-            } elseif ($maxPercentage >= 75) {
-                $capacityStatus = 'warning';
-            }
+        // Check if driver can accept new assignments
+        $driver->canAcceptNewAssignment = $this->canDriverAcceptAssignment($driver);
+        $driver->available = $driver->isActive();
+        $driver->current_assignments = $driver->deliveryOrders()
+            ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
+            ->count();
+        $driver->delivery_orders_count = $driver->current_assignments;
+        $driver->last_assigned_at = $driver->last_assigned_at;
 
-            // Availability check
-            $isAvailable = $driver->isAvailable() && $truck->is_active
-                && ($truck->volume_capacity > $currentVolume || $truck->volume_capacity == 0)
-                && ($truck->weight_capacity > $currentWeight || $truck->weight_capacity == 0);
+        // Calculate capacity percentages for warnings
+        $volumePercentage = $truck->volume_capacity > 0 ? ($currentVolume / $truck->volume_capacity) * 100 : 0;
+        $weightPercentage = $truck->weight_capacity > 0 ? ($currentWeight / $truck->weight_capacity) * 100 : 0;
+        $maxPercentage = max($volumePercentage, $weightPercentage);
 
-            return [
-                'id' => $assignment->id,
-                'driver' => $driver,
-                'truck' => $assignment->truck,
-                'region' => $assignment->region,
-                'current_region' => $assignment->currentRegion,
-                'current_volume' => $currentVolume,
-                'current_weight' => $currentWeight,
-                'available_volume' => max(0, $truck->volume_capacity - $currentVolume),
-                'available_weight' => max(0, $truck->weight_capacity - $currentWeight),
-                'is_available' => $isAvailable,
-                'active_orders' => $activeOrders,
-                'available_for_backhaul' => $assignment->current_status === DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE,
-                'assignment_type' => $assignment->current_status === DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE ? 'backhaul' : 'regular',
-                'current_status' => $assignment->current_status,
-                'region_match' => true,
-                'capacity_status' => $capacityStatus,
-                'capacity_percentage' => $maxPercentage
-            ];
-        })
-        ->filter(function($set) {
-            return $set !== null && $set['is_available'];
-        })
-        ->values()
-        ->toArray();
+        // Determine capacity status
+        $capacityStatus = 'normal';
+        if ($maxPercentage >= 90) {
+            $capacityStatus = 'critical';
+        } elseif ($maxPercentage >= 75) {
+            $capacityStatus = 'warning';
+        }
 
-        return $result;
-    }
+        // Availability check
+        $isAvailable = $driver->isAvailable() && 
+                      $truck->is_active &&
+                      ($truck->volume_capacity > $currentVolume || $truck->volume_capacity == 0) &&
+                      ($truck->weight_capacity > $currentWeight || $truck->weight_capacity == 0);
+
+        return [
+            'id' => $assignment->id,
+            'driver' => $driver,
+            'truck' => $assignment->truck,
+            'region' => $assignment->region,
+            'current_region' => $assignment->currentRegion,
+            'current_volume' => $currentVolume,
+            'current_weight' => $currentWeight,
+            'available_volume' => max(0, $truck->volume_capacity - $currentVolume),
+            'available_weight' => max(0, $truck->weight_capacity - $currentWeight),
+            'is_available' => $isAvailable,
+            'active_orders' => $activeOrders,
+            'available_for_backhaul' => $assignment->current_status === DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE,
+            'assignment_type' => $assignment->current_status === DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE ? 'backhaul' : 'regular',
+            'current_status' => $assignment->current_status,
+            'region_match' => true,
+            'capacity_status' => $capacityStatus,
+            'capacity_percentage' => $maxPercentage,
+            // Manifest status
+            'has_finalized_manifest' => $hasFinalizedManifest,
+            'manifest_status' => $hasFinalizedManifest ? 'finalized' : 'none',
+            'can_accept_new_assignments' => !$hasFinalizedManifest
+        ];
+    })
+    ->filter(function($set) {
+        return $set !== null && $set['is_available'];
+    })
+    ->values()
+    ->toArray();
+
+    return $result;
+}
 
     /**
      * Create a new delivery order with common assignment logic
@@ -789,7 +865,6 @@ public function assign(Request $request, DeliveryRequest $deliveryRequest)
 }
 
 
-
   public function batchAssign(Request $request)
 {
     $request->validate([
@@ -916,258 +991,7 @@ public function assign(Request $request, DeliveryRequest $deliveryRequest)
     return redirect()->back()->with('success', 'Batch assignment completed');
 }
 
-    /**
-     * Get suggested assignments based on region and capacity
-     */
-    public function getSuggestedAssignments(Request $request)
-    {
-        $request->validate([
-            'region_id' => 'required|exists:regions,id',
-            'workflow_mode' => 'sometimes|in:' . implode(',', [self::WORKFLOW_QUICK_ASSIGN, self::WORKFLOW_BATCH_PLANNING, self::WORKFLOW_BACKHAUL_OPTIMIZER])
-        ]);
-
-        // Include both regular and backhaul-compatible orders
-        $deliveries = DeliveryOrder::with([
-            'deliveryRequest.packages',
-            'deliveryRequest.dropOffRegion'
-        ])
-            ->whereHas('deliveryRequest', function($q) use ($request) {
-                $q->where('pick_up_region_id', $request->input('region_id'));
-            })
-            ->where('status', 'ready')
-            ->get()
-            ->groupBy('deliveryRequest.drop_off_region_id');
-
-        $driverTruckSets = $this->getAvailableDriverTruckSets($request->input('region_id'));
-
-        return response()->json([
-            'deliveries_by_destination' => $deliveries,
-            'driver_truck_sets' => $driverTruckSets
-        ]);
-    }
-
-    /**
-     * Validate potential assignment (API endpoint for frontend).
-     */
-    public function validateAssignment(Request $request)
-    {
-        $request->validate([
-            'delivery_order_ids' => 'required|array',
-            'driver_truck_assignment_id' => 'required|exists:driver_truck_assignments,id',
-            'workflow_mode' => 'sometimes|in:' . implode(',', [self::WORKFLOW_QUICK_ASSIGN, self::WORKFLOW_BATCH_PLANNING, self::WORKFLOW_BACKHAUL_OPTIMIZER])
-        ]);
-
-        // Optionally accept estimated_departure for time validation
-        $departureTime = $request->input('estimated_departure', null);
-
-        $result = $this->validateAssignmentLogic(
-            $request->delivery_order_ids,
-            $request->driver_truck_assignment_id,
-            $departureTime,
-            $request->input('workflow_mode', self::WORKFLOW_QUICK_ASSIGN)
-        );
-
-        return response()->json($result);
-    }
-
-    /**
-     * Comprehensive assignment validation for Cargo Assignment module (internal logic).
-     */
-    protected function validateAssignmentLogic(array $deliveryOrderIds, int $assignmentId, ?string $departureTime = null, string $workflowMode = self::WORKFLOW_QUICK_ASSIGN): array
-    {
-        $assignment = \App\Models\DriverTruckAssignment::with(['driver', 'truck', 'region', 'currentRegion'])->findOrFail($assignmentId);
-        $driver = $assignment->driver;
-        $truck = $assignment->truck;
-        $region = $assignment->region;
-
-        $errors = [];
-        $totalVolume = 0;
-        $totalWeight = 0;
-        $pickUpRegionId = null;
-        $orderIdsChecked = [];
-        $now = now();
-
-        // 1. Check cooldown status FIRST
-        if ($this->isInCooldown($assignment)) {
-            $errors[] = "Driver is in cooldown period and cannot be assigned new deliveries.";
-        }
-
-        // 2. Driver Availability
-        if (!$driver) {
-            $errors[] = "Driver not found for this assignment.";
-        } else {
-            // Only consider 'dispatched' and 'in_transit' as "on a trip"
-            $driverInProgress = $driver->deliveryOrders()
-                ->whereIn('status', ['dispatched', 'in_transit'])
-                ->exists();
-            if ($driverInProgress) {
-                $errors[] = "Driver is currently on a trip and cannot be assigned.";
-            }
-            if (!$driver->isActive()) {
-                $errors[] = "Driver is not active.";
-            }
-        }
-
-        // 3. Truck Availability
-        if (!$truck) {
-            $errors[] = "Truck not found for this assignment.";
-        } else {
-            if (!$truck->is_active || $truck->status === \App\Models\Truck::STATUS_MAINTENANCE) {
-                $errors[] = "Truck is unavailable or currently in maintenance.";
-            }
-            if (in_array($truck->status, [\App\Models\Truck::STATUS_IN_TRANSIT, \App\Models\Truck::STATUS_ASSIGNED])) {
-                $errors[] = "Truck is unavailable or currently in use.";
-            }
-            
-            // Region validation based on backhaul status
-            if ($assignment->current_status === DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE) {
-                if ($region && $truck->region_id !== $region->id) {
-                    $errors[] = "Truck home region does not match assignment region for backhaul.";
-                }
-            } else {
-                if ($region && $truck->region_id !== $region->id) {
-                    $errors[] = "Truck is not assigned to the selected region.";
-                }
-            }
-        }
-
-        // 4. Gather and check all delivery orders
-        $deliveryOrders = \App\Models\DeliveryOrder::with(['deliveryRequest.packages'])
-            ->whereIn('id', $deliveryOrderIds)
-            ->get();
-
-        if ($deliveryOrders->isEmpty()) {
-            $errors[] = "No valid delivery orders found for assignment.";
-        }
-
-        $seenPickupRegion = null;
-        $mixedAssignmentTypes = false;
-        $hasRegular = false;
-        $hasBackhaul = false;
-
-        foreach ($deliveryOrders as $order) {
-            $orderIdsChecked[] = $order->id;
-            $dr = $order->deliveryRequest;
-
-            // Check if order is assignable
-            if (!in_array($order->status, ['ready', 'assigned', 'pending_payment'])) {
-                $errors[] = "Delivery Order {$order->do_number} is not in a ready or assignable state (current status: {$order->status}).";
-                continue;
-            }
-
-            // Check for pending_payment and postpaid
-            if ($order->status === 'pending_payment' && $dr->payment_method !== 'postpaid') {
-                $errors[] = "Delivery Order {$order->do_number} is pending payment but payment method is not postpaid.";
-                continue;
-            }
-
-            // Check sticker requirement
-            $unstickerizedPackages = $dr->packages()->whereNull('sticker_printed_at')->get();
-            if (!$unstickerizedPackages->isEmpty()) {
-                $packageCodes = $unstickerizedPackages->pluck('item_code')->implode(', ');
-                $errors[] = "Delivery Order {$order->do_number} has packages without stickers: {$packageCodes}";
-            }
-
-            // Check pickup region consistency
-            if ($seenPickupRegion === null) {
-                $seenPickupRegion = $dr->pick_up_region_id;
-            } elseif ($seenPickupRegion !== $dr->pick_up_region_id) {
-                $errors[] = "Selected delivery orders have different pickup regions.";
-            }
-
-            // Check for mixed assignment types
-            if ($assignment->current_status === DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE) {
-                // For backhaul assignments, pickup must match current region and dropoff must match home region
-                if ($dr->pick_up_region_id != $assignment->current_region_id) {
-                    $errors[] = "For backhaul assignments, all orders must pickup from driver's current region.";
-                }
-                if ($dr->drop_off_region_id != $assignment->region_id) {
-                    $errors[] = "For backhaul assignments, all orders must deliver to driver's home region.";
-                }
-                $hasBackhaul = true;
-            } else {
-                // Regular assignment
-                if ($dr->pick_up_region_id != $assignment->region_id) {
-                    $errors[] = "For regular assignments, pickup region must match driver-truck set's home region.";
-                }
-                $hasRegular = true;
-            }
-
-            // Sum up volume and weight
-            $packages = $dr->packages;
-            $totalVolume += $packages->sum('volume');
-            $totalWeight += $packages->sum('weight');
-        }
-
-        // Mixed assignment type prevention
-        if ($hasRegular && $hasBackhaul) {
-            $errors[] = "Cannot mix regular and backhaul assignments in the same batch.";
-        }
-
-        // 5. Capacity checks
-        if ($truck) {
-            // Get current load from active orders
-            $activeOrders = \App\Models\DeliveryOrder::where('truck_id', $truck->id)
-                ->where('driver_id', $driver->id)
-                ->whereIn('status', ['assigned', 'in_transit'])
-                ->with(['deliveryRequest.packages'])
-                ->get();
-
-            $currentVolume = $activeOrders->sum(fn($order) => 
-                $order->deliveryRequest->packages->sum('volume')
-            );
-            $currentWeight = $activeOrders->sum(fn($order) => 
-                $order->deliveryRequest->packages->sum('weight')
-            );
-
-            $projectedVolume = $currentVolume + $totalVolume;
-            $projectedWeight = $currentWeight + $totalWeight;
-
-            if ($projectedVolume > $truck->volume_capacity) {
-                $errors[] = "Assignment would exceed truck volume capacity (current: {$currentVolume}, adding: {$totalVolume}, capacity: {$truck->volume_capacity}).";
-            }
-            if ($projectedWeight > $truck->weight_capacity) {
-                $errors[] = "Assignment would exceed truck weight capacity (current: {$currentWeight}, adding: {$totalWeight}, capacity: {$truck->weight_capacity}).";
-            }
-
-            // Capacity warnings
-            $volumePercentage = ($projectedVolume / $truck->volume_capacity) * 100;
-            $weightPercentage = ($projectedWeight / $truck->weight_capacity) * 100;
-            $maxPercentage = max($volumePercentage, $weightPercentage);
-
-            $warnings = [];
-            if ($maxPercentage >= 90) {
-                $warnings[] = "Critical capacity: Truck will be at " . round($maxPercentage) . "% capacity after assignment.";
-            } elseif ($maxPercentage >= 75) {
-                $warnings[] = "Warning: Truck will be at " . round($maxPercentage) . "% capacity after assignment.";
-            }
-        }
-
-        // 6. Estimated departure time validation
-        if ($departureTime) {
-            $departure = \Carbon\Carbon::parse($departureTime);
-            if ($departure->isPast()) {
-                $errors[] = "Estimated departure time cannot be in the past.";
-            }
-            // Optional: Check if departure is too far in the future (e.g., > 7 days)
-            if ($departure->diffInDays($now) > 7) {
-                $warnings[] = "Estimated departure time is more than 7 days in the future.";
-            }
-        }
-
-        return [
-            'is_valid' => empty($errors),
-            'errors' => $errors,
-            'warnings' => $warnings ?? [],
-            'total_volume' => $totalVolume,
-            'total_weight' => $totalWeight,
-            'capacity_percentage' => $maxPercentage ?? 0,
-            'assignment_type' => $hasBackhaul ? 'backhaul' : 'regular',
-            'workflow_mode' => $workflowMode
-        ];
-    }
-
-    /**
+/**
  * Check if assignment is in cooldown period - FIXED VERSION
  */
 protected function isInCooldown(DriverTruckAssignment $assignment): bool
@@ -1205,9 +1029,6 @@ protected function isInCooldown(DriverTruckAssignment $assignment): bool
 }
 
   /**
- * Dispatch a driver-truck set with manifest validation
- */
-/**
  * Dispatch a driver-truck set with manifest validation
  */
 public function dispatch(Request $request, DriverTruckAssignment $assignment)
@@ -1346,6 +1167,21 @@ DriverStatusLog::create([
 }
 
 
+private function getInitials(?string $name): string
+{
+    if (!$name) return '??';
+    
+    $names = explode(' ', $name);
+    $initials = '';
+    
+    foreach ($names as $name) {
+        if (!empty(trim($name))) {
+            $initials .= strtoupper(substr(trim($name), 0, 1));
+        }
+    }
+    
+    return substr($initials, 0, 2);
+}
 
 public function cancelDeliveryOrderAssignment(DeliveryOrder $deliveryOrder, Request $request)
 {
@@ -1435,35 +1271,6 @@ public function cancelDeliveryOrderAssignment(DeliveryOrder $deliveryOrder, Requ
     }
 }
 
-
-    /**
-     * Get backhaul statistics and metrics
-     */
-    public function getBackhaulMetrics()
-    {
-        $backhaulSets = DriverTruckAssignment::with(['driver', 'truck', 'region', 'currentRegion'])
-            ->where('current_status', DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE)
-            ->where('is_active', true)
-            ->get();
-
-        $metrics = [
-            'total_opportunities' => $backhaulSets->count(),
-            'by_region' => $backhaulSets->groupBy('current_region_id')->map(function($sets, $regionId) {
-                $region = Region::find($regionId);
-                return [
-                    'region_name' => $region ? $region->name : 'Unknown',
-                    'count' => $sets->count(),
-                    'total_capacity_volume' => $sets->sum(fn($set) => $set->truck->available_volume_capacity),
-                    'total_capacity_weight' => $sets->sum(fn($set) => $set->truck->available_weight_capacity)
-                ];
-            })->values(),
-            'total_available_volume' => $backhaulSets->sum(fn($set) => $set->truck->available_volume_capacity),
-            'total_available_weight' => $backhaulSets->sum(fn($set) => $set->truck->available_weight_capacity)
-        ];
-
-        return response()->json($metrics);
-    }
-
     /**
      * Helper method to check if driver can accept assignments
      */
@@ -1481,178 +1288,5 @@ public function cancelDeliveryOrderAssignment(DeliveryOrder $deliveryOrder, Requ
             ->count();
 
         return $currentAssignments < $maxAssignments;
-    }
-
-    /**
-     * Debug method to check driver-truck assignment data
-     */
-    public function debugAssignments()
-    {
-        \Log::info("=== DEBUG DRIVER-TRUCK ASSIGNMENTS ===");
-        
-        // Check all driver-truck assignments
-        $allAssignments = DriverTruckAssignment::with(['driver', 'truck'])->get();
-        \Log::info("Total assignments in DB: " . $allAssignments->count());
-        
-        foreach ($allAssignments as $assignment) {
-            \Log::info("Assignment ID: {$assignment->id}, Driver: " . ($assignment->driver->name ?? 'NONE') . 
-                      ", Truck: " . ($assignment->truck->license_plate ?? 'NONE') . 
-                      ", Active: " . ($assignment->is_active ? 'YES' : 'NO') . 
-                      ", Status: " . $assignment->current_status);
-        }
-        
-        // Check active assignments
-        $activeAssignments = DriverTruckAssignment::where('is_active', true)->count();
-        \Log::info("Active assignments: " . $activeAssignments);
-        
-        // Check trucks
-        $trucks = Truck::where('is_active', true)->get();
-        \Log::info("Active trucks: " . $trucks->count());
-        foreach ($trucks as $truck) {
-            \Log::info("Truck: {$truck->license_plate}, Status: {$truck->status}");
-        }
-        
-        // Check drivers
-        $drivers = User::where('role', 'driver')->where('is_active', true)->get();
-        \Log::info("Active drivers: " . $drivers->count());
-        
-        return response()->json([
-            'all_assignments' => $allAssignments->count(),
-            'active_assignments' => $activeAssignments,
-            'active_trucks' => $trucks->count(),
-            'active_drivers' => $drivers->count()
-        ]);
-    }
-
-    /**
-     * One-click backhaul assignment
-     */
-    public function quickBackhaulAssign(Request $request, DriverTruckAssignment $assignment)
-    {
-        $request->validate([
-            'estimated_departure' => 'required|date|after:now'
-        ]);
-
-        if ($assignment->current_status !== DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE) {
-            return back()->withErrors('This driver-truck set is not eligible for backhaul assignment.');
-        }
-
-        // Find matching backhaul deliveries
-        $matchingDeliveries = DeliveryOrder::with(['deliveryRequest.packages'])
-            ->whereHas('deliveryRequest', function($q) use ($assignment) {
-                $q->where('pick_up_region_id', $assignment->current_region_id)
-                  ->where('drop_off_region_id', $assignment->region_id);
-            })
-            ->where('status', 'ready')
-            ->get();
-
-        if ($matchingDeliveries->isEmpty()) {
-            return back()->withErrors('No backhaul delivery opportunities found for this driver-truck set.');
-        }
-
-        // Validate capacity and assign
-        $totalVolume = 0;
-        $totalWeight = 0;
-        $assignableOrders = [];
-
-        foreach ($matchingDeliveries as $order) {
-            $packages = $order->deliveryRequest->packages;
-            $volume = $packages->sum('volume');
-            $weight = $packages->sum('weight');
-
-            if (($totalVolume + $volume) <= $assignment->truck->available_volume_capacity &&
-                ($totalWeight + $weight) <= $assignment->truck->available_weight_capacity) {
-                
-                $assignableOrders[] = $order->id;
-                $totalVolume += $volume;
-                $totalWeight += $weight;
-            }
-        }
-
-        if (empty($assignableOrders)) {
-            return back()->withErrors('No backhaul deliveries fit within the available truck capacity.');
-        }
-
-        // Perform batch assignment
-        return $this->batchAssign(new Request([
-            'delivery_request_ids' => $assignableOrders,
-            'driver_truck_assignment_id' => $assignment->id,
-            'estimated_departure' => $request->estimated_departure,
-            'workflow_mode' => self::WORKFLOW_BACKHAUL_OPTIMIZER
-        ]));
-    }
-
-    /**
-     * Enable backhaul for a driver-truck assignment
-     */
-    public function enableBackhaul(DriverTruckAssignment $assignment)
-    {
-        try {
-            // Check if assignment can be enabled for backhaul
-            if (!$assignment->is_active) {
-                return back()->withErrors('This driver-truck assignment is not active.');
-            }
-
-            if ($assignment->available_for_backhaul) {
-                return back()->withErrors('This driver-truck set is already available for backhaul.');
-            }
-
-            // Check if driver is in a different region from home
-            if ($assignment->driver->current_region_id == $assignment->region_id) {
-                return back()->withErrors('Driver is already in home region. Backhaul requires driver to be in a different region.');
-            }
-
-            // Check if driver can accept assignments
-            if (!$this->canDriverAcceptAssignment($assignment->driver)) {
-                return back()->withErrors('Driver cannot accept new assignments at this time.');
-            }
-
-            // Check truck availability
-            if (!$assignment->truck->isAvailable()) {
-                return back()->withErrors('Truck is not available for backhaul assignment.');
-            }
-
-            DB::transaction(function() use ($assignment) {
-                // Update assignment to backhaul eligible
-                $assignment->update([
-                    'current_status' => DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE,
-                    'available_for_backhaul' => true,
-                    'backhaul_eligible_at' => now(),
-                    'current_region_id' => $assignment->driver->current_region_id
-                ]);
-
-                // Update truck status
-                $assignment->truck->update([
-                    'status' => Truck::STATUS_AVAILABLE_FOR_BACKHAUL
-                ]);
-
-                // Log the status change
-                DriverStatusLog::create([
-                    'driver_truck_assignment_id' => $assignment->id,
-                    'previous_status' => DriverTruckAssignment::STATUS_ACTIVE,
-                    'new_status' => DriverTruckAssignment::STATUS_BACKHAUL_ELIGIBLE,
-                    'remarks' => 'Manually enabled for backhaul by staff',
-                    'changed_at' => now()
-                ]);
-            });
-
-            return back()->with('success', 'Driver-truck set enabled for backhaul assignments.');
-
-        } catch (\Exception $e) {
-            \Log::error('Failed to enable backhaul: ' . $e->getMessage());
-            return back()->withErrors('Failed to enable backhaul: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Check if a driver-truck assignment can be manually enabled for backhaul
-     */
-    protected function canEnableBackhaul(DriverTruckAssignment $assignment): bool
-    {
-        return $assignment->is_active &&
-               !$assignment->available_for_backhaul &&
-               $assignment->driver->current_region_id != $assignment->region_id &&
-               $this->canDriverAcceptAssignment($assignment->driver) &&
-               $assignment->truck->isAvailable();
     }
 }

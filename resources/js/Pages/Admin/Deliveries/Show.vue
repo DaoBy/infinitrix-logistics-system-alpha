@@ -290,11 +290,11 @@
                       <template #dimensions="{ row }">
                         {{ formatDimension(row.height) }} × {{ formatDimension(row.width) }} × {{ formatDimension(row.length) }} cm
                       </template>
-                      <template #volume="{ row }">
-                        {{ formatVolume(row.volume) }} m³
-                      </template>
+                   <template #volume="{ row }">
+  {{ calculatePackageVolume(row) }}
+</template>
                       <template #weight="{ row }">
-                        {{ formatWeight(row.weight) }} kg
+                        {{ formatWeight(row.weight) }} 
                       </template>
                       <template #value="{ row }">
                         ₱{{ formatCurrency(row.value) }}
@@ -581,7 +581,7 @@ function getNestedValue(obj, path) {
   return path.split('.').reduce((o, p) => o?.[p], obj);
 }
 
-// --- Formatting Helpers ---
+// --- FIXED Formatting Helpers ---
 function formatCurrency(value) {
   const num = Number(value) || 0;
   return num.toFixed(2);
@@ -589,17 +589,71 @@ function formatCurrency(value) {
 
 function formatDimension(value) {
   const num = Number(value) || 0;
-  return num.toFixed(1);
+  return num.toFixed(0); // No decimals for dimensions
 }
 
-function formatVolume(value) {
-  const num = Number(value) || 0;
-  return num.toFixed(3);
+// FIXED: Clean volume formatting
+function formatVolume(volume) {
+  const vol = Number(volume) || 0;
+  
+  if (vol === 0) return '0 m³';
+  
+  // Show in cm³ for very small volumes
+  if (vol < 0.001) {
+    const volumeCm3 = vol * 1000000;
+    return `${volumeCm3.toFixed(0)} cm³`;
+  }
+  
+  // Show with 3 decimals for small volumes
+  if (vol < 0.1) {
+    return `${vol.toFixed(3)} m³`;
+  }
+  
+  // Show with 2 decimals for normal volumes
+  if (vol < 1) {
+    return `${vol.toFixed(2)} m³`;
+  }
+  
+  // Show with 1 decimal for larger volumes
+  return `${vol.toFixed(1)} m³`;
 }
 
+// FIXED: Clean weight formatting
 function formatWeight(value) {
-  const num = Number(value) || 0;
-  return num.toFixed(1);
+  const weight = Number(value) || 0;
+  
+  if (weight === 0) return '0 kg';
+  
+  // Show in grams for very small weights
+  if (weight < 0.1) {
+    const grams = weight * 1000;
+    return `${grams.toFixed(0)} g`;
+  }
+  
+  // Show with 1 decimal for normal weights
+  if (weight < 10) {
+    return `${weight.toFixed(1)} kg`;
+  }
+  
+  // Show without decimals for larger weights
+  return `${weight.toFixed(0)} kg`;
+}
+
+// Calculate volume from dimensions when available
+function calculatePackageVolume(pkg) {
+  // If we have valid dimensions, calculate volume from them
+  if (pkg.height && pkg.width && pkg.length) {
+    const height = parseFloat(pkg.height) || 0;
+    const width = parseFloat(pkg.width) || 0;
+    const length = parseFloat(pkg.length) || 0;
+    
+    // Calculate volume in cubic meters (cm³ to m³ conversion)
+    const volumeM3 = (height * width * length) / 1000000;
+    return formatVolume(volumeM3);
+  }
+  
+  // Fallback to stored volume if dimensions aren't available
+  return formatVolume(pkg.volume);
 }
 
 function formatDate(dateString) {

@@ -274,62 +274,68 @@ Route::middleware(['auth', 'role:admin,staff'])->group(function () {
         Route::post('/bulk-reject', [RequestApprovalController::class, 'bulkReject'])->name('deliveries.bulk-reject');
     });
 
-    // Driver-Truck Assignments
-    Route::prefix('driver-truck-assignments')->name('driver-truck-assignments.')->group(function () {
-        Route::get('/', [DriverTruckAssignmentController::class, 'index'])->name('index');
-        Route::post('/store', [DriverTruckAssignmentController::class, 'store'])->name('store');
-        Route::get('/available-resources', [DriverTruckAssignmentController::class, 'getAvailableResources'])->name('available-resources');
-        Route::get('/all-resources', [DriverTruckAssignmentController::class, 'getAllResourcesForRegion'])->name('all-resources');
-        Route::get('/debug/database-state', [DriverTruckAssignmentController::class, 'checkDatabaseState'])->name('debug.database-state');
+   // Driver-Truck Assignments
+Route::prefix('driver-truck-assignments')->name('driver-truck-assignments.')->group(function () {
+    Route::get('/', [DriverTruckAssignmentController::class, 'index'])->name('index');
+    Route::post('/store', [DriverTruckAssignmentController::class, 'store'])->name('store');
+    Route::get('/available-resources', [DriverTruckAssignmentController::class, 'getAvailableResources'])->name('available-resources');
+    Route::get('/all-resources', [DriverTruckAssignmentController::class, 'getAllResourcesForRegion'])->name('all-resources');
+    Route::get('/debug/database-state', [DriverTruckAssignmentController::class, 'checkDatabaseState'])->name('debug.database-state');
 
-        Route::prefix('{assignment}')->group(function () {
-            Route::post('/cancel', [DriverTruckAssignmentController::class, 'cancel'])->name('cancel');
-            Route::put('/update-status', [DriverTruckAssignmentController::class, 'updateDriverStatus'])->name('update-status');
-            Route::get('/status-timeline', [DriverTruckAssignmentController::class, 'getDriverStatusTimeline'])->name('status-timeline');
-            Route::get('/status-timeline/show', [DriverTruckAssignmentController::class, 'showStatusTimeline'])->name('status-timeline.show');
-            Route::post('/complete-cooldown', [DriverTruckAssignmentController::class, 'completeCooldown'])->name('complete-cooldown');
-            Route::post('/skip-cooldown', [DriverTruckAssignmentController::class, 'skipCooldown'])->name('skip-cooldown');
-            Route::post('/enable-backhaul', [DriverTruckAssignmentController::class, 'enableBackhaul'])->name('enable-backhaul');
-            Route::post('/disable-backhaul', [DriverTruckAssignmentController::class, 'disableBackhaul'])->name('disable-backhaul');
-            Route::post('/check-backhaul-eligibility', [DriverTruckAssignmentController::class, 'checkBackhaulEligibility'])->name('check-backhaul-eligibility');
-            Route::post('/verify-return', [DriverTruckAssignmentController::class, 'verifyDriverReturn'])->name('verify-return');
-            Route::post('/force-return', [DriverTruckAssignmentController::class, 'forceReturnToBase'])->name('force-return');
-            Route::post('/confirm-return', [DriverTruckAssignmentController::class, 'confirmReturnToBase'])->name('confirm-return');
-            Route::post('/force-complete', [DriverTruckAssignmentController::class, 'forceCompleteAssignment'])->name('force-complete');
-        });
+    // ADD THIS ROUTE FOR MANIFEST STATUS CHECK
+    Route::get('/{assignment}/check-manifest-status', [DriverTruckAssignmentController::class, 'checkManifestStatus'])->name('check-manifest-status');
+
+    Route::prefix('{assignment}')->group(function () {
+        Route::post('/cancel', [DriverTruckAssignmentController::class, 'cancel'])->name('cancel');
+        Route::put('/update-status', [DriverTruckAssignmentController::class, 'updateDriverStatus'])->name('update-status');
+        Route::get('/status-timeline', [DriverTruckAssignmentController::class, 'getDriverStatusTimeline'])->name('status-timeline');
+        Route::get('/status-timeline/show', [DriverTruckAssignmentController::class, 'showStatusTimeline'])->name('status-timeline.show');
+        Route::post('/complete-cooldown', [DriverTruckAssignmentController::class, 'completeCooldown'])->name('complete-cooldown');
+        Route::post('/skip-cooldown', [DriverTruckAssignmentController::class, 'skipCooldown'])->name('skip-cooldown');
+        Route::post('/enable-backhaul', [DriverTruckAssignmentController::class, 'enableBackhaul'])->name('enable-backhaul');
+        Route::post('/disable-backhaul', [DriverTruckAssignmentController::class, 'disableBackhaul'])->name('disable-backhaul');
+        Route::post('/check-backhaul-eligibility', [DriverTruckAssignmentController::class, 'checkBackhaulEligibility'])->name('check-backhaul-eligibility');
+        Route::post('/verify-return', [DriverTruckAssignmentController::class, 'verifyDriverReturn'])->name('verify-return');
+        Route::post('/force-return', [DriverTruckAssignmentController::class, 'forceReturnToBase'])->name('force-return');
+        Route::post('/confirm-return', [DriverTruckAssignmentController::class, 'confirmReturnToBase'])->name('confirm-return');
+        Route::post('/force-complete', [DriverTruckAssignmentController::class, 'forceCompleteAssignment'])->name('force-complete');
+    });
+
 
         
     });
 
-    // Cargo Assignments
-    Route::prefix('cargo-assignments')->name('cargo-assignments.')->group(function () {
-        Route::get('/', [CargoAssignmentController::class, 'index'])->name('index');
-        Route::get('/{deliveryOrder}', [CargoAssignmentController::class, 'show'])->name('show');
+// Cargo Assignments
+Route::prefix('cargo-assignments')->name('cargo-assignments.')->group(function () {
+    Route::get('/', [CargoAssignmentController::class, 'index'])->name('index');
+    Route::get('/{deliveryOrder}', [CargoAssignmentController::class, 'show'])->name('show');
 
-        Route::prefix('assign')->name('assign.')->group(function () {
-            Route::get('/suggestions', [CargoAssignmentController::class, 'getSuggestedAssignments'])->name('suggestions');
-            Route::post('/validate', [CargoAssignmentController::class, 'validateAssignment'])->name('validate');
-            Route::post('/batch', [CargoAssignmentController::class, 'batchAssign'])->name('batch');
-            Route::post('/{deliveryRequest}', [CargoAssignmentController::class, 'assign'])->name('single');
-        });
-
-        Route::prefix('backhaul')->name('backhaul.')->group(function () {
-            Route::post('/{assignment}/enable', [CargoAssignmentController::class, 'enableBackhaul'])->name('enable');
-            Route::post('/{assignment}/quick-assign', [CargoAssignmentController::class, 'quickBackhaulAssign'])->name('quick-assign');
-        });
-
-        Route::prefix('deliveries')->name('deliveries.')->group(function () {
-            Route::post('/{deliveryOrder}/cancel', [CargoAssignmentController::class, 'cancelDeliveryOrderAssignment'])->name('cancel');
-        });
-
-        Route::prefix('dispatch')->name('dispatch.')->group(function () {
-            Route::post('/{assignment}', [CargoAssignmentController::class, 'dispatch'])->name('driver-truck-set');
-            Route::get('/{assignment}/validate', [CargoAssignmentController::class, 'validateDispatch'])->name('validate');
-        });
-
-        Route::get('/backhaul/metrics', [CargoAssignmentController::class, 'getBackhaulMetrics'])->name('backhaul.metrics');
-        Route::get('/debug/assignments', [CargoAssignmentController::class, 'debugAssignments'])->name('debug.assignments');
+    Route::prefix('assign')->name('assign.')->group(function () {
+        // Route::get('/suggestions', [CargoAssignmentController::class, 'getSuggestedAssignments'])->name('suggestions'); // REMOVED
+        // Route::post('/validate', [CargoAssignmentController::class, 'validateAssignment'])->name('validate'); // REMOVED
+        Route::post('/batch', [CargoAssignmentController::class, 'batchAssign'])->name('batch');
+        Route::post('/{deliveryRequest}', [CargoAssignmentController::class, 'assign'])->name('single');
     });
+
+
+    Route::get('/delivery-orders/{deliveryOrder}/manifest-status', [CargoAssignmentController::class, 'checkManifestStatus']);
+    // Route::prefix('backhaul')->name('backhaul.')->group(function () { // REMOVED ENTIRE GROUP
+        // Route::post('/{assignment}/enable', [CargoAssignmentController::class, 'enableBackhaul'])->name('enable'); // REMOVED
+        // Route::post('/{assignment}/quick-assign', [CargoAssignmentController::class, 'quickBackhaulAssign'])->name('quick-assign'); // REMOVED
+    // });
+
+    Route::prefix('deliveries')->name('deliveries.')->group(function () {
+        Route::post('/{deliveryOrder}/cancel', [CargoAssignmentController::class, 'cancelDeliveryOrderAssignment'])->name('cancel');
+    });
+
+    Route::prefix('dispatch')->name('dispatch.')->group(function () {
+        Route::post('/{assignment}', [CargoAssignmentController::class, 'dispatch'])->name('driver-truck-set');
+        Route::get('/{assignment}/validate', [CargoAssignmentController::class, 'validateDispatch'])->name('validate');
+    });
+
+    // Route::get('/backhaul/metrics', [CargoAssignmentController::class, 'getBackhaulMetrics'])->name('backhaul.metrics'); // REMOVED
+    // Route::get('/debug/assignments', [CargoAssignmentController::class, 'debugAssignments'])->name('debug.assignments'); // REMOVED
+});
 
     // Delivery Completion
     Route::prefix('cargo-assignments/delivery-completion')->name('delivery-completion.')->group(function() {

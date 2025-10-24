@@ -12,9 +12,14 @@ use Illuminate\Validation\Rule;
 
 class PackageController extends Controller
 {
-   public function index()
+   public function index(Request $request)
     {
-        $packages = Package::with(['deliveryRequest', 'currentRegion', 'transfers'])
+        $query = Package::with([
+            'deliveryRequest.sender', 
+            'deliveryRequest.receiver', 
+            'currentRegion', 
+            'transfers'
+        ])
             ->whereHas('deliveryRequest', function($query) {
                 if (!auth()->user()->isAdmin()) {
                     $query->where(function($q) {
@@ -23,21 +28,60 @@ class PackageController extends Controller
                           ->orWhere('created_by', Auth::id());
                     });
                 }
-            })
-            ->latest()
-            ->paginate(10) // Add pagination here
-            ->through(function ($package) {
-                return $this->formatPackage($package);
             });
 
+        // Apply search filter
+        if ($request->has('search') && !empty($request->search)) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('item_code', 'like', "%{$search}%")
+                  ->orWhere('item_name', 'like', "%{$search}%")
+                  ->orWhereHas('waybill', function($waybillQuery) use ($search) {
+                      $waybillQuery->where('waybill_number', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('deliveryRequest', function($drQuery) use ($search) {
+                      $drQuery->where('reference_number', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        // Apply category filter
+        if ($request->has('category') && !empty($request->category)) {
+            $query->where('category', $request->category);
+        }
+
+        // Apply status filter
+        if ($request->has('status') && !empty($request->status)) {
+            $query->where('status', $request->status);
+        }
+
+        // Apply sorting
+        $sortField = $request->get('sort', 'item_code');
+        $sortDirection = $request->get('direction', 'asc');
+        
+        // Validate sort field to prevent SQL injection
+        $allowedSortFields = ['item_code', 'item_name', 'category', 'status'];
+        if (in_array($sortField, $allowedSortFields)) {
+            $query->orderBy($sortField, $sortDirection);
+        } else {
+            $query->orderBy('item_code', 'asc');
+        }
+
+        $packages = $query->latest()->paginate(7);
+
+        // Format packages for frontend - UPDATED to include delivery request data
+        $formattedPackages = $packages->through(function ($package) {
+            return $this->formatPackage($package);
+        });
+
         return Inertia::render('Admin/Packages/Index', [
-            'packages' => $packages, // This now returns paginated data
+            'packages' => $formattedPackages,
+            'filters' => $request->only(['search', 'category', 'status']),
             'package_statuses' => Package::getStatuses(),
             'status' => session('status'),
             'success' => session('success'),
         ]);
     }
-
 
     public function show(Package $package)
     {
@@ -62,7 +106,7 @@ class PackageController extends Controller
         ]);
     }
     
-      public function transfer(Request $request, Package $package)
+    public function transfer(Request $request, Package $package)
     {
         $this->authorizePackageAccess($package);
         
@@ -138,20 +182,49 @@ class PackageController extends Controller
     }
 
     protected function formatPackage(Package $package, bool $detailed = false): array
-    {
-        return [
-            'id' => $package->id,
-            'item_code' => $package->item_code,
-            'item_name' => $package->item_name,
-            'category' => $package->category,
-            'status' => $package->status,
-            'current_region' => $package->currentRegion ? [
-                'id' => $package->currentRegion->id,
-                'name' => $package->currentRegion->name
+{
+    $baseData = [
+        'id' => $package->id,
+        'item_code' => $package->item_code,
+        'item_name' => $package->item_name,
+        'category' => $package->category,
+        'status' => $package->status,
+        'current_region' => $package->currentRegion ? [
+            'id' => $package->currentRegion->id,
+            'name' => $package->currentRegion->name,
+            'color_hex' => $package->currentRegion->color_hex
+        ] : null,
+        'waybill_number' => $package->waybill?->waybill_number,
+        'created_at' => $package->created_at?->toISOString(),
+        'delivery_request_id' => $package->delivery_request_id,
+    ];
+
+    // Add delivery request data if relationship is loaded
+    if ($package->relationLoaded('deliveryRequest')) {
+        $baseData['delivery_request'] = $package->deliveryRequest ? [
+            'id' => $package->deliveryRequest->id,
+            'reference_number' => $package->deliveryRequest->reference_number,
+            'sender' => $package->deliveryRequest->sender ? [
+                'id' => $package->deliveryRequest->sender->id,
+                'name' => $package->deliveryRequest->sender->name,
+                'company_name' => $package->deliveryRequest->sender->company_name,
+                'mobile' => $package->deliveryRequest->sender->mobile, // From Customer model
+                'phone' => $package->deliveryRequest->sender->phone,   // From Customer model
+                'email' => $package->deliveryRequest->sender->email,
             ] : null,
-            'waybill_number' => $package->waybill?->waybill_number,
-        ];
+            'receiver' => $package->deliveryRequest->receiver ? [
+                'id' => $package->deliveryRequest->receiver->id,
+                'name' => $package->deliveryRequest->receiver->name,
+                'company_name' => $package->deliveryRequest->receiver->company_name,
+                'mobile' => $package->deliveryRequest->receiver->mobile, // From Customer model
+                'phone' => $package->deliveryRequest->receiver->phone,   // From Customer model
+                'email' => $package->deliveryRequest->receiver->email,
+            ] : null,
+        ] : null;
     }
+
+    return $baseData;
+}
 
     protected function authorizePackageAccess(Package $package)
     {

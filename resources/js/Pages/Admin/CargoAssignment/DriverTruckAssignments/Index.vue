@@ -241,29 +241,29 @@
               ]"
             >
               <!-- Header with Driver & Status -->
-              <div class="flex justify-between items-start mb-3">
-                <div class="flex items-center">
-                  <div class="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center"
-                       :class="assignment.current_status === 'backhaul_eligible' ? 'bg-purple-100' : 'bg-gray-100'">
-                    <span class="text-sm font-medium" 
-                          :class="assignment.current_status === 'backhaul_eligible' ? 'text-purple-800' : 'text-gray-600'">
-                      {{ getInitials(assignment.driver?.name) }}
-                    </span>
-                  </div>
-                  <div class="ml-3">
-                    <div class="text-sm font-medium text-gray-900">{{ assignment.driver?.name }}</div>
-                    <div class="text-xs text-gray-500">{{ assignment.driver?.employee_profile?.employee_id }}</div>
-                  </div>
-                </div>
-                <span
-                  :class="[
-                    'px-2 py-1 rounded-full text-xs font-semibold',
-                    getAssignmentStatusColor(assignment.current_status)
-                  ]"
-                >
-                  {{ getAssignmentStatusLabel(assignment.current_status) }}
-                </span>
-              </div>
+            <div class="flex justify-between items-start mb-3">
+  <div class="flex items-center">
+    <div class="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center"
+         :class="assignment.current_status === 'backhaul_eligible' ? 'bg-purple-100' : 'bg-gray-100'">
+      <span class="text-sm font-medium" 
+            :class="assignment.current_status === 'backhaul_eligible' ? 'text-purple-800' : 'text-gray-600'">
+        {{ getInitials(assignment.driver?.name) }}
+      </span>
+    </div>
+    <div class="ml-3">
+      <div class="text-sm font-medium text-gray-900">{{ assignment.driver?.name }}</div>
+      <div class="text-xs text-gray-500">{{ assignment.driver?.employee_profile?.employee_id }}</div>
+    </div>
+  </div>
+  <span
+    :class="[
+      'px-2 py-1 rounded-full text-xs font-semibold',
+      getAssignmentStatusColor(assignment.current_status)
+    ]"
+  >
+    {{ getAssignmentStatusLabel(assignment.current_status) }}
+  </span>
+</div>
 
               <!-- Truck Info -->
               <div class="mb-3">
@@ -349,9 +349,8 @@
                 </div>
               </div>
 
-              <!-- Actions -->
-              <div class="flex space-x-2">
-               <SecondaryButton 
+            <div class="flex space-x-2">
+  <SecondaryButton 
     @click="viewStatusTimeline(assignment)"
     size="xs"
     class="flex-1"
@@ -363,10 +362,19 @@
     @click="openCancelAssignmentModal(assignment)" 
     size="xs"
     title="Cancel Assignment"
+    :disabled="assignment.has_finalized_manifest"
   >
     <TrashIcon class="w-3 h-3" />
   </DangerButton>
-              </div>
+</div>
+
+<!-- Add manifest status indicator -->
+<div v-if="assignment.has_finalized_manifest" class="text-xs text-blue-600 mt-1 text-center">
+  <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+  </svg>
+  Manifest Finalized
+</div>
             </div>
           </div>
 
@@ -423,19 +431,19 @@
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {{ assignment.region?.name }}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm">
-                      <span
-                        :class="[
-                          'px-2 py-1 rounded-full text-xs font-semibold',
-                          getAssignmentStatusColor(assignment.current_status)
-                        ]"
-                      >
-                        {{ getAssignmentStatusLabel(assignment.current_status) }}
-                      </span>
-                      <div v-if="assignment.deleted_reason" class="text-xs text-gray-500 mt-1">
-                        Reason: {{ assignment.deleted_reason }}
-                      </div>
-                    </td>
+                   <td class="px-6 py-4 whitespace-nowrap text-sm">
+  <span
+    :class="[
+      'px-2 py-1 rounded-full text-xs font-semibold',
+      getAssignmentStatusColor(assignment.current_status)
+    ]"
+  >
+    {{ getAssignmentStatusLabel(assignment.current_status) }}
+  </span>
+  <div v-if="assignment.deleted_reason" class="text-xs text-gray-500 mt-1">
+    Reason: {{ assignment.deleted_reason }}
+  </div>
+</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {{ formatDateTime(assignment.assigned_at) }}
                     </td>
@@ -825,6 +833,16 @@ async function loadData() {
   }
 }
 
+async function checkManifestStatus(assignmentId) {
+  try {
+    const response = await axios.get(`/driver-truck-assignments/${assignmentId}/check-manifest-status`);
+    return response.data.has_finalized_manifest;
+  } catch (error) {
+    console.error('Failed to check manifest status:', error);
+    return false;
+  }
+}
+
 // NEW: Optimized tab switching
 async function switchTab(tab) {
   if (tab === activeTab.value || tabLoading.value) return
@@ -1040,8 +1058,13 @@ const submit = () => {
   })
 }
 
-// Assignment Management Functions
 function openCancelAssignmentModal(assignment) {
+  // Additional safety check
+  if (assignment.has_finalized_manifest) {
+    alert('Cannot cancel assignment. Manifest has been finalized and this assignment is ready for dispatch.');
+    return;
+  }
+  
   cancelAssignmentData.value = assignment
   cancelReason.value = ''
   cancelRemarks.value = ''
@@ -1129,6 +1152,7 @@ function getAssignmentStatusColor(status) {
     cooldown: 'bg-yellow-100 text-yellow-800 border border-yellow-300',
     backhaul_eligible: 'bg-purple-100 text-purple-800 border border-purple-300',
     returning: 'bg-blue-100 text-blue-800 border border-blue-300',
+    in_transit: 'bg-indigo-100 text-indigo-800 border border-indigo-300', // Distinct color for in_transit
     completed: 'bg-gray-100 text-gray-800 border border-gray-300',
     cancelled: 'bg-red-100 text-red-800 border border-red-300'
   }
@@ -1142,7 +1166,8 @@ function getAssignmentStatusLabel(status) {
     backhaul_eligible: 'Backhaul Eligible',
     returning: 'Returning',
     completed: 'Completed',
-    cancelled: 'Cancelled'
+    cancelled: 'Cancelled',
+    in_transit: 'In Transit' // Add this line - properly capitalized
   }
   return labels[status] || status
 }
@@ -1189,6 +1214,8 @@ function isCooldownFinished(assignment) {
   return new Date(assignment.cooldown_ends_at) <= new Date()
 }
 
+// Update the canBeCancelled method
+// Update the canBeCancelled method
 function canBeCancelled(assignment) {
   // Do not allow cancellation for these statuses
   const excludedStatuses = ['in_transit', 'backhaul_eligible'];
@@ -1196,7 +1223,8 @@ function canBeCancelled(assignment) {
   return assignment.is_active && 
          !excludedStatuses.includes(assignment.current_status) &&
          (assignment.current_status === 'active' || 
-          assignment.current_status === 'cooldown');
+          assignment.current_status === 'cooldown') &&
+         !assignment.has_finalized_manifest; // Add this check
 }
 
 // Helper methods for filter labels

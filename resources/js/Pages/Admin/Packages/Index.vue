@@ -55,35 +55,38 @@
           </div>
         </div>
 
-        <!-- Search and Filters - EXACT SAME STRUCTURE AS EMPLOYEE MANAGEMENT -->
+        <!-- Search and Filters - SERVER-SIDE FILTERING -->
         <div class="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div class="w-full sm:w-96">
             <SearchInput 
-              v-model="search" 
-              placeholder="Search packages by item code, name, or waybill..." 
+              v-model="filters.search" 
+              placeholder="Search packages by item code, name, waybill, or reference..." 
               class="w-full"
+              @input="handleDebouncedFilter"
             />
           </div>
           <div class="flex items-center gap-3">
             <SelectInput 
-              v-model="categoryFilter" 
+              v-model="filters.category" 
               :options="categoryOptions" 
               option-value="value"
               option-label="text"
               placeholder="All Categories"
               class="w-full sm:w-48"
+              @change="handleFilterChange"
             />
             <SelectInput 
-              v-model="statusFilter" 
+              v-model="filters.status" 
               :options="statusOptions" 
               option-value="value"
               option-label="text"
               placeholder="All Statuses"
               class="w-full sm:w-48"
+              @change="handleFilterChange"
             />
             <div class="text-sm text-gray-500 bg-blue-50 px-3 py-1 rounded border border-blue-100 whitespace-nowrap">
-              📦 Showing {{ filteredPackages.length }} {{ filteredPackages.length === 1 ? 'package' : 'packages' }}
-              <span v-if="packages.data && packages.data.length < packages.total" class="ml-1">
+              📦 Showing {{ packages.data ? packages.data.length : 0 }} {{ packages.data && packages.data.length === 1 ? 'package' : 'packages' }}
+              <span v-if="packages.data && packages.total > packages.per_page" class="ml-1">
                 (Page {{ packages.current_page }} of {{ packages.last_page }})
               </span>
             </div>
@@ -92,22 +95,106 @@
 
         <!-- Data Table Container with proper spacing -->
         <div class="justify-center flex items-center">
-          <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg w-full max-w-[95vw]">
+          <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg w-full max-w-[98vw]">
             <div class="p-4 bg-white border-b border-gray-200">
               <DataTable 
                 :columns="columns" 
-                :data="filteredPackages"
+                :data="packages.data || []"
                 :sort-field="sortField"
                 :sort-direction="sortDirection"
                 @sort="handleSort"
                 class="w-full"
               >
+                <!-- Delivery Request Reference -->
+                <template #delivery_reference="{ row }">
+                  <div class="flex items-center space-x-2">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                      Ref
+                    </span>
+                    <span class="font-bold text-green-700 tracking-wide text-sm">
+                      {{ row.delivery_request?.reference_number || `DR-${String(row.delivery_request_id || '').padStart(6, '0')}` }}
+                    </span>
+                  </div>
+                  <div class="text-xs text-gray-500 mt-1">
+                    ID: DO-{{ String(row.delivery_request_id || '').padStart(6, '0') }}
+                    <span v-if="row.created_at"> | Created: {{ formatDate(row.created_at) }}</span>
+                  </div>
+                </template>
+
                 <template #item_code="{ row }">
                   <div class="font-medium text-gray-900">{{ row.item_code }}</div>
                 </template>
 
                 <template #item_name="{ row }">
                   <div class="text-gray-900">{{ row.item_name }}</div>
+                </template>
+
+                <!-- Sender Information -->
+                <template #sender="{ row }">
+                  <div v-if="row.delivery_request?.sender">
+                    <div class="text-sm font-medium text-gray-900 mb-1">
+                      {{ 
+                        row.delivery_request.sender.name ||
+                        row.delivery_request.sender.company_name ||
+                        'N/A'
+                      }}
+                    </div>
+                    <div class="text-xs text-gray-500 space-y-1">
+                      <div class="flex items-center gap-1" v-if="getCustomerPhone(row.delivery_request.sender)">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                        </svg>
+                        {{ getCustomerPhone(row.delivery_request.sender) }}
+                        <span v-if="row.delivery_request.sender.phone && row.delivery_request.sender.mobile" class="text-gray-400">
+                          ({{ row.delivery_request.sender.mobile === getCustomerPhone(row.delivery_request.sender) ? 'Mobile' : 'Phone' }})
+                        </span>
+                      </div>
+                      <div class="flex items-center gap-1" v-if="getCustomerEmail(row.delivery_request.sender)">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                        {{ getCustomerEmail(row.delivery_request.sender) }}
+                      </div>
+                      <div v-if="!getCustomerPhone(row.delivery_request.sender) && !getCustomerEmail(row.delivery_request.sender)" class="text-gray-400">
+                        No contact info
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="text-sm text-gray-500">No sender info</div>
+                </template>
+
+                <!-- Receiver Information -->
+                <template #receiver="{ row }">
+                  <div v-if="row.delivery_request?.receiver">
+                    <div class="text-sm font-medium text-gray-900 mb-1">
+                      {{ 
+                        row.delivery_request.receiver.name ||
+                        row.delivery_request.receiver.company_name ||
+                        'N/A'
+                      }}
+                    </div>
+                    <div class="text-xs text-gray-500 space-y-1">
+                      <div class="flex items-center gap-1" v-if="getCustomerPhone(row.delivery_request.receiver)">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                        </svg>
+                        {{ getCustomerPhone(row.delivery_request.receiver) }}
+                        <span v-if="row.delivery_request.receiver.phone && row.delivery_request.receiver.mobile" class="text-gray-400">
+                          ({{ row.delivery_request.receiver.mobile === getCustomerPhone(row.delivery_request.receiver) ? 'Mobile' : 'Phone' }})
+                        </span>
+                      </div>
+                      <div class="flex items-center gap-1" v-if="getCustomerEmail(row.delivery_request.receiver)">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                        {{ getCustomerEmail(row.delivery_request.receiver) }}
+                      </div>
+                      <div v-if="!getCustomerPhone(row.delivery_request.receiver) && !getCustomerEmail(row.delivery_request.receiver)" class="text-gray-400">
+                        No contact info
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="text-sm text-gray-500">No receiver info</div>
                 </template>
 
                 <template #category="{ row }">
@@ -155,8 +242,15 @@
                       </svg>
                       <h3 class="text-lg font-medium text-gray-900 mb-2">No packages found</h3>
                       <p class="text-gray-500 mb-3">
-                        {{ search ? 'Try adjusting your search terms' : 'No packages are currently being tracked' }}
+                        {{ filters.search || filters.category || filters.status ? 'Try adjusting your search terms or filters' : 'No packages are currently being tracked' }}
                       </p>
+                      <SecondaryButton 
+                        v-if="filters.search || filters.category || filters.status" 
+                        @click="resetFilters"
+                        class="mt-2"
+                      >
+                        Clear Filters
+                      </SecondaryButton>
                     </div>
                   </div>
                 </template>
@@ -232,7 +326,7 @@ import DataTable from '@/Components/DataTable.vue';
 import Modal from '@/Components/Modal.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { router } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -240,27 +334,36 @@ const props = defineProps({
   status: String,
   success: String,
   error: String,
+  filters: Object
 });
 
-const search = ref('');
-const categoryFilter = ref('');
-const statusFilter = ref('');
+// Filters
+const filters = reactive({
+  search: props.filters?.search || '',
+  category: props.filters?.category || '',
+  status: props.filters?.status || ''
+});
+
 const sortField = ref('item_code');
 const sortDirection = ref('asc');
 const showStatusFilters = ref(false);
 const showStatusModal = ref(false);
 const currentPackage = ref(null);
 
+// UPDATED: Added new columns for delivery reference, sender, and receiver
 const columns = [
+  { field: 'delivery_reference', header: 'Delivery Ref', sortable: true },
   { field: 'item_code', header: 'Item Code', sortable: true },
   { field: 'item_name', header: 'Item Name', sortable: true },
+  { field: 'sender', header: 'Sender', sortable: false },
+  { field: 'receiver', header: 'Receiver', sortable: false },
   { field: 'category', header: 'Category', sortable: true },
   { field: 'status', header: 'Status', sortable: true },
   { field: 'current_region', header: 'Current Location', sortable: true },
   { field: 'actions', header: 'Actions', sortable: false }
 ];
 
-// UPDATED: Correct categories from container presets
+// Category options
 const categoryOptions = [
   { value: '', text: 'All Categories' },
   { value: 'piece', text: 'Piece' },
@@ -271,11 +374,10 @@ const categoryOptions = [
   { value: 'C/S', text: 'Custom Size' },
 ];
 
-// COMPLETE status options from Package model
+// Status options
 const statusOptions = [
   { value: '', text: 'All Statuses' },
   { value: 'preparing', text: 'Preparing' },
-  { value: 'ready_for_pickup', text: 'Ready for Pickup' },
   { value: 'loaded', text: 'Loaded' },
   { value: 'in_transit', text: 'In Transit' },
   { value: 'delivered', text: 'Delivered' },
@@ -286,10 +388,9 @@ const statusOptions = [
   { value: 'lost_in_transit', text: 'Lost in Transit' }
 ];
 
-// COMPLETE available statuses for bulk actions and modal
+// Available statuses for bulk actions and modal
 const availableStatuses = [
   { value: 'preparing', title: 'Preparing' },
-  { value: 'ready_for_pickup', title: 'Ready for Pickup' },
   { value: 'loaded', title: 'Loaded' },
   { value: 'in_transit', title: 'In Transit' },
   { value: 'delivered', title: 'Delivered' },
@@ -300,10 +401,9 @@ const availableStatuses = [
   { value: 'lost_in_transit', title: 'Lost in Transit' }
 ];
 
-// COMPLETE status labels
+// Status labels
 const statusLabels = {
   preparing: 'Preparing',
-  ready_for_pickup: 'Ready for Pickup',
   loaded: 'Loaded',
   in_transit: 'In Transit',
   delivered: 'Delivered',
@@ -314,7 +414,31 @@ const statusLabels = {
   lost_in_transit: 'Lost in Transit'
 };
 
-// NEW: Function to format category display with capitalization
+// Helper functions for customer data
+function getCustomerPhone(customer) {
+  if (!customer) return null;
+  
+  // Use 'mobile' field first (from your Customer model), then fallback to 'phone'
+  return customer.mobile || customer.phone || null;
+}
+
+function getCustomerEmail(customer) {
+  if (!customer) return null;
+  
+  // Use 'email' field (from your Customer model)
+  return customer.email || null;
+}
+
+function formatDate(dateString) {
+  if (!dateString) return 'N/A';
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+// Format category display
 function formatCategory(category) {
   if (!category) return 'N/A';
   
@@ -330,42 +454,36 @@ function formatCategory(category) {
   return categoryMap[category] || category;
 }
 
-const filteredPackages = computed(() => {
-  // Handle both array and paginated data
-  const packagesData = Array.isArray(props.packages) 
-    ? props.packages 
-    : (props.packages.data || []);
+// Server-side filtering functions
+function handleFilterChange() {
+  const payload = {
+    ...filters,
+    page: 1
+  };
   
-  return packagesData.filter(pkg => {
-    const matchesSearch = search.value === '' || 
-      pkg.item_code.toLowerCase().includes(search.value.toLowerCase()) ||
-      pkg.item_name.toLowerCase().includes(search.value.toLowerCase()) ||
-      (pkg.waybill_number && pkg.waybill_number.toLowerCase().includes(search.value.toLowerCase()));
-    
-    const matchesCategory = categoryFilter.value === '' || 
-      pkg.category === categoryFilter.value;
-    
-    const matchesStatus = statusFilter.value === '' || 
-      pkg.status === statusFilter.value;
-    
-    return matchesSearch && matchesCategory && matchesStatus;
-  }).sort((a, b) => {
-    const modifier = sortDirection.value === 'asc' ? 1 : -1;
-    
-    let aValue = a[sortField.value];
-    let bValue = b[sortField.value];
-    
-    if (aValue == null) aValue = '';
-    if (bValue == null) bValue = '';
-    
-    aValue = String(aValue).toLowerCase();
-    bValue = String(bValue).toLowerCase();
-
-    if (aValue < bValue) return -1 * modifier;
-    if (aValue > bValue) return 1 * modifier;
-    return 0;
+  router.visit(route('admin.packages.index'), {
+    data: payload,
+    preserveState: true,
+    preserveScroll: true,
+    replace: true
   });
-});
+}
+
+// Debounced search for better performance
+let searchTimeout = null;
+function handleDebouncedFilter() {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    handleFilterChange();
+  }, 500);
+}
+
+function resetFilters() {
+  filters.search = '';
+  filters.category = '';
+  filters.status = '';
+  handleFilterChange();
+}
 
 const statusForm = useForm({
   package_id: null,
@@ -376,11 +494,29 @@ const statusForm = useForm({
 function handleSort(sortParams) {
   sortField.value = sortParams.field;
   sortDirection.value = sortParams.direction;
+  
+  const payload = {
+    ...filters,
+    sort: sortParams.field,
+    direction: sortParams.direction
+  };
+  
+  router.visit(route('admin.packages.index'), {
+    data: payload,
+    preserveState: true,
+    preserveScroll: true,
+    replace: true
+  });
 }
 
 function handlePageChange(page) {
-  // Use the correct route name we now know exists
-  router.get(route('admin.packages.index', { page: page }), {
+  const payload = {
+    ...filters,
+    page: page
+  };
+  
+  router.visit(route('admin.packages.index'), {
+    data: payload,
     preserveState: true,
     preserveScroll: true,
     replace: true
@@ -392,7 +528,6 @@ function refreshData() {
 }
 
 function viewPackage(id) {
-  // Try different possible route names
   const possibleRoutes = [
     'packages.track',
     'packages.show',
@@ -407,7 +542,6 @@ function viewPackage(id) {
     }
   }
   
-  // Fallback to direct URL
   router.get(`/packages/${id}`);
 }
 
@@ -426,7 +560,6 @@ function closeStatusModal() {
 }
 
 function submitStatusUpdate() {
-  // Try different possible route names for status update
   const possibleRoutes = [
     'admin.packages.mark-status',
     'packages.update-status',
@@ -440,6 +573,7 @@ function submitStatusUpdate() {
         preserveScroll: true,
         onSuccess: () => {
           closeStatusModal();
+          refreshData();
         }
       });
       routeFound = true;
@@ -460,7 +594,6 @@ function applyBulkStatus(status) {
   }
 
   if (confirm(`Are you sure you want to update ${selectedPackages.value.length} package(s) to ${status}?`)) {
-    // Try different possible route names for bulk status
     const possibleRoutes = [
       'admin.packages.bulk-status',
       'packages.bulk-status',
@@ -475,6 +608,9 @@ function applyBulkStatus(status) {
           status: status
         }, {
           preserveScroll: true,
+          onSuccess: () => {
+            refreshData();
+          }
         });
         routeFound = true;
         break;
@@ -489,24 +625,20 @@ function applyBulkStatus(status) {
 }
 
 function statusButtonClass(status) {
-  // Using your requested color scheme
   if (status === 'delivered' || status === 'completed') return 'bg-green-500 text-white hover:bg-green-600';
   if (status === 'returned' || status === 'rejected') return 'bg-red-500 text-white hover:bg-red-600';
   if (status === 'in_transit' || status === 'loaded' || status === 'ready_for_pickup') return 'bg-green-500 text-white hover:bg-green-600';
   if (status === 'preparing') return 'bg-yellow-500 text-white hover:bg-yellow-600';
   if (status === 'damaged_in_transit' || status === 'lost_in_transit') return 'bg-red-500 text-white hover:bg-red-600';
-  // Default for other statuses
   return 'bg-gray-500 text-white hover:bg-gray-600';
 }
 
 function statusBadgeClass(status) {
-  // Using your requested color scheme
   if (status === 'delivered' || status === 'completed') return 'bg-green-100 text-green-800';
   if (status === 'returned' || status === 'rejected') return 'bg-red-100 text-red-800';
   if (status === 'in_transit' || status === 'loaded' || status === 'ready_for_pickup') return 'bg-green-100 text-green-800';
   if (status === 'preparing') return 'bg-yellow-100 text-yellow-800';
   if (status === 'damaged_in_transit' || status === 'lost_in_transit') return 'bg-red-100 text-red-800';
-  // Default for other statuses
   return 'bg-gray-100 text-gray-800';
 }
 
@@ -522,13 +654,16 @@ function categoryBadgeClass(category) {
   }
 }
 
-// Note: Removed selectedPackages functionality since it wasn't implemented in the original
 const selectedPackages = ref([]);
+
+onMounted(() => {
+  console.log('Initial filters from server:', props.filters);
+});
 </script>
 
 <style scoped>
 .zoom-content {
-  zoom: 0.80;
+  zoom: 0.85;
 }
 
 /* Override DataTable's left padding if needed */

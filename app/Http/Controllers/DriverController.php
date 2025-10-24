@@ -548,42 +548,45 @@ class DriverController extends Controller
     }
 
     private function getPackagesReadyForStatusUpdate(User $driver)
-    {
-        return Package::with([
-                'currentRegion',
-                'deliveryRequest.dropOffRegion',
-                'deliveryRequest.deliveryOrder'
-            ])
-            ->whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
-                $query->where('driver_id', $driver->id)
-                    ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
-            })
-            ->where('status', 'in_transit')
-            ->whereHas('deliveryRequest', function($query) use ($driver) {
-                $query->where('drop_off_region_id', $driver->current_region_id);
-            })
-            ->get()
-            ->map(function ($package) {
-                return [
-                    'id' => $package->id,
-                    'item_code' => $package->item_code,
-                    'item_name' => $package->item_name,
-                    'status' => $package->status,
-                    'current_region' => [
-                        'id' => $package->current_region_id,
-                        'name' => $package->currentRegion->name,
-                    ],
-                    'deliveryRequest' => $package->deliveryRequest ? [
-                        'drop_off_region_id' => $package->deliveryRequest->drop_off_region_id,
-                        'dropOffRegion' => $package->deliveryRequest->dropOffRegion->name,
-                        'reference_number' => $package->deliveryRequest->reference_number,
-                    ] : null,
-                    'deliveryOrder' => $package->deliveryRequest->deliveryOrder ? [
-                        'id' => $package->deliveryRequest->deliveryOrder->id,
-                    ] : null
-                ];
-            });
-    }
+{
+    return Package::with([
+            'currentRegion',
+            'deliveryRequest.dropOffRegion',
+            'deliveryRequest.deliveryOrder'
+        ])
+        ->whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
+            $query->where('driver_id', $driver->id)
+                ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
+        })
+        ->where('status', 'in_transit')
+        ->whereHas('deliveryRequest', function($query) use ($driver) {
+            $query->where('drop_off_region_id', $driver->current_region_id);
+        })
+        ->get()
+        ->map(function ($package) {
+            return [
+                'id' => $package->id,
+                'item_code' => $package->item_code,
+                'item_name' => $package->item_name,
+                'category' => $package->category, // Add this
+                'weight' => $package->weight ? (float) $package->weight : null, // Add this - cast to float
+                'volume' => $package->volume ? (float) $package->volume : null, // Add this - cast to float
+                'status' => $package->status,
+                'current_region' => [
+                    'id' => $package->current_region_id,
+                    'name' => $package->currentRegion->name,
+                ],
+                'deliveryRequest' => $package->deliveryRequest ? [
+                    'drop_off_region_id' => $package->deliveryRequest->drop_off_region_id,
+                    'dropOffRegion' => $package->deliveryRequest->dropOffRegion->name,
+                    'reference_number' => $package->deliveryRequest->reference_number,
+                ] : null,
+                'deliveryOrder' => $package->deliveryRequest->deliveryOrder ? [
+                    'id' => $package->deliveryRequest->deliveryOrder->id,
+                ] : null
+            ];
+        });
+}
 
    public function updateDestinationPackagesStatus(Request $request)
 {
@@ -982,45 +985,48 @@ class DriverController extends Controller
             ->toArray();
     }
 
-    private function getDriverPackages(User $driver)
-    {
-        return Package::with([
-                'currentRegion',
-                'deliveryRequest.dropOffRegion',
-                'deliveryRequest.pickUpRegion',
-                'deliveryRequest.deliveryOrder'
-            ])
-            ->whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
-                $query->where('driver_id', $driver->id)
-                    ->whereIn('status', ['assigned', 'dispatched', 'in_transit', 'needs_review']);
-            })
-            ->whereNotIn('status', ['delivered', 'completed', 'returned', 'damaged_in_transit', 'lost_in_transit'])
-            ->get()
-            ->map(function ($package) {
-                    $currentStatus = $package->status;
-                    $isFinalStatus = in_array($currentStatus, ['delivered', 'returned', 'completed', 'damaged_in_transit', 'lost_in_transit']);
-                    
-                    return [
-                        'id' => $package->id,
-                        'item_code' => $package->item_code,
-                        'item_name' => $package->item_name,
-                        'status' => $currentStatus,
-                        'is_final_status' => $isFinalStatus,
-                        'verified_at' => $package->verified_at,
-                        'verification_status' => $package->verification_status,
-                        'current_region' => [
-                            'id' => $package->current_region_id,
-                            'name' => $package->currentRegion->name,
-                        ],
-                        'deliveryRequest' => $package->deliveryRequest ? [
-                            'drop_off_region_id' => $package->deliveryRequest->drop_off_region_id,
-                            'pick_up_region_id' => $package->deliveryRequest->pick_up_region_id,
-                            'dropOffRegion' => $package->deliveryRequest->dropOffRegion->name,
-                            'pickUpRegion' => $package->deliveryRequest->pickUpRegion->name
-                        ] : null
-                    ];
-                });
-        }
+   private function getDriverPackages(User $driver)
+{
+    return Package::with([
+            'currentRegion',
+            'deliveryRequest.dropOffRegion',
+            'deliveryRequest.pickUpRegion',
+            'deliveryRequest.deliveryOrder'
+        ])
+        ->whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
+            $query->where('driver_id', $driver->id)
+                ->whereIn('status', ['assigned', 'dispatched', 'in_transit', 'needs_review']);
+        })
+        ->whereNotIn('status', ['delivered', 'completed', 'returned', 'damaged_in_transit', 'lost_in_transit'])
+        ->get()
+        ->map(function ($package) {
+                $currentStatus = $package->status;
+                $isFinalStatus = in_array($currentStatus, ['delivered', 'returned', 'completed', 'damaged_in_transit', 'lost_in_transit']);
+                
+                return [
+                    'id' => $package->id,
+                    'item_code' => $package->item_code,
+                    'item_name' => $package->item_name,
+                    'category' => $package->category, // Add this
+                    'weight' => $package->weight ? (float) $package->weight : null, // Add this
+                    'volume' => $package->volume ? (float) $package->volume : null, // Add this
+                    'status' => $currentStatus,
+                    'is_final_status' => $isFinalStatus,
+                    'verified_at' => $package->verified_at,
+                    'verification_status' => $package->verification_status,
+                    'current_region' => [
+                        'id' => $package->current_region_id,
+                        'name' => $package->currentRegion->name,
+                    ],
+                    'deliveryRequest' => $package->deliveryRequest ? [
+                        'drop_off_region_id' => $package->deliveryRequest->drop_off_region_id,
+                        'pick_up_region_id' => $package->deliveryRequest->pick_up_region_id,
+                        'dropOffRegion' => $package->deliveryRequest->dropOffRegion->name,
+                        'pickUpRegion' => $package->deliveryRequest->pickUpRegion->name
+                    ] : null
+                ];
+            });
+}
 
     private function getDriverStats(User $driver)
     {
@@ -1059,52 +1065,69 @@ class DriverController extends Controller
         }
 
     private function getActiveDeliveries(User $driver)
-    {
-        return $driver->deliveryOrders()
-            ->with([
-                'deliveryRequest.receiver',
-                'deliveryRequest.packages' => function($query) {
-                    $query->whereNotIn('status', ['delivered', 'completed', 'returned', 'damaged_in_transit', 'lost_in_transit']);
-                },
-                'truck',
-                'currentRegion'
-            ])
-            ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
-            ->whereHas('deliveryRequest.packages', function($query) {
+{
+    return $driver->deliveryOrders()
+        ->with([
+            'deliveryRequest.receiver',
+            'deliveryRequest.packages' => function($query) {
                 $query->whereNotIn('status', ['delivered', 'completed', 'returned', 'damaged_in_transit', 'lost_in_transit']);
-            })
-            ->get()
-            ->map(function ($deliveryOrder) {
-                    $packages = $deliveryOrder->deliveryRequest->packages ?? collect([]);
-                    
+            },
+            'deliveryRequest.packages.currentRegion', // ✅ ADD THIS
+            'deliveryRequest.packages.deliveryRequest.dropOffRegion', // ✅ ADD THIS
+            'deliveryRequest.dropOffRegion', // ✅ ADD THIS
+            'deliveryRequest.pickUpRegion', // ✅ ADD THIS
+            'truck',
+            'currentRegion'
+        ])
+        ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
+        ->whereHas('deliveryRequest.packages', function($query) {
+            $query->whereNotIn('status', ['delivered', 'completed', 'returned', 'damaged_in_transit', 'lost_in_transit']);
+        })
+        ->get()
+        ->map(function ($deliveryOrder) {
+            $packages = $deliveryOrder->deliveryRequest->packages ?? collect([]);
+            
+            return [
+                'id' => $deliveryOrder->id,
+                'reference_number' => $deliveryOrder->deliveryRequest->reference_number,
+                'status' => $deliveryOrder->status,
+                'receiver' => $deliveryOrder->deliveryRequest->receiver->name,
+                'destination' => $deliveryOrder->deliveryRequest->dropOffRegion->name ?? 'Unknown',
+                'pickUpRegion' => $deliveryOrder->deliveryRequest->pickUpRegion->name ?? 'Unknown', // ✅ ADD THIS
+                'dropOffRegion' => $deliveryOrder->deliveryRequest->dropOffRegion->name ?? 'Unknown', // ✅ ADD THIS
+                'truck' => $deliveryOrder->truck ? [
+                    'make' => $deliveryOrder->truck->make,
+                    'model' => $deliveryOrder->truck->model,
+                    'license_plate' => $deliveryOrder->truck->license_plate,
+                ] : null,
+                'packages' => $packages->take(2)->map(function ($package) {
                     return [
-                        'id' => $deliveryOrder->id,
-                        'reference_number' => $deliveryOrder->deliveryRequest->reference_number,
-                        'status' => $deliveryOrder->status,
-                        'receiver' => $deliveryOrder->deliveryRequest->receiver->name,
-                        'destination' => $deliveryOrder->deliveryRequest->dropOffRegion->name ?? 'Unknown',
-                        'truck' => $deliveryOrder->truck ? [
-                            'make' => $deliveryOrder->truck->make,
-                            'model' => $deliveryOrder->truck->model,
-                            'license_plate' => $deliveryOrder->truck->license_plate,
-                        ] : null,
-                        'packages' => $packages->take(2)->map(function ($package) {
-                            return [
-                                'id' => $package->id,
-                                'item_code' => $package->item_code,
-                            ];
-                        }),
-                        'package_count' => $packages->count(),
-                        'verified_packages' => $packages->whereNotNull('verified_at')->count(),
-                        'current_region' => $deliveryOrder->currentRegion->name ?? 'Unknown',
-                        'is_backhaul' => $deliveryOrder->isBackhaulAssignment(),
-                        'estimated_arrival' => $deliveryOrder->estimated_arrival?->format('M d, Y H:i'),
-                        'actual_arrival' => $deliveryOrder->actual_arrival?->format('M d, Y H:i'),
-                        'dispatched_at' => $deliveryOrder->dispatched_at?->format('M d, Y H:i'),
+                        'id' => $package->id,
+                        'item_code' => $package->item_code,
+                        'item_name' => $package->item_name, // ✅ ADD THIS
+                        'category' => $package->category, // ✅ ADD THIS
+                        'weight' => $package->weight ? (float) $package->weight : null, // ✅ ADD THIS
+                        'volume' => $package->volume ? (float) $package->volume : null, // ✅ ADD THIS
+                        'current_region' => [ // ✅ ADD THIS
+                            'id' => $package->current_region_id,
+                            'name' => $package->currentRegion->name ?? 'Unknown',
+                        ],
+                        'deliveryRequest' => $package->deliveryRequest ? [ // ✅ ADD THIS
+                            'drop_off_region_id' => $package->deliveryRequest->drop_off_region_id,
+                            'dropOffRegion' => $package->deliveryRequest->dropOffRegion->name ?? 'Unknown',
+                        ] : null
                     ];
-                });
-    }
-
+                }),
+                'package_count' => $packages->count(),
+                'verified_packages' => $packages->whereNotNull('verified_at')->count(),
+                'current_region' => $deliveryOrder->currentRegion->name ?? 'Unknown',
+                'is_backhaul' => $deliveryOrder->isBackhaulAssignment(),
+                'estimated_arrival' => $deliveryOrder->estimated_arrival?->format('M d, Y H:i'),
+                'actual_arrival' => $deliveryOrder->actual_arrival?->format('M d, Y H:i'),
+                'dispatched_at' => $deliveryOrder->dispatched_at?->format('M d, Y H:i'),
+            ];
+        });
+}
     private function getRecentDeliveries(User $driver)
     {
         return $driver->deliveryOrders()

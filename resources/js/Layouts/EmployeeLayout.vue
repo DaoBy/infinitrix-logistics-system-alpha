@@ -44,7 +44,7 @@ onMounted(() => {
 <template>
   <v-app>
     <v-layout style="height: 100vh; overflow: hidden;">
-      <!-- Sidebar (fixed in place, does not overlay content) -->
+      <!-- Sidebar -->
       <div
         :style="{
           position: 'fixed',
@@ -55,37 +55,44 @@ onMounted(() => {
           width: sidebarWidth + 'px',
           transition: 'width 0.3s cubic-bezier(0.4,0,0.2,1)'
         }"
+        class="hidden lg:block"
       >
         <ESidebar @sidebar-toggle="onSidebarToggle" />
       </div>
 
-      <!-- Main Content Area - Adjusts based on sidebar width -->
+      <!-- Mobile Sidebar Overlay -->
+      <div class="lg:hidden">
+        <ESidebar @sidebar-toggle="onSidebarToggle" />
+      </div>
+
+      <!-- Main Content Area -->
       <v-main
         class="flex flex-col"
         :style="{
           marginLeft: sidebarWidth + 'px',
+          width: `calc(100vw - ${sidebarWidth}px)`,
           height: '100vh',
           overflow: 'hidden',
-          transition: 'margin-left 0.3s cubic-bezier(0.4,0,0.2,1)'
+          transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)'
         }"
       >
         <!-- Header Slot -->
-        <header v-if="$slots.header" class="bg-white shadow-sm shrink-0">
-          <v-container fluid class="px-6 py-3">
+        <header v-if="$slots.header" class="bg-white shadow-sm shrink-0 border-b border-gray-200">
+          <div class="px-4 sm:px-6 lg:px-8 py-4">
             <slot name="header" />
-          </v-container>
+          </div>
         </header>
 
         <!-- Scrollable Main Content -->
-        <div class="flex-1 overflow-y-auto">
-          <v-container fluid class="w-full pa-4">
+        <div class="flex-1 overflow-y-auto overflow-x-hidden">
+          <div class="w-full p-4 sm:p-6">
             <slot />
-          </v-container>
+          </div>
         </div>
 
         <!-- Fixed Footer -->
-        <footer class="bg-white border-t border-gray-200 py-2 px-6 shrink-0">
-          <div class="w-full flex flex-col sm:flex-row justify-between items-center gap-1">
+        <footer class="bg-white border-t border-gray-200 py-3 px-4 sm:px-6 shrink-0">
+          <div class="w-full flex flex-col sm:flex-row justify-between items-center gap-2">
             <!-- Copyright -->
             <p class="text-xs text-gray-500 text-center sm:text-left">
               © {{ new Date().getFullYear() }} LogiSys. All rights reserved.
@@ -111,17 +118,6 @@ onMounted(() => {
   height: 100%;
 }
 
-/* Sidebar fixed and does not overlay content */
-.v-layout > div:first-child {
-  position: fixed;
-  left: 0;
-  top: 0;
-  height: 100vh;
-  background: inherit;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-  pointer-events: auto;
-}
-
 /* Ensure v-main takes full height and doesn't overflow */
 .v-main {
   display: flex;
@@ -131,7 +127,7 @@ onMounted(() => {
 /* Scrollable content area */
 .flex-1 {
   flex: 1;
-  min-height: 0; /* Important for flexbox scrolling */
+  min-height: 0;
 }
 
 .overflow-y-auto {
@@ -148,8 +144,11 @@ header {
   flex-shrink: 0;
 }
 
-/* Ensure containers don't cause horizontal overflow */
-.v-container {
-  max-width: 100%;
+/* Mobile responsiveness */
+@media (max-width: 1023px) {
+  .v-main {
+    margin-left: 0 !important;
+    width: 100vw !important;
+  }
 }
 </style>

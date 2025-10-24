@@ -75,10 +75,10 @@ class DriverTruckAssignment extends Model
     }
 
     // Relationships
-    public function driver(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'driver_id');
-    }
+   public function driver()
+{
+    return $this->belongsTo(User::class, 'driver_id')->where('role', 'driver');
+}
 
     public function truck(): BelongsTo
     {
