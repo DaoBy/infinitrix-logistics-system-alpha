@@ -22,27 +22,6 @@ function goToAssignedDeliveries() {
   router.visit(route('driver.assigned-deliveries'));
 }
 
-// Handle backhaul enable/disable
-function toggleBackhaul() {
-  if (props.backhaul_available) {
-    // Disable backhaul
-    router.post(route('driver.backhaul.disable'), {}, {
-      preserveScroll: true,
-      onSuccess: () => {
-        router.reload();
-      }
-    });
-  } else {
-    // Enable backhaul
-    router.post(route('driver.backhaul.enable'), {}, {
-      preserveScroll: true,
-      onSuccess: () => {
-        router.reload();
-      }
-    });
-  }
-}
-
 // Helper function to format truck status with null checking
 function formatTruckStatus(status) {
   if (!status) return 'Unknown';
@@ -104,21 +83,7 @@ function getTruckStatusClasses(status) {
                     </div>
                 </div>
                 <div class="flex gap-2">
-                    <!-- Backhaul Toggle Button -->
-                    <PrimaryButton 
-                        v-if="stats.backhaul_eligible"
-                        @click="toggleBackhaul"
-                        :class="[
-                            'ml-0 sm:ml-4 mt-3 sm:mt-0',
-                            backhaul_available ? 'bg-red-600 hover:bg-red-700' : 'bg-purple-600 hover:bg-purple-700'
-                        ]"
-                    >
-                        <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path v-if="backhaul_available" stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                            <path v-else stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                        </svg>
-                        {{ backhaul_available ? 'Disable Backhaul' : 'Enable Backhaul' }}
-                    </PrimaryButton>
+                    
                     
                     <SecondaryButton @click="goToAssignedDeliveries" class="ml-0 sm:ml-4 mt-3 sm:mt-0">
                         <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
