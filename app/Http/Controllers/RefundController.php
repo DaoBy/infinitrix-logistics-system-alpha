@@ -273,13 +273,26 @@ class RefundController extends Controller
                 ->with('error', 'Only pending refunds/adjustments can be edited');
         }
 
+        // FIXED: Load packages with their values
         $refund->load([
             'deliveryRequest.sender',
-            'deliveryRequest.packages',
+            'deliveryRequest.packages' => function ($query) {
+                $query->select('id', 'item_name', 'value', 'weight', 'status', 'delivery_request_id', 
+                             'photo_path', 'incident_evidence', 'incident_description', 'incident_reported_at');
+            },
             'deliveryRequest.payment'
         ]);
 
-        $maxRefundable = $refund->calculateMaxRefundableAmount();
+        // Debug logging
+        \Log::info('Edit Refund Data', [
+            'refund_id' => $refund->id,
+            'original_amount' => $refund->original_amount,
+            'delivery_request_packages_count' => $refund->deliveryRequest->packages->count(),
+            'package_values_sum' => $refund->deliveryRequest->packages->sum('value'),
+            'refunded_packages' => $refund->refunded_packages
+        ]);
+
+        $maxRefundable = $this->calculateMaxRefundableAmount($refund->deliveryRequest, $refund->refunded_packages ?? []);
 
         return Inertia::render('Admin/Refunds/Edit', [
             'refund' => $refund,
@@ -398,55 +411,68 @@ class RefundController extends Controller
     return response()->json($deliveryRequests);
 }
 
-   public function calculateMaxRefund(Request $request)
-{
-    try {
-        // Handle package_ids parameter - it might be a JSON string
-        $packageIds = [];
-        if ($request->has('package_ids')) {
-            if (is_string($request->package_ids)) {
-                // Try to decode JSON string
-                $packageIds = json_decode($request->package_ids, true) ?? [];
-            } else {
-                $packageIds = $request->package_ids;
+    public function calculateMaxRefund(Request $request)
+    {
+        try {
+            // Handle package_ids parameter - it might be a JSON string
+            $packageIds = [];
+            if ($request->has('package_ids')) {
+                if (is_string($request->package_ids)) {
+                    // Try to decode JSON string
+                    $packageIds = json_decode($request->package_ids, true) ?? [];
+                } else {
+                    $packageIds = $request->package_ids;
+                }
             }
+
+            $request->merge(['package_ids' => $packageIds]);
+
+            $request->validate([
+                'delivery_request_id' => 'required|exists:delivery_requests,id',
+                'package_ids' => 'nullable|array',
+                'package_ids.*' => 'exists:packages,id',
+            ]);
+
+            $deliveryRequest = DeliveryRequest::with('packages')->findOrFail($request->delivery_request_id);
+            
+            $maxRefundable = $this->calculateMaxRefundableAmount($deliveryRequest, $packageIds);
+
+            // Get detailed breakdown for debugging
+            $deliveryFee = $deliveryRequest->total_price;
+            $packageValues = $deliveryRequest->packages->sum('value');
+            $selectedPackageValues = !empty($packageIds) 
+                ? Package::whereIn('id', $packageIds)->sum('value')
+                : $packageValues;
+
+            return response()->json([
+                'max_refundable' => (float) $maxRefundable,
+                'original_amount' => (float) $deliveryRequest->total_price,
+                'delivery_fee' => (float) $deliveryFee,
+                'total_package_values' => (float) $packageValues,
+                'selected_package_values' => (float) $selectedPackageValues,
+                'package_count' => $deliveryRequest->packages->count(),
+                'selected_package_count' => count($packageIds),
+                'type' => $deliveryRequest->isPrepaid() ? 'refund' : 'adjustment',
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Calculate max refund error: ' . $e->getMessage(), [
+                'delivery_request_id' => $request->delivery_request_id,
+                'package_ids' => $request->package_ids,
+                'exception' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'error' => 'Failed to calculate maximum refund amount: ' . $e->getMessage(),
+                'max_refundable' => 0,
+                'original_amount' => 0,
+                'delivery_fee' => 0,
+                'total_package_values' => 0,
+                'selected_package_values' => 0,
+                'type' => 'refund',
+            ], 500);
         }
-
-        $request->merge(['package_ids' => $packageIds]);
-
-        $request->validate([
-            'delivery_request_id' => 'required|exists:delivery_requests,id',
-            'package_ids' => 'nullable|array',
-            'package_ids.*' => 'exists:packages,id',
-        ]);
-
-        $deliveryRequest = DeliveryRequest::with('packages')->findOrFail($request->delivery_request_id);
-        
-        $maxRefundable = $this->calculateMaxRefundableAmount($deliveryRequest, $packageIds);
-
-        return response()->json([
-            'max_refundable' => (float) $maxRefundable,
-            'original_amount' => (float) $deliveryRequest->total_price,
-            'package_values' => (float) $deliveryRequest->packages->sum('value'),
-            'type' => $deliveryRequest->isPrepaid() ? 'refund' : 'adjustment',
-        ]);
-        
-    } catch (\Exception $e) {
-        \Log::error('Calculate max refund error: ' . $e->getMessage(), [
-            'delivery_request_id' => $request->delivery_request_id,
-            'package_ids' => $request->package_ids,
-            'exception' => $e->getTraceAsString()
-        ]);
-        
-        return response()->json([
-            'error' => $e->getMessage(),
-            'max_refundable' => 0,
-            'original_amount' => 0,
-            'package_values' => 0,
-            'type' => 'refund',
-        ], 500);
     }
-}
 
     /**
      * Calculate maximum refundable/adjustable amount
@@ -454,23 +480,43 @@ class RefundController extends Controller
 /**
  * Calculate maximum refundable/adjustable amount
  */
-private function calculateMaxRefundableAmount(DeliveryRequest $deliveryRequest, array $packageIds = []): float
-{
-    // Start with delivery cost
-    $maxRefundable = $deliveryRequest->total_price;
+  private function calculateMaxRefundableAmount(DeliveryRequest $deliveryRequest, array $packageIds = []): float
+    {
+        // Start with delivery fee (base shipping cost)
+        $deliveryFee = (float) $deliveryRequest->total_price;
+        
+        // Calculate package values
+        $packageValues = 0;
 
-    if (!empty($packageIds)) {
-        // Add selected package values
-        $selectedPackagesValue = Package::whereIn('id', $packageIds)->sum('value');
-        $maxRefundable += $selectedPackagesValue;
-    } else {
-        // No packages selected = assume complete failure
-        $packageValues = $deliveryRequest->packages->sum('value');
-        $maxRefundable += $packageValues;
+        // Ensure packages are loaded
+        if (!$deliveryRequest->relationLoaded('packages')) {
+            $deliveryRequest->load('packages');
+        }
+
+        if (!empty($packageIds)) {
+            // Add selected package values only
+            $selectedPackages = Package::whereIn('id', $packageIds)->get();
+            $packageValues = $selectedPackages->sum('value');
+        } else {
+            // No packages selected = assume complete failure, use all packages
+            $packageValues = $deliveryRequest->packages->sum('value');
+        }
+
+        // Total maximum = delivery fee + package values
+        $maxRefundable = $deliveryFee + (float) $packageValues;
+
+        \Log::info('Max refundable calculation', [
+            'delivery_request_id' => $deliveryRequest->id,
+            'delivery_fee' => $deliveryFee,
+            'package_values' => $packageValues,
+            'selected_package_ids' => $packageIds,
+            'max_refundable' => $maxRefundable,
+            'package_count' => $deliveryRequest->packages->count(),
+            'all_package_values' => $deliveryRequest->packages->pluck('value')
+        ]);
+
+        return $maxRefundable;
     }
-
-    return $maxRefundable;
-}
 
     /**
      * Release undamaged packages after refund/adjustment processing

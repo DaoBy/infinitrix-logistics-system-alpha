@@ -532,18 +532,35 @@ public function checkManifestStatus(DriverTruckAssignment $assignment)
 
     protected function hasFinalizedManifest(DriverTruckAssignment $assignment): bool
 {
-    // Check for finalized manifest using driver_truck_assignment_id
+    // First, check for finalized manifest using the specific assignment ID
     $hasFinalizedManifest = \App\Models\Manifest::where('driver_truck_assignment_id', $assignment->id)
         ->where('status', 'finalized')
         ->exists();
 
-    // If no manifest found by assignment ID, check by driver_id and truck_id for backward compatibility
+    // If no manifest found by assignment ID, ONLY check by driver_id and truck_id 
+    // if this assignment actually has active delivery orders
     if (!$hasFinalizedManifest) {
-        $hasFinalizedManifest = \App\Models\Manifest::where('driver_id', $assignment->driver_id)
-            ->where('truck_id', $assignment->truck_id)
-            ->where('status', 'finalized')
+        $hasActiveOrders = \App\Models\DeliveryOrder::where('driver_truck_assignment_id', $assignment->id)
+            ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
             ->exists();
+
+        // Only check by driver_id + truck_id if there are active orders for this assignment
+        if ($hasActiveOrders) {
+            $hasFinalizedManifest = \App\Models\Manifest::where('driver_id', $assignment->driver_id)
+                ->where('truck_id', $assignment->truck_id)
+                ->where('status', 'finalized')
+                ->exists();
+        }
     }
+
+    \Log::info("Manifest check for assignment", [
+        'assignment_id' => $assignment->id,
+        'driver_id' => $assignment->driver_id,
+        'truck_id' => $assignment->truck_id,
+        'has_finalized_manifest' => $hasFinalizedManifest,
+        'has_active_orders' => $hasActiveOrders ?? false,
+        'method' => 'updated_check'
+    ]);
 
     return $hasFinalizedManifest;
 }

@@ -1,7 +1,7 @@
 <template>
   <EmployeeLayout>
     <template #header>
-      <div class="flex flex-wrap justify-between items-center gap-4 px-4 md:px-6 max-w-screen-xl mx-auto w-full">
+      <div class="flex flex-wrap justify-between items-center gap-4 px-4 md:px-6 w-full">
         <div>
           <h2 class="text-xl font-semibold leading-tight text-gray-800">
             Cargo Assignment Dashboard
@@ -9,6 +9,7 @@
           <p class="text-sm text-gray-600 mt-1">
             Manage delivery assignments and track active deliveries
           </p>
+
         </div>
         <div class="flex flex-wrap gap-2">
           <SearchInput
@@ -126,7 +127,7 @@
             </div>
 
             <!-- Advanced Filters -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
               <SelectInput
                 v-model="filters.region_id"
                 :options="regionOptions"
@@ -135,33 +136,51 @@
                 :disabled="tabLoading"
               />
 
-              <!-- Assigned Tab Filters -->
-              <template v-if="activeTab === 'assigned'">
+              <!-- Ready Tab Filters -->
                 <SelectInput
-                  v-model="filters.driver_id"
-                  :options="driverOptions"
-                  placeholder="Filter by Driver"
-                  @change="handleFilterChange"
-                  :disabled="tabLoading"
-                />
-              </template>
+    v-if="activeTab === 'ready'"
+    v-model="filters.sticker_status"
+    :options="stickerStatusOptions"
+    placeholder="Sticker Status"
+    @change="handleFilterChange"
+    :disabled="tabLoading"
+  />
+
+              <!-- Assigned Tab Filters -->
+             <SelectInput
+    v-if="activeTab === 'assigned'"
+    v-model="filters.driver_id"
+    :options="driverOptions"
+    placeholder="Filter by Driver"
+    @change="handleFilterChange"
+    :disabled="tabLoading"
+  />
+
+              
             </div>
 
             <!-- Filter Info -->
-            <div class="flex justify-between items-center mt-4">
-              <div class="text-sm text-gray-500">
-                Showing {{ filteredDeliveries.length }} deliveries
-                <span v-if="filters.region_id" class="ml-2">
-                  in {{ getSelectedRegionName(filters.region_id) }}
-                </span>
-              </div>
-              <div v-if="activeTab === 'ready'" class="text-xs text-gray-600">
-                <span class="flex items-center">
-                  <div class="w-2 h-2 bg-yellow-500 rounded-full mr-1"></div>
-                  Missing Stickers
-                </span>
-              </div>
-            </div>
+         <div class="flex justify-between items-center mt-4">
+  <div class="text-sm text-gray-500">
+    Showing {{ deliveries.meta?.from || 0 }} to {{ deliveries.meta?.to || 0 }} of {{ deliveries.meta?.total || 0 }} deliveries
+    <span v-if="filters.region_id" class="ml-2">
+      in {{ getSelectedRegionName(filters.region_id) }}
+    </span>
+    <span v-if="filters.sticker_status && activeTab === 'ready'" class="ml-2">
+      • {{ getStickerStatusLabel(filters.sticker_status) }}
+    </span>
+    <!-- Add driver filter display for assigned tab -->
+    <span v-if="filters.driver_id && activeTab === 'assigned'" class="ml-2">
+      • Driver: {{ getSelectedDriverName(filters.driver_id) }}
+    </span>
+  </div>
+  <div v-if="activeTab === 'ready'" class="text-xs text-gray-600">
+    <span class="flex items-center">
+      <div class="w-2 h-2 bg-yellow-500 rounded-full mr-1"></div>
+      Missing Stickers
+    </span>
+  </div>
+</div>
           </div>
         </div>
 
@@ -241,6 +260,7 @@
                       <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Packages</th>
                       <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Volume</th>
                       <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Weight</th>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                       <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
                       <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
@@ -274,7 +294,6 @@
                         </div>
                         <div class="text-xs text-gray-500 mt-1">
                           ID: DO-{{ String(delivery.delivery_request_id || '').padStart(6, '0') }}
-                          <span v-if="delivery.created_at"> | Created: {{ formatDate(delivery.created_at) }}</span>
                         </div>
                         <div v-if="hasUnstickerizedPackages(delivery)" class="text-xs text-yellow-600 flex items-center mt-1">
                           <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
@@ -296,12 +315,20 @@
                       <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {{ formatWeight(calculateTotalWeight(delivery.delivery_request?.packages || [])) }}
                       </td>
+                   <td class="px-6 py-4 whitespace-nowrap">
+  <StatusBadge 
+    :status="delivery.status" 
+    :variant="getDeliveryStatusVariant(delivery.status)"
+  >
+    {{ getDeliveryStatusLabel(delivery.status) }}
+  </StatusBadge>
+</td>
                       <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {{ formatDate(delivery.created_at) }}
                       </td>
                       <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <SecondaryButton 
-                          @click="viewDetails(delivery.id)"
+                          @click="viewDetails(delivery.delivery_request_id)"
                           size="xs"
                         >
                           Details
@@ -320,6 +347,31 @@
                   </svg>
                 </div>
                 <p class="text-gray-500">No deliveries ready for assignment</p>
+              </div>
+
+              <!-- Pagination for Ready Tab -->
+              <div v-if="deliveries.meta && deliveries.meta.last_page > 1" class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                <div class="flex-1 flex justify-between items-center">
+                  <div class="text-sm text-gray-700">
+                    Page {{ deliveries.meta.current_page }} of {{ deliveries.meta.last_page }}
+                  </div>
+                  <div class="flex space-x-2">
+                    <button
+                      @click="handlePageChange(deliveries.meta.current_page - 1)"
+                      :disabled="deliveries.meta.current_page <= 1"
+                      class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      @click="handlePageChange(deliveries.meta.current_page + 1)"
+                      :disabled="deliveries.meta.current_page >= deliveries.meta.last_page"
+                      class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -358,7 +410,6 @@
                         </div>
                         <div class="text-xs text-gray-500 mt-1">
                           ID: DO-{{ String(delivery.id || '').padStart(6, '0') }}
-                          <span v-if="delivery.created_at"> | Created: {{ formatDate(delivery.created_at) }}</span>
                         </div>
                       </td>
                       <td class="px-6 py-4 whitespace-nowrap">
@@ -412,7 +463,7 @@
                       <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div class="flex justify-end space-x-2">
                           <SecondaryButton 
-                            @click="viewDetails(delivery.id)"
+                            @click="viewDetails(delivery.delivery_request_id)"
                             size="xs"
                           >
                             Details
@@ -453,6 +504,31 @@
                 </div>
                 <p class="text-gray-500">No assigned deliveries found</p>
               </div>
+
+              <!-- Pagination for Assigned Tab -->
+              <div v-if="deliveries.meta && deliveries.meta.last_page > 1" class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                <div class="flex-1 flex justify-between items-center">
+                  <div class="text-sm text-gray-700">
+                    Page {{ deliveries.meta.current_page }} of {{ deliveries.meta.last_page }}
+                  </div>
+                  <div class="flex space-x-2">
+                    <button
+                      @click="handlePageChange(deliveries.meta.current_page - 1)"
+                      :disabled="deliveries.meta.current_page <= 1"
+                      class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      @click="handlePageChange(deliveries.meta.current_page + 1)"
+                      :disabled="deliveries.meta.current_page >= deliveries.meta.last_page"
+                      class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -485,7 +561,6 @@
                         </div>
                         <div class="text-xs text-gray-500 mt-1">
                           ID: DO-{{ String(delivery.delivery_request_id || '').padStart(6, '0') }}
-                          <span v-if="delivery.created_at"> | Created: {{ formatDate(delivery.created_at) }}</span>
                         </div>
                       </td>
                       <td class="px-6 py-4 whitespace-nowrap">
@@ -519,7 +594,7 @@
                       </td>
                       <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <SecondaryButton 
-                          @click="viewDetails(delivery.id)"
+                          @click="viewDetails(delivery.delivery_request_id)"
                           size="xs"
                         >
                           Track
@@ -538,6 +613,31 @@
                   </svg>
                 </div>
                 <p class="text-gray-500">No active deliveries found</p>
+              </div>
+
+              <!-- Pagination for Active Tab -->
+              <div v-if="deliveries.meta && deliveries.meta.last_page > 1" class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                <div class="flex-1 flex justify-between items-center">
+                  <div class="text-sm text-gray-700">
+                    Page {{ deliveries.meta.current_page }} of {{ deliveries.meta.last_page }}
+                  </div>
+                  <div class="flex space-x-2">
+                    <button
+                      @click="handlePageChange(deliveries.meta.current_page - 1)"
+                      :disabled="deliveries.meta.current_page <= 1"
+                      class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      @click="handlePageChange(deliveries.meta.current_page + 1)"
+                      :disabled="deliveries.meta.current_page >= deliveries.meta.last_page"
+                      class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -844,23 +944,6 @@
             </div>
           </div>
         </div>
-
-        <!-- Pagination -->
-        <div v-if="deliveries.data.length > 0 && !tabLoading" class="bg-white px-4 py-3 flex items-center justify-center border-t border-gray-200 sm:px-6 mt-6 max-w-screen-xl mx-auto rounded-lg">
-          <div class="flex items-center space-x-2">
-            <button
-              @click="handlePageChange(deliveries.current_page - 1)"
-              :disabled="deliveries.current_page <= 1 || tabLoading"
-              class="px-3 py-1 rounded border text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-            >Previous</button>
-            <span>Page {{ deliveries.current_page }} of {{ deliveries.last_page }}</span>
-            <button
-              @click="handlePageChange(deliveries.current_page + 1)"
-              :disabled="deliveries.current_page >= deliveries.last_page || tabLoading"
-              class="px-3 py-1 rounded border text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-            >Next</button>
-          </div>
-        </div>
       </template>
     </div>
 
@@ -1000,7 +1083,7 @@
                   </div>
                   <p class="text-xs text-gray-500 mt-0.5 truncate">
                     {{ delivery.delivery_request?.pick_up_region?.name ?? 'N/A' }} → 
-                    {{ delivery.delivery_request?.drop_off_region?.name ?? 'N/A' }}
+                    {{ delivery.delivery_request?.drop_region?.name ?? 'N/A' }}
                   </p>
                   <div class="flex items-center space-x-3 mt-1 text-xs text-gray-400">
                     <span>Vol: {{ formatVolume(calculateTotalVolume(delivery.delivery_request?.packages || [])) }}</span>
@@ -1122,6 +1205,7 @@ import FlashMessages from '@/Components/FlashMessages.vue'
 import ConfirmationModal from '@/Components/ConfirmationModal.vue'
 import DispatchModal from '@/Components/DispatchModal.vue'
 import Modal from '@/Components/Modal.vue'
+import StatusBadge from '@/Components/StatusBadge.vue'
 import { TruckIcon } from '@heroicons/vue/24/outline'
 
 // Props
@@ -1166,7 +1250,9 @@ const assignmentTypeFilter = ref('all')
 const filters = reactive({
   search: props.filters?.search || '',
   region_id: props.filters?.region_id || '',
-  driver_id: props.filters?.driver_id || ''
+  driver_id: props.filters?.driver_id || '',
+  sticker_status: props.filters?.sticker_status || '',
+  status: props.filters?.status || ''
 })
 
 // Computed
@@ -1178,18 +1264,28 @@ const regionOptions = computed(() => [
   })) || [])
 ])
 
+const stickerStatusOptions = computed(() => [
+  { value: '', label: 'All Sticker Status' },
+  { value: 'with_stickers', label: 'With Stickers' },
+  { value: 'missing_stickers', label: 'Missing Stickers' }
+])
+
+
+
 const driverOptions = computed(() => {
-  // Get unique drivers from assigned deliveries
+  // Get unique drivers from ALL assigned deliveries, not just filtered ones
   const drivers = new Map();
   
-  if (activeTab.value === 'assigned') {
-    filteredDeliveries.value.forEach(delivery => {
+  if (activeTab.value === 'assigned' && deliveries.value.data) {
+    deliveries.value.data.forEach(delivery => {
       const driver = delivery.driver_truck_assignment?.driver;
       if (driver && driver.id) {
+        // Use driver name as the label, not employee ID
         drivers.set(driver.id, {
           value: driver.id,
-          label: driver.name,
-          employee_id: driver.employee_id
+          label: driver.name, // Just show the driver name
+          name: driver.name,
+          employee_id: driver.employee_id || null
         });
       }
     });
@@ -1211,65 +1307,15 @@ const hasFlashMessages = computed(() => {
   return props.flash?.success || props.flash?.error || props.flash?.warning
 })
 
-const deliveries = computed(() => props.deliveries || { data: [] })
-
+const deliveries = computed(() => props.deliveries || { data: [], meta: {} })
 const allSelected = computed(() => {
   return filteredDeliveries.value.length > 0 && 
          filteredDeliveries.value.every(delivery => isDeliverySelected(delivery.id))
 })
 
-// Filter deliveries by active tab status
+// SIMPLIFIED - Just return the backend-paginated data
 const filteredDeliveries = computed(() => {
-  const allDeliveries = deliveries.value.data || [];
-  
-  // First filter by status based on active tab
-  let statusFiltered = allDeliveries.filter(delivery => {
-    switch (activeTab.value) {
-      case 'ready':
-        return delivery.status === 'ready'
-      case 'assigned':
-        return delivery.status === 'assigned'
-      case 'active':
-        return delivery.status === 'in_transit' || delivery.status === 'dispatched'
-      default:
-        return true
-    }
-  });
-  
-  // Then apply other filters
-  return statusFiltered.filter(delivery => {
-    // Search filter
-    if (filters.search) {
-      const searchTerm = filters.search.toLowerCase();
-      const referenceNumber = delivery.delivery_request?.reference_number?.toLowerCase() || '';
-      const doNumber = `do-${delivery.id?.toString()?.padStart(6, '0')}`.toLowerCase();
-      const pickupRegion = delivery.delivery_request?.pick_up_region?.name?.toLowerCase() || '';
-      const dropoffRegion = delivery.delivery_request?.drop_off_region?.name?.toLowerCase() || '';
-      const driverName = delivery.driver_truck_assignment?.driver?.name?.toLowerCase() || '';
-      
-      if (!referenceNumber.includes(searchTerm) && 
-          !doNumber.includes(searchTerm) && 
-          !pickupRegion.includes(searchTerm) && 
-          !dropoffRegion.includes(searchTerm) &&
-          !driverName.includes(searchTerm)) {
-        return false;
-      }
-    }
-    
-    // Region filter
-    if (filters.region_id) {
-      const pickupRegionId = delivery.delivery_request?.pick_up_region?.id;
-      if (pickupRegionId != filters.region_id) return false;
-    }
-    
-    // Driver filter (only for assigned tab)
-    if (filters.driver_id && activeTab.value === 'assigned') {
-      const driverId = delivery.driver_truck_assignment?.driver?.id;
-      if (driverId != filters.driver_id) return false;
-    }
-    
-    return true;
-  });
+  return deliveries.value.data || []
 })
 
 const driverTruckSets = computed(() => {
@@ -1287,7 +1333,12 @@ const batchSuggestions = computed(() => {
 })
 
 const effectiveBatchSuggestions = computed(() => {
-  return batchSuggestions.value
+  return batchSuggestions.value.filter(suggestion => {
+    // Only include suggestions where all deliveries are ready (not pending_payment)
+    return suggestion.delivery_requests?.every(delivery => 
+      delivery.status === 'ready'
+    ) ?? false;
+  });
 })
 
 const filteredDriverTruckSets = computed(() => {
@@ -1573,22 +1624,32 @@ function handleDebouncedFilter() {
 function resetFilters() {
   filters.search = '';
   filters.region_id = '';
-  filters.driver_id = ''; 
+  filters.driver_id = '';
+  filters.sticker_status = '';
+  // REMOVED: filters.status = '';
   handleFilterChange();
 }
 
 function handlePageChange(page) {
-  if (page >= 1 && page <= deliveries.value.last_page) {
+  if (page >= 1 && page <= deliveries.value.meta.last_page) {
     const payload = {
       ...filters,
       activeTab: activeTab.value,
-      page
+      page: page
     }
+    
+    // Remove empty filters
+    Object.keys(payload).forEach(key => {
+      if (payload[key] === '' || payload[key] === null || payload[key] === undefined) {
+        delete payload[key];
+      }
+    });
     
     router.visit(route('cargo-assignments.index'), {
       data: payload,
       preserveState: true,
-      preserveScroll: true
+      preserveScroll: true,
+      replace: true
     })
   }
 }
@@ -1765,6 +1826,60 @@ function getSelectedRegionName(regionId) {
   return region?.name || 'Selected Region'
 }
 
+// Add a helper method to get driver name for display
+function getSelectedDriverName(driverId) {
+  if (!driverId) return ''
+  const driverOption = driverOptions.value.find(opt => opt.value == driverId)
+  return driverOption?.name || driverOption?.label || 'Selected Driver'
+}
+
+function getStickerStatusLabel(status) {
+  const labels = {
+    'with_stickers': 'With Stickers',
+    'missing_stickers': 'Missing Stickers'
+  }
+  return labels[status] || status
+}
+
+function getStatusLabel(status) {
+  const labels = {
+    'ready': 'Ready',
+    'pending_payment': 'Pending Payment'
+  }
+  return labels[status] || status
+}
+
+
+
+// Helper method to check if ALL packages have stickers
+const hasAllStickers = (delivery) => {
+  const packages = delivery.delivery_request?.packages || []
+  if (packages.length === 0) return true
+  return packages.every(pkg => pkg.sticker_printed_at)
+}
+
+
+
+function getDeliveryStatusLabel(status) {
+  const labels = {
+    'ready': 'Ready',
+    'assigned': 'Assigned',
+    'dispatched': 'Dispatched',
+    'in_transit': 'In Transit'
+  }
+  return labels[status] || status
+}
+
+function getDeliveryStatusVariant(status) {
+  const variants = {
+    'ready': 'success',
+    'assigned': 'info',
+    'dispatched': 'primary',
+    'in_transit': 'secondary'
+  }
+  return variants[status] || 'secondary'
+}
+
 function getInitials(name) {
   if (!name) return '??'
   return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)
@@ -1864,16 +1979,13 @@ function calculateTotalWeight(packages) {
   return packages.reduce((total, pkg) => total + (Number(pkg.weight) || 0), 0)
 }
 
-function hasUnstickerizedPackages(delivery) {
+// Helper functions for VISUAL highlighting only (not filtering)
+const hasUnstickerizedPackages = (delivery) => {
   const packages = delivery.delivery_request?.packages || []
   return packages.some(pkg => !pkg.sticker_printed_at)
 }
 
-function hasUnstickerizedPackagesInSuggestion(suggestion) {
-  return suggestion.delivery_requests?.some(delivery => hasUnstickerizedPackages(delivery)) || false
-}
-
-function hasRegionMismatch(delivery) {
+const hasRegionMismatch = (delivery) => {
   if (!selectedSet.value) return false
   
   const homeRegionId = selectedSet.value.region?.id
@@ -1884,13 +1996,13 @@ function hasRegionMismatch(delivery) {
   const dropoffRegionId = delivery.delivery_request?.drop_off_region?.id
   
   if (isBackhaulSet) {
-    // Backhaul: pickup must be from current region, dropoff to home region
     return pickupRegionId !== currentRegionId || dropoffRegionId !== homeRegionId
   } else {
-    // Regular: pickup must be from home region
     return pickupRegionId !== homeRegionId
   }
 }
+
+
 
 function prepareBatchAssignment(suggestion) {
   if (!suggestion || !suggestion.delivery_requests) {

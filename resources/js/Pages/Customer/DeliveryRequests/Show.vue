@@ -144,177 +144,180 @@
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
           <!-- Left Column - Main Content (3/4 width) -->
           <div class="lg:col-span-3 space-y-6">
-            <!-- Delivery Status Timeline -->
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 class="text-xl font-semibold text-gray-900 mb-6">Delivery Progress</h2>
-              
-              <!-- Enhanced Status Timeline -->
-              <div class="relative">
-                <!-- Timeline Line -->
-                <div class="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
-                
-                <!-- Timeline Steps -->
-                <div class="space-y-8">
-                  <!-- Step 1: Request Submitted -->
-                  <div class="relative flex items-start">
-                    <div class="flex-shrink-0">
-                      <div :class="[
-                        'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium',
-                        currentStep >= 1 ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600'
-                      ]">
-                        1
-                      </div>
-                    </div>
-                    <div class="ml-6 flex-1">
-                      <div class="flex items-center justify-between">
-                        <h3 class="text-lg font-medium text-gray-900">Request Submitted</h3>
-                        <span class="text-sm text-gray-500">{{ formatDate(delivery.created_at) }}</span>
-                      </div>
-                      <p class="mt-1 text-gray-600">Your delivery request has been received and is being processed.</p>
-                    </div>
-                  </div>
+          <!-- Delivery Status Timeline -->
+<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+  <h2 class="text-xl font-semibold text-gray-900 mb-6">Delivery Progress</h2>
+  
+  <!-- Enhanced Status Timeline -->
+  <div class="relative">
+    <!-- Timeline Line -->
+    <div class="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+    
+    <!-- Timeline Steps -->
+    <div class="space-y-8">
+      <!-- Step 1: Request Submitted -->
+      <div class="relative flex items-start">
+        <div class="flex-shrink-0">
+          <div :class="[
+            'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium',
+            currentStep >= 1 ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600'
+          ]">
+            ✓
+          </div>
+        </div>
+        <div class="ml-6 flex-1">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-medium text-gray-900">Request Submitted</h3>
+            <span class="text-sm text-gray-500">{{ formatDate(delivery.created_at) }}</span>
+          </div>
+          <p class="mt-1 text-gray-600">Your delivery request has been received and is being processed.</p>
+        </div>
+      </div>
 
-                  <!-- Step 2: Approval -->
-                  <div class="relative flex items-start">
-                    <div class="flex-shrink-0">
-                      <div :class="[
-                        'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium',
-                        currentStep >= 2 ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600',
-                        delivery.status === 'rejected' ? 'bg-red-600 text-white' : ''
-                      ]">
-                        2
-                      </div>
-                    </div>
-                    <div class="ml-6 flex-1">
-                      <div class="flex items-center justify-between">
-                        <h3 class="text-lg font-medium text-gray-900">
-                          {{ delivery.status === 'rejected' ? 'Request Rejected' : 'Approval' }}
-                        </h3>
-                        <span v-if="delivery.approved_at" class="text-sm text-gray-500">{{ formatDate(delivery.approved_at) }}</span>
-                        <span v-else-if="delivery.rejected_at" class="text-sm text-gray-500">{{ formatDate(delivery.rejected_at) }}</span>
-                      </div>
-                      <p class="mt-1 text-gray-600" v-if="delivery.status === 'rejected'">
-                        Request was rejected. Reason: {{ delivery.rejection_reason || 'Not specified' }}
-                      </p>
-                      <p class="mt-1 text-gray-600" v-else-if="delivery.status === 'approved'">
-                        Your request has been approved and is ready for processing.
-                      </p>
-                      <p class="mt-1 text-gray-600" v-else>
-                        Awaiting approval from our team.
-                      </p>
-                    </div>
-                  </div>
+      <!-- Step 2: Approval -->
+      <div class="relative flex items-start">
+        <div class="flex-shrink-0">
+          <div :class="[
+            'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium',
+            currentStep >= 2 ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600',
+            delivery.status === 'rejected' ? 'bg-red-600 text-white' : ''
+          ]">
+            <span v-if="delivery.status === 'rejected'">!</span>
+            <span v-else>✓</span>
+          </div>
+        </div>
+        <div class="ml-6 flex-1">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-medium text-gray-900">
+              {{ delivery.status === 'rejected' ? 'Request Rejected' : 'Approval' }}
+            </h3>
+            <span v-if="delivery.approved_at" class="text-sm text-gray-500">{{ formatDate(delivery.approved_at) }}</span>
+            <span v-else-if="delivery.rejected_at" class="text-sm text-gray-500">{{ formatDate(delivery.rejected_at) }}</span>
+          </div>
+          <p class="mt-1 text-gray-600" v-if="delivery.status === 'rejected'">
+            Request was rejected. Reason: {{ delivery.rejection_reason || 'Not specified' }}
+          </p>
+          <p class="mt-1 text-gray-600" v-else-if="delivery.status === 'approved'">
+            Your request has been approved and is ready for processing.
+          </p>
+          <p class="mt-1 text-gray-600" v-else>
+            Awaiting approval from our team.
+          </p>
+        </div>
+      </div>
 
-                  <!-- Step 3: Payment Processing (Prepaid) -->
-                  <div v-if="showPaymentProcessingStep" class="relative flex items-start">
-                    <div class="flex-shrink-0">
-                      <div :class="[
-                        'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium',
-                        currentStep >= 3 ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600',
-                        delivery.payment_status === 'rejected' ? 'bg-red-600 text-white' : ''
-                      ]">
-                        3
-                      </div>
-                    </div>
-                    <div class="ml-6 flex-1">
-                      <div class="flex items-center justify-between">
-                        <h3 class="text-lg font-medium text-gray-900">Payment Processing</h3>
-                        <span v-if="delivery.payment_status === 'paid'" class="text-sm text-green-600">Paid</span>
-                        <span v-else-if="delivery.payment_status === 'rejected'" class="text-sm text-red-600">Rejected</span>
-                        <span v-else class="text-sm text-yellow-600">Pending</span>
-                      </div>
-                      <p class="mt-1 text-gray-600">
-                        <span v-if="delivery.payment_status === 'paid'">Payment completed and verified.</span>
-                        <span v-else-if="delivery.payment_status === 'rejected'">Payment was rejected. Please resubmit.</span>
-                        <span v-else>Payment required to proceed with delivery.</span>
-                      </p>
-                      <!-- Show payment method for prepaid -->
-                      <p v-if="delivery.payment_method" class="mt-1 text-sm text-gray-500">
-                        Method: {{ delivery.payment_method }}
-                      </p>
-                    </div>
-                  </div>
+      <!-- Payment Processing (Prepaid) -->
+      <div v-if="showPaymentProcessingStep" class="relative flex items-start">
+        <div class="flex-shrink-0">
+          <div :class="[
+            'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium',
+            currentStep >= 3 ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600',
+            delivery.payment_status === 'rejected' ? 'bg-red-600 text-white' : ''
+          ]">
+            <span v-if="delivery.payment_status === 'rejected'">!</span>
+            <span v-else>✓</span>
+          </div>
+        </div>
+        <div class="ml-6 flex-1">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-medium text-gray-900">Payment Processing</h3>
+            <span v-if="delivery.payment_status === 'paid'" class="text-sm text-green-600">Paid</span>
+            <span v-else-if="delivery.payment_status === 'rejected'" class="text-sm text-red-600">Rejected</span>
+            <span v-else class="text-sm text-yellow-600">Pending</span>
+          </div>
+          <p class="mt-1 text-gray-600">
+            <span v-if="delivery.payment_status === 'paid'">Payment completed and verified.</span>
+            <span v-else-if="delivery.payment_status === 'rejected'">Payment was rejected. Please resubmit.</span>
+            <span v-else>Payment required to proceed with delivery.</span>
+          </p>
+          <!-- Show payment method for prepaid -->
+          <p v-if="delivery.payment_method" class="mt-1 text-sm text-gray-500">
+            Method: {{ delivery.payment_method }}
+          </p>
+        </div>
+      </div>
 
-                  <!-- Step 4: Delivery Activity -->
-                  <div v-if="showDeliveryOrderStep" class="relative flex items-start">
-                    <div class="flex-shrink-0">
-                      <div :class="[
-                        'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium',
-                        currentStep >= 4 ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600'
-                      ]">
-                        4
-                      </div>
-                    </div>
-                    <div class="ml-6 flex-1">
-                      <div class="flex items-center justify-between">
-                        <h3 class="text-lg font-medium text-gray-900">Delivery Activity</h3>
-                        <span :class="deliveryOrderStatusBadgeClass" class="text-xs font-medium px-2 py-1 rounded-full">
-                          {{ deliveryOrderStatusLabel }}
-                        </span>
-                      </div>
-                      <p class="mt-1 text-gray-600">
-                        {{ deliveryOrderStatusDescription }}
-                      </p>
-                      <!-- Show package summary if available -->
-                      <div v-if="packageStatusSummary" class="mt-2 text-sm text-gray-500">
-                        <p>Packages: {{ packageStatusSummary.delivered }}/{{ packageStatusSummary.total }} delivered</p>
-                        <p v-if="packageStatusSummary.hasIssues" class="text-orange-600">
-                          Note: Some packages require review
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+      <!-- Delivery Activity -->
+      <div v-if="showDeliveryOrderStep" class="relative flex items-start">
+        <div class="flex-shrink-0">
+          <div :class="[
+            'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium',
+            currentStep >= 4 ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600'
+          ]">
+            ✓
+          </div>
+        </div>
+        <div class="ml-6 flex-1">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-medium text-gray-900">Delivery Activity</h3>
+            <span :class="deliveryOrderStatusBadgeClass" class="text-xs font-medium px-2 py-1 rounded-full">
+              {{ deliveryOrderStatusLabel }}
+            </span>
+          </div>
+          <p class="mt-1 text-gray-600">
+            {{ deliveryOrderStatusDescription }}
+          </p>
+          <!-- Show package summary if available -->
+          <div v-if="packageStatusSummary" class="mt-2 text-sm text-gray-500">
+            <p>Packages: {{ packageStatusSummary.delivered }}/{{ packageStatusSummary.total }} delivered</p>
+            <p v-if="packageStatusSummary.hasIssues" class="text-orange-600">
+              Note: Some packages require review
+            </p>
+          </div>
+        </div>
+      </div>
 
-                  <!-- Step 5: Completed -->
-                  <div v-if="showCompletedStep" class="relative flex items-start">
-                    <div class="flex-shrink-0">
-                      <div :class="[
-                        'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium',
-                        currentStep >= 5 ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600'
-                      ]">
-                        5
-                      </div>
-                    </div>
-                    <div class="ml-6 flex-1">
-                      <div class="flex items-center justify-between">
-                        <h3 class="text-lg font-medium text-gray-900">Completed</h3>
-                        <span class="text-sm text-green-600">Finished</span>
-                      </div>
-                      <p class="mt-1 text-gray-600">
-                        Your delivery request has been fully completed.
-                      </p>
-                      <!-- Show success message when completed -->
-                      <div v-if="packageStatusSummary && delivery.status === 'completed'" class="mt-2 text-sm text-green-600">
-                        <p>✅ All {{ packageStatusSummary.total }} packages successfully delivered</p>
-                      </div>
-                    </div>
-                  </div>
+      <!-- Completed -->
+      <div v-if="showCompletedStep" class="relative flex items-start">
+        <div class="flex-shrink-0">
+          <div :class="[
+            'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium',
+            currentStep >= 5 ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600'
+          ]">
+            ✓
+          </div>
+        </div>
+        <div class="ml-6 flex-1">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-medium text-gray-900">Completed</h3>
+            <span class="text-sm text-green-600">Finished</span>
+          </div>
+          <p class="mt-1 text-gray-600">
+            Your delivery request has been fully completed.
+          </p>
+          <!-- Show success message when completed -->
+          <div v-if="packageStatusSummary && delivery.status === 'completed'" class="mt-2 text-sm text-green-600">
+            <p>✅ All {{ packageStatusSummary.total }} packages successfully delivered</p>
+          </div>
+        </div>
+      </div>
 
-                  <!-- Step 6: Postpaid Payment (Conditional) -->
-                  <div v-if="showPostpaidPaymentStep" class="relative flex items-start">
-                    <div class="flex-shrink-0">
-                      <div :class="[
-                        'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium',
-                        delivery.payment_status === 'paid' ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600'
-                      ]">
-                        6
-                      </div>
-                    </div>
-                    <div class="ml-6 flex-1">
-                      <div class="flex items-center justify-between">
-                        <h3 class="text-lg font-medium text-gray-900">Payment Settlement</h3>
-                        <span v-if="delivery.payment_status === 'paid'" class="text-sm text-green-600">Paid</span>
-                        <span v-else class="text-sm text-yellow-600">Pending</span>
-                      </div>
-                      <p class="mt-1 text-gray-600">
-                        <span v-if="delivery.payment_status === 'paid'">Payment has been settled.</span>
-                        <span v-else>Payment is due after delivery completion.</span>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+      <!-- Postpaid Payment (Conditional) -->
+      <div v-if="showPostpaidPaymentStep" class="relative flex items-start">
+        <div class="flex-shrink-0">
+          <div :class="[
+            'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium',
+            delivery.payment_status === 'paid' ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600'
+          ]">
+            <span v-if="delivery.payment_status === 'paid'">✓</span>
+            <span v-else>$</span>
+          </div>
+        </div>
+        <div class="ml-6 flex-1">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-medium text-gray-900">Payment Settlement</h3>
+            <span v-if="delivery.payment_status === 'paid'" class="text-sm text-green-600">Paid</span>
+            <span v-else class="text-sm text-yellow-600">Pending</span>
+          </div>
+          <p class="mt-1 text-gray-600">
+            <span v-if="delivery.payment_status === 'paid'">Payment has been settled.</span>
+            <span v-else>Payment is due after delivery completion.</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
             <!-- Package Information -->
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

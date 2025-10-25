@@ -18,63 +18,65 @@ use Illuminate\Support\Facades\DB;
 
 class WaybillController extends Controller
 {
-   public function index()
-    {
-        // Delivery requests with waybills
-        $waybills = Waybill::with([
-                'deliveryRequest.dropOffRegion',
-                'deliveryRequest.sender',
-                'deliveryRequest.receiver',
-                'deliveryRequest.packages',
-                'deliveryRequest.deliveryOrder.driver',
-                'generator'
-            ])
-            ->latest()
-            ->paginate(10);
+  public function index()
+{
+    // Delivery requests with waybills
+   $waybills = Waybill::with([
+        'deliveryRequest.dropOffRegion',
+        'deliveryRequest.pickUpRegion', // ✅ ADD THIS
+        'deliveryRequest.sender',
+        'deliveryRequest.receiver',
+        'deliveryRequest.packages',
+        'deliveryRequest.deliveryOrder.driver',
+        'generator'
+    ])
+    ->latest()
+    ->paginate(10);
 
-        // Add is_paid to waybill's deliveryRequest
-        foreach ($waybills as $waybill) {
-            if ($waybill->deliveryRequest) {
-                $waybill->deliveryRequest->is_paid = $waybill->deliveryRequest->isPaid();
-            }
+    // Add is_paid to waybill's deliveryRequest
+    foreach ($waybills as $waybill) {
+        if ($waybill->deliveryRequest) {
+            $waybill->deliveryRequest->is_paid = $waybill->deliveryRequest->isPaid();
         }
-
-        // Pending waybills:
-        // - Prepaid: must be paid
-        // - Postpaid: always show (payment collected after delivery)
-        $pendingWaybills = DeliveryRequest::whereDoesntHave('waybill')
-            ->whereHas('deliveryOrder')
-            ->where(function($q) {
-                $q->where(function($q2) {
-                    // Prepaid - must be paid
-                    $q2->where('payment_type', 'prepaid')
-                       ->where('payment_status', 'paid');
-                })
-                ->orWhere(function($q2) {
-                    // Postpaid - always show
-                    $q2->where('payment_type', 'postpaid');
-                });
-            })
-            ->with([
-                'sender',
-                'receiver',
-                'packages',
-                'deliveryOrder.driver',
-                'dropOffRegion'
-            ])
-            ->latest()
-            ->paginate(10, ['*'], 'pending_page');
-
-        // Add is_paid to each pending delivery request
-        foreach ($pendingWaybills as $pending) {
-            $pending->is_paid = $pending->isPaid();
-        }
-
-        return Inertia::render('Admin/Billing/Index', [
-            'waybills' => $waybills,
-            'pendingWaybills' => $pendingWaybills
-        ]);
     }
+
+    // Pending waybills:
+    // - Prepaid: must be paid
+    // - Postpaid: always show
+    $pendingWaybills = DeliveryRequest::whereDoesntHave('waybill')
+        ->whereHas('deliveryOrder')
+        ->where(function($q) {
+            $q->where(function($q2) {
+                // Prepaid - must be paid
+                $q2->where('payment_type', 'prepaid')
+                   ->where('payment_status', 'paid');
+            })
+            ->orWhere(function($q2) {
+                // Postpaid - always show
+                $q2->where('payment_type', 'postpaid');
+            });
+        })
+        ->with([
+            'sender',
+            'receiver',
+            'packages',
+            'deliveryOrder.driver',
+            'pickUpRegion', // ✅ ADD THIS
+            'dropOffRegion'
+        ])
+        ->latest()
+        ->paginate(10, ['*'], 'pending_page');
+
+    // Add is_paid to each pending delivery request
+    foreach ($pendingWaybills as $pending) {
+        $pending->is_paid = $pending->isPaid();
+    }
+
+    return Inertia::render('Admin/Billing/Index', [
+        'waybills' => $waybills,
+        'pendingWaybills' => $pendingWaybills
+    ]);
+}
 
 
     
@@ -140,51 +142,75 @@ class WaybillController extends Controller
     }
 
     public function show(Waybill $waybill)
-    {
-        $waybill->load([
-            'deliveryRequest' => function ($q) {
-                $q->select([
-                    'id', 'sender_id', 'receiver_id', 'pick_up_region_id', 'drop_off_region_id', 'payment_type', 'payment_status', 'payment_method', 'payment_terms', 'payment_due_date', 'total_price', 'reference_number', 'created_at'
-                ])
-                ->with([
-                    // Load all sender/receiver fields for full name/address
-                    'sender:id,user_id,first_name,middle_name,last_name,company_name,email,mobile,phone,building_number,street,barangay,city,province,zip_code,customer_category,frequency_type,payment_terms,credit_limit,notes,created_at,updated_at,archived_at,name,address',
-                    'receiver:id,user_id,first_name,middle_name,last_name,company_name,email,mobile,phone,building_number,street,barangay,city,province,zip_code,customer_category,frequency_type,payment_terms,credit_limit,notes,created_at,updated_at,archived_at,name,address',
-                    'packages:id,delivery_request_id,item_code,item_name,weight,length,width,height',
-                    'pickUpRegion:id,name,address,warehouse_address',
-                    'dropOffRegion:id,name,address,warehouse_address',
-                    'deliveryOrder' => function ($q2) {
-                        $q2->select(['id', 'delivery_request_id', 'driver_id', 'truck_id', 'status'])
-                            ->with([
-                                'driver:id,name',
-                                'truck:id,license_plate,make,model'
-                            ]);
-                    },
+{
+    $waybill->load([
+        'deliveryRequest' => function ($q) {
+            $q->select([
+                'id', 'sender_id', 'receiver_id', 'pick_up_region_id', 'drop_off_region_id', 
+                'payment_type', 'payment_status', 'payment_method', 'payment_terms', 
+                'payment_due_date', 'total_price', 'reference_number', 'created_at',
+                'payment_verified', 'payment_verified_at' // Ensure these are loaded
+            ])
+            ->with([
+                'sender:id,user_id,first_name,middle_name,last_name,company_name,email,mobile,phone,building_number,street,barangay,city,province,zip_code,customer_category,frequency_type,payment_terms,credit_limit,notes,created_at,updated_at,archived_at,name,address',
+                'receiver:id,user_id,first_name,middle_name,last_name,company_name,email,mobile,phone,building_number,street,barangay,city,province,zip_code,customer_category,frequency_type,payment_terms,credit_limit,notes,created_at,updated_at,archived_at,name,address',
+                'packages:id,delivery_request_id,item_code,item_name,weight,length,width,height',
+                'pickUpRegion:id,name,address,warehouse_address',
+                'dropOffRegion:id,name,address,warehouse_address',
+                'deliveryOrder' => function ($q2) {
+                    $q2->select(['id', 'delivery_request_id', 'driver_id', 'truck_id', 'driver_truck_assignment_id', 'status'])
+                        ->with([
+                            'driver:id,name',
+                            'truck:id,license_plate,make,model',
+                            'driverTruckAssignment' => function ($q3) {
+                                $q3->with([
+                                    'truck:id,license_plate,make,model',
+                                    'driver:id,name'
+                                ]);
+                            }
+                        ]);
+                },
+            ]);
+        },
+        'generator:id,name'
+    ]);
+
+    $deliveryRequest = $waybill->deliveryRequest;
+
+    // ✅ FIX: Enhanced payment status logic
+    if ($deliveryRequest) {
+        // For prepaid cash, automatically consider it paid and verified
+        if ($deliveryRequest->payment_type === 'prepaid' && $deliveryRequest->payment_method === 'cash') {
+            $deliveryRequest->is_paid = true;
+            // Also ensure the backend flags are set correctly
+            if ($deliveryRequest->payment_status === 'paid' && !$deliveryRequest->payment_verified) {
+                // This indicates a data inconsistency - cash prepaid should be auto-verified
+                \Log::warning('Cash prepaid payment not verified', [
+                    'delivery_request_id' => $deliveryRequest->id,
+                    'payment_status' => $deliveryRequest->payment_status,
+                    'payment_verified' => $deliveryRequest->payment_verified
                 ]);
-            },
-            'generator:id,name'
-        ]);
-
-        $deliveryRequest = $waybill->deliveryRequest;
-
-        // Set is_paid property for frontend consistency (like in index)
-        if ($deliveryRequest) {
-            $deliveryRequest->is_paid = $deliveryRequest->isPaid();
+            }
+        } else {
+            // For other payment methods, use the standard logic
+            $deliveryRequest->is_paid = $deliveryRequest->payment_status === 'paid' && 
+                                       $deliveryRequest->payment_verified;
         }
-
-        return Inertia::render('Admin/Billing/Show', [
-            'waybill' => $waybill,
-            'order' => $waybill->deliveryRequest->deliveryOrder,
-            'paymentStatus' => [
-                'type' => $deliveryRequest?->payment_type ?? null,
-                'method' => $deliveryRequest?->payment_method ?? null,
-                'terms' => $deliveryRequest?->payment_terms ?? null,
-                'due_date' => $deliveryRequest?->payment_due_date ?? null,
-                'isPaid' => $deliveryRequest?->is_paid ?? false,
-                'amount' => $deliveryRequest?->total_price ?? 0
-            ]
-        ]);
     }
+
+    return Inertia::render('Admin/Billing/Show', [
+        'waybill' => $waybill,
+        'order' => $waybill->deliveryRequest->deliveryOrder,
+        'paymentStatus' => [
+            'type' => $deliveryRequest?->payment_type ?? null,
+            'method' => $deliveryRequest?->payment_method ?? null,
+            'terms' => $deliveryRequest?->payment_terms ?? null,
+            'due_date' => $deliveryRequest?->payment_due_date ?? null,
+            'isPaid' => $deliveryRequest?->is_paid ?? false,
+            'amount' => $deliveryRequest?->total_price ?? 0
+        ]
+    ]);
+}
 
     public function billing(DeliveryRequest $deliveryRequest)
     {
@@ -272,49 +298,106 @@ class WaybillController extends Controller
             ->with('success', 'Waybills generated successfully!');
     }
 
-    protected function generatePdf(Waybill $waybill, $final = false)
-    {
-        $waybill->load([
-            'deliveryRequest' => function ($q) {
-                $q->select([
-                    'id', 'sender_id', 'receiver_id', 'pick_up_region_id', 'drop_off_region_id', 'payment_type', 'payment_status', 'payment_method', 'payment_terms', 'payment_due_date', 'total_price', 'reference_number', 'created_at'
-                ])
-                ->with([
-                    // Load all sender/receiver fields for full name/address
-                    'sender:id,user_id,first_name,middle_name,last_name,company_name,email,mobile,phone,building_number,street,barangay,city,province,zip_code,customer_category,frequency_type,payment_terms,credit_limit,notes,created_at,updated_at,archived_at,name,address',
-                    'receiver:id,user_id,first_name,middle_name,last_name,company_name,email,mobile,phone,building_number,street,barangay,city,province,zip_code,customer_category,frequency_type,payment_terms,credit_limit,notes,created_at,updated_at,archived_at,name,address',
-                    'packages:id,delivery_request_id,item_code,item_name,weight,length,width,height',
-                    'deliveryOrder.driver:id,name',
-                    'deliveryOrder.truck:id,license_plate,make,model',
-                    'pickUpRegion:id,name,address,warehouse_address',
-                ]);
-            },
-            'generator:id,name'
-        ]);
+   protected function generatePdf(Waybill $waybill, $final = false)
+{
+    $waybill->load([
+        'deliveryRequest' => function ($q) {
+            $q->select([
+                'id', 'sender_id', 'receiver_id', 'pick_up_region_id', 'drop_off_region_id', 
+                'payment_type', 'payment_status', 'payment_method', 'payment_terms', 
+                'payment_due_date', 'total_price', 'reference_number', 'created_at',
+                'payment_verified' // ✅ ADD payment_verified field
+            ])
+            ->with([
+                'sender:id,user_id,first_name,middle_name,last_name,company_name,email,mobile,phone,building_number,street,barangay,city,province,zip_code,customer_category,frequency_type,payment_terms,credit_limit,notes,created_at,updated_at,archived_at,name,address',
+                'receiver:id,user_id,first_name,middle_name,last_name,company_name,email,mobile,phone,building_number,street,barangay,city,province,zip_code,customer_category,frequency_type,payment_terms,credit_limit,notes,created_at,updated_at,archived_at,name,address',
+                'packages:id,delivery_request_id,item_code,item_name,weight,length,width,height',
+                'deliveryOrder' => function ($q2) {
+                    $q2->with([
+                        'driver:id,name',
+                        'truck:id,license_plate,make,model',
+                        'driverTruckAssignment' => function ($q3) {
+                            $q3->with([
+                                'truck:id,license_plate,make,model',
+                                'driver:id,name'
+                            ]);
+                        }
+                    ]);
+                },
+                'pickUpRegion:id,name,address,warehouse_address',
+                'dropOffRegion:id,name,address,warehouse_address',
+            ]);
+        },
+        'generator:id,name'
+    ]);
 
-        // Check if deliveryRequest exists
-        if (!$waybill->deliveryRequest) {
-            throw new \Exception("Delivery request not found for waybill #{$waybill->id}");
-        }
-
-        $view = $final ? 'waybill_complete' : 'waybill';
-
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($view, [
-            'order' => $waybill->deliveryRequest->deliveryOrder ?? null,
-            'waybill' => $waybill,
-            'paymentType' => $waybill->deliveryRequest->payment_type,
-            'isPaid' => $waybill->deliveryRequest->isPaid(),
-            'paymentMethod' => $waybill->deliveryRequest->payment_method,
-            'paymentTerms' => $waybill->deliveryRequest->payment_terms ?? null,
-            'paymentDueDate' => $waybill->deliveryRequest->payment_due_date ?? null,
-        ]);
-
-        $filePath = 'waybills/' . $waybill->waybill_number . ($final ? '_final' : '_initial') . '.pdf';
-
-        \Illuminate\Support\Facades\Storage::put($filePath, $pdf->output());
-
-        // Update the waybill file_path if needed
-        $waybill->file_path = $filePath;
-        $waybill->save();
+    // Check if deliveryRequest exists
+    if (!$waybill->deliveryRequest) {
+        throw new \Exception("Delivery request not found for waybill #{$waybill->id}");
     }
+
+    $order = $waybill->deliveryRequest->deliveryOrder;
+
+    // ✅ DEBUG: Check both truck sources
+    \Log::info('Waybill PDF Generation Debug - Enhanced', [
+        'waybill_id' => $waybill->id,
+        'has_delivery_request' => !is_null($waybill->deliveryRequest),
+        'has_delivery_order' => !is_null($order),
+        'direct_truck_plate' => $order && $order->truck ? $order->truck->license_plate : 'NO DIRECT TRUCK',
+        'assignment_truck_plate' => $order && $order->driverTruckAssignment && $order->driverTruckAssignment->truck ? $order->driverTruckAssignment->truck->license_plate : 'NO ASSIGNMENT TRUCK',
+        'has_driver_truck_assignment' => $order ? !is_null($order->driverTruckAssignment) : false,
+        'assignment_id' => $order && $order->driverTruckAssignment ? $order->driverTruckAssignment->id : null,
+    ]);
+
+    // ✅ FIXED: Enhanced payment status logic
+    $isPaid = false;
+    if ($waybill->deliveryRequest) {
+        // For prepaid cash, automatically consider it paid (cash doesn't need verification)
+        if ($waybill->deliveryRequest->payment_type === 'prepaid' && 
+            $waybill->deliveryRequest->payment_method === 'cash') {
+            $isPaid = true;
+            
+            // Log cash payment auto-verification
+            \Log::info('Cash prepaid payment auto-verified for PDF', [
+                'waybill_id' => $waybill->id,
+                'delivery_request_id' => $waybill->deliveryRequest->id,
+                'payment_status' => $waybill->deliveryRequest->payment_status,
+                'payment_verified' => $waybill->deliveryRequest->payment_verified
+            ]);
+        } else {
+            // For other payment methods, use standard verification logic
+            $isPaid = $waybill->deliveryRequest->payment_status === 'paid' && 
+                     $waybill->deliveryRequest->payment_verified;
+            
+            // Log other payment method verification
+            \Log::info('Non-cash payment verification check for PDF', [
+                'waybill_id' => $waybill->id,
+                'payment_type' => $waybill->deliveryRequest->payment_type,
+                'payment_method' => $waybill->deliveryRequest->payment_method,
+                'payment_status' => $waybill->deliveryRequest->payment_status,
+                'payment_verified' => $waybill->deliveryRequest->payment_verified,
+                'is_paid_result' => $isPaid
+            ]);
+        }
+    }
+
+    $view = $final ? 'waybill_complete' : 'waybill';
+
+    $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($view, [
+        'order' => $order,
+        'waybill' => $waybill,
+        'paymentType' => $waybill->deliveryRequest->payment_type,
+        'isPaid' => $isPaid,
+        'paymentMethod' => $waybill->deliveryRequest->payment_method,
+        'paymentTerms' => $waybill->deliveryRequest->payment_terms ?? null,
+        'paymentDueDate' => $waybill->deliveryRequest->payment_due_date ?? null,
+    ]);
+
+    $filePath = 'waybills/' . $waybill->waybill_number . ($final ? '_final' : '_initial') . '.pdf';
+
+    \Illuminate\Support\Facades\Storage::put($filePath, $pdf->output());
+
+    $waybill->file_path = $filePath;
+    $waybill->save();
+}
 }

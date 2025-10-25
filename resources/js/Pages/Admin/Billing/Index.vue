@@ -34,16 +34,16 @@
             <thead class="bg-gray-50 dark:bg-gray-700">
               <tr>
                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Order #
+                  Reference
                 </th>
                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Customer
+                  Sender
                 </th>
                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Payment
                 </th>
                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Destination
+                  Locations
                 </th>
                 <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Actions
@@ -52,24 +52,78 @@
             </thead>
             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               <tr v-for="request in limitedPendingWaybills" :key="request.id + '-row'">
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                  DR-{{ request.id.toString().padStart(6, '0') }}
+                <!-- Reference Column -->
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="flex items-center space-x-2">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                      Ref
+                    </span>
+                    <span class="font-bold text-green-700 tracking-wide text-sm">
+                      {{ request.reference_number || `DR-${request.id.toString().padStart(6, '0')}` }}
+                    </span>
+                  </div>
+                  <div class="text-xs text-gray-500 mt-1">
+                    ID: DR-{{ String(request.id).padStart(6, '0') }}
+                    <span v-if="request.created_at"> | Created: {{ formatDate(request.created_at) }}</span>
+                  </div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                  {{
-                    (request.sender && (request.sender.name || request.sender.company_name || request.sender['"name"']))
-                    || (request.receiver && (request.receiver.name || request.receiver.company_name || request.receiver['"name"']))
-                    || 'N/A'
-                  }}
+
+                <!-- Sender Column -->
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div v-if="request.sender">
+                    <div class="text-sm font-medium text-gray-900 mb-1">
+                      {{ 
+                        request.sender?.name ||
+                        request.sender?.company_name ||
+                        'N/A'
+                      }}
+                    </div>
+                    <div class="text-xs text-gray-500 space-y-1">
+                      <div class="flex items-center gap-1" v-if="getCustomerPhone(request.sender)">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                        </svg>
+                        {{ getCustomerPhone(request.sender) }}
+                      </div>
+                      <div class="flex items-center gap-1" v-if="getCustomerEmail(request.sender)">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                        {{ getCustomerEmail(request.sender) }}
+                      </div>
+                      <div v-if="!getCustomerPhone(request.sender) && !getCustomerEmail(request.sender)" class="text-gray-400">
+                        No contact info
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="text-sm text-gray-500">No sender info</div>
                 </td>
+
+                <!-- Payment Column -->
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span :class="paymentStatusClasses(request)">
-                    {{ request.payment_type.toUpperCase() }} - {{ request.is_paid ? 'PAID' : 'PENDING' }}
+                    {{ formatPaymentType(request.payment_type) }} - {{ request.is_paid ? 'PAID' : 'PENDING' }}
                   </span>
+                  <div class="text-xs text-gray-500 mt-1">
+                    {{ formatCurrency(request.total_price) }}
+                  </div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                  {{ request.drop_off_region?.name || 'N/A' }}
-                </td>
+
+               <!-- Locations Column -->
+<td class="px-6 py-4 whitespace-nowrap">
+  <div class="text-sm space-y-1">
+    <div>
+      <span class="font-medium text-gray-700">Pick-Up:</span>
+      <span class="text-gray-600 ml-1">{{ request.pick_up_region?.name || 'N/A' }}</span>
+    </div>
+    <div>
+      <span class="font-medium text-gray-700">Drop-Off:</span>
+      <span class="text-gray-600 ml-1">{{ request.drop_off_region?.name || 'N/A' }}</span>
+    </div>
+  </div>
+</td>
+
+                <!-- Actions Column -->
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div class="flex justify-end space-x-2">
                     <PrimaryButton 
@@ -96,7 +150,7 @@
                 </td>
               </tr>
               <tr v-if="limitedPendingWaybills.length === 0">
-                <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                   No pending waybills found
                 </td>
               </tr>
@@ -105,7 +159,6 @@
         </div>
 
         <div class="bg-white dark:bg-gray-800 px-4 py-3 flex items-center justify-center border-t border-gray-200 dark:border-gray-700 sm:px-6">
-          <!-- Inline Pagination Controls for pendingWaybills -->
           <div class="flex items-center space-x-2">
             <button
               @click="goToPendingPage(pendingWaybills.current_page - 1)"
@@ -161,13 +214,19 @@
                   Waybill #
                 </th>
                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Customer
+                  Reference
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Sender
                 </th>
                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Payment
                 </th>
                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Status
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Locations
                 </th>
                 <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Actions
@@ -176,31 +235,96 @@
             </thead>
             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               <tr v-for="waybill in limitedFilteredWaybills" :key="waybill.id">
+                <!-- Waybill Number -->
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                   {{ waybill.waybill_number || 'N/A' }}
+                  <div class="text-xs text-gray-500 mt-1">
+                    {{ formatDate(waybill.created_at) }}
+                  </div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                  {{
-                    waybill.delivery_request?.sender?.name
-                    || waybill.delivery_request?.sender?.company_name
-                    || waybill.delivery_request?.receiver?.name
-                    || waybill.delivery_request?.receiver?.company_name
-                    || 'N/A'
-                  }}
+
+                <!-- Reference Column -->
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="flex items-center space-x-2">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                      Ref
+                    </span>
+                    <span class="font-bold text-green-700 tracking-wide text-sm">
+                      {{ waybill.delivery_request?.reference_number || `DR-${waybill.delivery_request_id?.toString().padStart(6, '0')}` }}
+                    </span>
+                  </div>
+                  <div class="text-xs text-gray-500 mt-1">
+                    ID: DR-{{ String(waybill.delivery_request_id).padStart(6, '0') }}
+                  </div>
                 </td>
+
+                <!-- Sender Column -->
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div v-if="waybill.delivery_request?.sender">
+                    <div class="text-sm font-medium text-gray-900 mb-1">
+                      {{ 
+                        waybill.delivery_request.sender?.name ||
+                        waybill.delivery_request.sender?.company_name ||
+                        'N/A'
+                      }}
+                    </div>
+                    <div class="text-xs text-gray-500 space-y-1">
+                      <div class="flex items-center gap-1" v-if="getCustomerPhone(waybill.delivery_request.sender)">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                        </svg>
+                        {{ getCustomerPhone(waybill.delivery_request.sender) }}
+                      </div>
+                      <div class="flex items-center gap-1" v-if="getCustomerEmail(waybill.delivery_request.sender)">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                        {{ getCustomerEmail(waybill.delivery_request.sender) }}
+                      </div>
+                      <div v-if="!getCustomerPhone(waybill.delivery_request.sender) && !getCustomerEmail(waybill.delivery_request.sender)" class="text-gray-400">
+                        No contact info
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="text-sm text-gray-500">No sender info</div>
+                </td>
+
+                <!-- Payment Column -->
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span :class="paymentStatusClasses(waybill.delivery_request)">
-                    {{ waybill.delivery_request?.payment_type?.toUpperCase() || 'N/A' }}
+                    {{ formatPaymentType(waybill.delivery_request?.payment_type) || 'N/A' }}
                     <span v-if="waybill.delivery_request">
                       - {{ waybill.delivery_request.is_paid ? 'PAID' : 'PENDING' }}
                     </span>
                   </span>
+                  <div class="text-xs text-gray-500 mt-1" v-if="waybill.delivery_request?.total_price">
+                    {{ formatCurrency(waybill.delivery_request.total_price) }}
+                  </div>
                 </td>
+
+                <!-- Status Column -->
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span :class="statusClasses(waybill.delivery_request?.delivery_order?.status)">
-                    {{ waybill.delivery_request?.delivery_order?.status || 'N/A' }}
+                    {{ formatOrderStatus(waybill.delivery_request?.delivery_order?.status) }}
                   </span>
                 </td>
+
+                <!-- Locations Column -->
+               <!-- Locations Column -->
+<td class="px-6 py-4 whitespace-nowrap">
+  <div class="text-sm space-y-1">
+    <div>
+      <span class="font-medium text-gray-700">Pick-Up:</span>
+      <span class="text-gray-600 ml-1">{{ waybill.delivery_request?.pick_up_region?.name || 'N/A' }}</span>
+    </div>
+    <div>
+      <span class="font-medium text-gray-700">Drop-Off:</span>
+      <span class="text-gray-600 ml-1">{{ waybill.delivery_request?.drop_off_region?.name || 'N/A' }}</span>
+    </div>
+  </div>
+</td>
+
+                <!-- Actions Column -->
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div class="flex justify-end space-x-2">
                     <PrimaryButton 
@@ -224,7 +348,7 @@
                 </td>
               </tr>
               <tr v-if="limitedFilteredWaybills.length === 0">
-                <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                <td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                   No waybills found
                 </td>
               </tr>
@@ -233,7 +357,6 @@
         </div>
 
         <div class="bg-white dark:bg-gray-800 px-4 py-3 flex items-center justify-center border-t border-gray-200 dark:border-gray-700 sm:px-6">
-          <!-- Inline Pagination Controls for waybills -->
           <div class="flex items-center space-x-2">
             <button
               @click="goToWaybillsPage(waybills.current_page - 1)"
@@ -295,6 +418,25 @@ const paymentTypeFilter = ref('');
 const sortDirection = ref('desc');
 const sortField = ref('created_at');
 
+// Add helper functions for customer contact info
+const getCustomerPhone = (customer) => {
+  if (!customer) return null;
+  return customer.mobile || customer.phone || null;
+};
+
+const getCustomerEmail = (customer) => {
+  if (!customer) return null;
+  return customer.email || null;
+};
+
+const formatCurrency = (amount) => {
+  if (!amount) return '₱0.00';
+  return new Intl.NumberFormat('en-PH', {
+    style: 'currency',
+    currency: 'PHP'
+  }).format(amount);
+};
+
 watch(search, debounce((value) => {
   router.get(route('waybills.index'), { search: value }, {
     preserveState: true,
@@ -347,16 +489,49 @@ const formatDate = (dateString) => {
   }
 };
 
+const formatPaymentType = (paymentType) => {
+  if (!paymentType) return 'N/A';
+  return paymentType.charAt(0).toUpperCase() + paymentType.slice(1);
+};
+
+const formatOrderStatus = (status) => {
+  if (!status) return 'N/A';
+  
+  const statusMap = {
+    'pending': 'Pending',
+    'ready': 'Ready',
+    'assigned': 'Assigned',
+    'in_transit': 'In Transit',
+    'delivered': 'Delivered',
+    'partially_delivered': 'Partially Delivered',
+    'delivery_failed': 'Delivery Failed',
+    'completed': 'Completed',
+    'cancelled': 'Cancelled'
+  };
+  
+  return statusMap[status] || status.split('_').map(word => 
+    word.charAt(0).toUpperCase() + word.slice(1)
+  ).join(' ');
+};
+
 const statusClasses = (status) => {
   const base = 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full';
   
   switch (status) {
-    case 'dispatched':
+    case 'pending':
+      return `${base} bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200`;
+    case 'ready':
       return `${base} bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200`;
+    case 'assigned':
+      return `${base} bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200`;
     case 'in_transit':
       return `${base} bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200`;
     case 'delivered':
       return `${base} bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200`;
+    case 'partially_delivered':
+      return `${base} bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200`;
+    case 'delivery_failed':
+      return `${base} bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200`;
     case 'completed':
       return `${base} bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200`;
     case 'cancelled':
@@ -398,6 +573,12 @@ const printWaybill = (waybill) => {
   // Print final if completed, otherwise print initial
   const isFinal = waybill.delivery_request?.delivery_order?.status === 'completed';
   window.open(route('waybills.preview', { id: waybill.id, final: isFinal }), '_blank');
+};
+
+const printInitialWaybill = (request) => {
+  if (request.waybill && request.waybill.id) {
+    window.open(route('waybills.preview', { id: request.waybill.id, final: false }), '_blank');
+  }
 };
 
 const generateWaybill = (deliveryRequestId) => {

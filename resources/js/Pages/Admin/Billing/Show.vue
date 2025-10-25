@@ -116,61 +116,88 @@
             </div>
           </div>
 
-          <!-- Payment Information -->
-          <div class="mb-6">
-            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Payment Information</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  <span class="font-semibold">Payment Type:</span>
-                  <span class="text-gray-900 dark:text-gray-100">{{ waybill.delivery_request?.payment_type?.toUpperCase() || 'N/A' }}</span>
-                </p>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  <span class="font-semibold">Method:</span>
-                  <span class="text-gray-900 dark:text-gray-100">{{ waybill.delivery_request?.payment_method?.toUpperCase() || 'N/A' }}</span>
-                </p>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  <span class="font-semibold">Payment Terms:</span>
-                  <span class="text-gray-900 dark:text-gray-100">
-                    {{
-                      waybill.delivery_request?.payment_terms === 'net_7' ? 'Net 7' :
-                      waybill.delivery_request?.payment_terms === 'net_15' ? 'Net 15' :
-                      waybill.delivery_request?.payment_terms === 'net_30' ? 'Net 30' :
-                      waybill.delivery_request?.payment_terms === 'cnd' ? 'CND' :
-                      (waybill.delivery_request?.payment_terms || 'N/A')
-                    }}
-                  </span>
-                </p>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  <span class="font-semibold">Due Date:</span>
-                  <span class="text-gray-900 dark:text-gray-100">
-                    {{ waybill.delivery_request?.payment_due_date ? formatDate(waybill.delivery_request.payment_due_date) : 'N/A' }}
-                  </span>
-                </p>
-              </div>
-              <div>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  <span class="font-semibold">Total Amount:</span>
-                  <span class="text-gray-900 dark:text-gray-100">{{ formatCurrency(waybill.delivery_request?.total_price || 0) }}</span>
-                </p>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  <span class="font-semibold">Status:</span>
-                  <span class="text-gray-900 dark:text-gray-100">
-                    <template v-if="waybill.delivery_request?.payment_type === 'prepaid'">
-                      {{ waybill.delivery_request?.is_paid ? 'PAID' : 'PENDING' }}
-                    </template>
-                    <template v-else>
-                      {{ order && order.status === 'completed' ? 'COLLECTED' : 'TO BE COLLECTED' }}
-                    </template>
-                  </span>
-                </p>
-                <p v-if="waybill.delivery_request?.payment_type === 'prepaid' && waybill.delivery_request?.is_paid && waybill.delivery_request?.payment" class="text-sm text-gray-500 dark:text-gray-400">
-                  <span class="font-semibold">Paid At:</span>
-                  <span class="text-gray-900 dark:text-gray-100">{{ formatDateTime(waybill.delivery_request.payment.created_at) }}</span>
-                </p>
-              </div>
-            </div>
-          </div>
+<!-- Payment Information -->
+<div class="mb-6">
+  <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Payment Information</h3>
+  
+  <!-- Debug Information (Remove in production) -->
+  <div class="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4 text-xs">
+    <p class="font-semibold text-yellow-800">Payment Status Debug:</p>
+    <div class="grid grid-cols-2 gap-2 mt-1">
+      <div>Payment Type: <span class="font-mono">{{ waybill.delivery_request?.payment_type }}</span></div>
+      <div>Payment Method: <span class="font-mono">{{ waybill.delivery_request?.payment_method }}</span></div>
+      <div>Payment Status: <span class="font-mono">{{ waybill.delivery_request?.payment_status }}</span></div>
+      <div>Payment Verified: <span class="font-mono">{{ waybill.delivery_request?.payment_verified }}</span></div>
+      <div>is_paid: <span class="font-mono">{{ waybill.delivery_request?.is_paid }}</span></div>
+      <div>Final Status: <span class="font-mono">{{ getFinalPaymentStatus() }}</span></div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <!-- Column 1 -->
+    <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded">
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">
+        <span class="font-semibold">Payment Type:</span>
+      </p>
+      <p class="text-sm text-gray-900 dark:text-gray-100 font-medium">
+        {{ waybill.delivery_request?.payment_type?.toUpperCase() || 'N/A' }}
+      </p>
+      
+      <p class="text-sm text-gray-500 dark:text-gray-400 mt-3 mb-2">
+        <span class="font-semibold">Method:</span>
+      </p>
+      <p class="text-sm text-gray-900 dark:text-gray-100 font-medium">
+        {{ waybill.delivery_request?.payment_method?.toUpperCase() || 'N/A' }}
+      </p>
+    </div>
+
+    <!-- Column 2 -->
+    <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded">
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">
+        <span class="font-semibold">Payment Terms:</span>
+      </p>
+      <p class="text-sm text-gray-900 dark:text-gray-100 font-medium">
+        {{
+          waybill.delivery_request?.payment_type === 'postpaid' 
+            ? (waybill.delivery_request?.payment_terms === 'net_7' ? 'Net 7' :
+               waybill.delivery_request?.payment_terms === 'net_15' ? 'Net 15' :
+               waybill.delivery_request?.payment_terms === 'net_30' ? 'Net 30' :
+               waybill.delivery_request?.payment_terms === 'cnd' ? 'CND' :
+               'N/A')
+            : 'For Postpaid Only'
+        }}
+      </p>
+      
+      <p class="text-sm text-gray-500 dark:text-gray-400 mt-3 mb-2">
+        <span class="font-semibold">Due Date:</span>
+      </p>
+      <p class="text-sm text-gray-900 dark:text-gray-100 font-medium">
+        {{
+          waybill.delivery_request?.payment_type === 'postpaid'
+            ? (waybill.delivery_request?.payment_due_date ? formatDate(waybill.delivery_request.payment_due_date) : 'N/A')
+            : 'For Postpaid Only'
+        }}
+      </p>
+    </div>
+
+    <!-- Column 3 -->
+    <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded">
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">
+        <span class="font-semibold">Total Amount:</span>
+      </p>
+      <p class="text-lg text-gray-900 dark:text-gray-100 font-bold">
+        {{ formatCurrency(waybill.delivery_request?.total_price || 0) }}
+      </p>
+      
+      <p class="text-sm text-gray-500 dark:text-gray-400 mt-3 mb-2">
+        <span class="font-semibold">Status:</span>
+      </p>
+      <p class="text-sm font-medium" :class="paymentStatusColor">
+        {{ getFinalPaymentStatus() }}
+      </p>
+    </div>
+  </div>
+</div>
 
           <!-- Delivery Assignment -->
           <div v-if="order && order.driver" class="mb-6">
@@ -211,7 +238,8 @@ import EmployeeLayout from '@/Layouts/EmployeeLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import { router } from '@inertiajs/vue3';
-
+import { computed } from 'vue';
+import { onMounted } from 'vue';
 const props = defineProps({
   waybill: {
     type: Object,
@@ -223,6 +251,61 @@ const props = defineProps({
   }
 });
 
+const getFinalPaymentStatus = () => {
+  const paymentType = props.waybill.delivery_request?.payment_type;
+  const paymentMethod = props.waybill.delivery_request?.payment_method;
+  const paymentStatus = props.waybill.delivery_request?.payment_status;
+  const paymentVerified = props.waybill.delivery_request?.payment_verified;
+  const isPaid = props.waybill.delivery_request?.is_paid;
+  const orderStatus = props.order?.status;
+
+  let finalStatus = 'UNKNOWN';
+  
+  if (paymentType === 'prepaid') {
+    // Prepaid cash is always considered PAID
+    if (paymentMethod === 'cash') {
+      finalStatus = 'PAID';
+    } else {
+      // For other prepaid methods, check payment status
+      const paid = (paymentStatus === 'paid' && paymentVerified) || isPaid;
+      finalStatus = paid ? 'PAID' : 'PENDING';
+    }
+  } else {
+    // Postpaid
+    finalStatus = orderStatus === 'completed' ? 'COLLECTED' : 'TO BE COLLECTED';
+  }
+
+  // Log the payment status calculation for debugging
+  console.log('🔍 PAYMENT STATUS DEBUG:', {
+    paymentType,
+    paymentMethod,
+    paymentStatus,
+    paymentVerified,
+    isPaid,
+    orderStatus,
+    finalStatus,
+    waybillId: props.waybill.id,
+    deliveryRequestId: props.waybill.delivery_request?.id
+  });
+
+  return finalStatus;
+};
+
+onMounted(() => {
+  console.log('💰 FULL PAYMENT DATA:', {
+    waybill: props.waybill,
+    delivery_request: props.waybill.delivery_request,
+    order: props.order,
+    paymentData: {
+      type: props.waybill.delivery_request?.payment_type,
+      method: props.waybill.delivery_request?.payment_method,
+      status: props.waybill.delivery_request?.payment_status,
+      verified: props.waybill.delivery_request?.payment_verified,
+      is_paid: props.waybill.delivery_request?.is_paid,
+      total_price: props.waybill.delivery_request?.total_price
+    }
+  });
+});
 const formatCurrency = (amount) => {
   if (isNaN(amount)) return '₱0.00';
   return new Intl.NumberFormat('en-PH', {
@@ -231,7 +314,21 @@ const formatCurrency = (amount) => {
     minimumFractionDigits: 2
   }).format(amount);
 };
-
+const paymentStatusColor = computed(() => {
+  const finalStatus = getFinalPaymentStatus();
+  
+  switch (finalStatus) {
+    case 'PAID':
+    case 'COLLECTED':
+      return 'text-green-600 dark:text-green-400';
+    case 'PENDING':
+      return 'text-yellow-600 dark:text-yellow-400';
+    case 'TO BE COLLECTED':
+      return 'text-blue-600 dark:text-blue-400';
+    default:
+      return 'text-gray-600 dark:text-gray-400';
+  }
+});
 const formatDate = (dateString) => {
   if (!dateString) return 'Not specified';
   try {

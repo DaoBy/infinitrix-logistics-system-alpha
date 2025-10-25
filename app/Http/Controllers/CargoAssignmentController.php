@@ -31,10 +31,11 @@ class CargoAssignmentController extends Controller
     const WORKFLOW_BATCH_PLANNING = 'batch_planning';
     const WORKFLOW_BACKHAUL_OPTIMIZER = 'backhaul_optimizer';
 
-    public function index()
+   public function index(Request $request)
 {
-    $perPage = request('per_page', 5);
-    $workflowMode = request('workflow_mode', self::WORKFLOW_QUICK_ASSIGN);
+    $perPage = $request->input('per_page', 5);
+    $workflowMode = $request->input('workflow_mode', self::WORKFLOW_QUICK_ASSIGN);
+    $activeTab = $request->input('activeTab', 'ready');
 
     $query = DeliveryOrder::with([
         'deliveryRequest.sender',
@@ -57,61 +58,95 @@ class CargoAssignmentController extends Controller
         }
     ]);
 
-    // Apply status filter if present
-    if ($status = request('status')) {
-        $query->where('status', $status);
+    // Apply active tab filter
+    switch ($activeTab) {
+        case 'ready':
+            $query->where('status', 'ready');
+            break;
+        case 'assigned':
+            $query->where('status', 'assigned');
+            break;
+        case 'active':
+            $query->whereIn('status', ['dispatched', 'in_transit']);
+            break;
+        default:
+            $query->where('status', 'ready');
     }
 
     // Apply search filter if present
-    if ($search = request('search')) {
+    if ($search = $request->input('search')) {
         $query->where(function ($q) use ($search) {
             $q->where('do_number', 'like', "%{$search}%")
               ->orWhereHas('deliveryRequest', function ($q2) use ($search) {
-                  $q2->where('dr_number', 'like', "%{$search}%");
+                  $q2->where('dr_number', 'like', "%{$search}%")
+                     ->orWhere('reference_number', 'like', "%{$search}%")
+                     ->orWhereHas('sender', function ($q3) use ($search) {
+                         $q3->where('name', 'like', "%{$search}%");
+                     });
+              })
+              ->orWhereHas('driverTruckAssignment.driver', function ($q2) use ($search) {
+                  $q2->where('name', 'like', "%{$search}%");
               });
         });
     }
 
     // Apply region filter if present
-    if ($regionId = request('region_id')) {
+    if ($regionId = $request->input('region_id')) {
         $query->whereHas('deliveryRequest', function($q) use ($regionId) {
             $q->where('pick_up_region_id', $regionId);
         });
     }
 
-    // Apply backhaul filter if present
-    if ($backhaulFilter = request('backhaul_filter')) {
-        if ($backhaulFilter === 'backhaul') {
-            $query->whereHas('driverTruckAssignment', function($q) {
-                $q->where('available_for_backhaul', true);
+    // ✅ FIXED: Apply driver filter if present (for assigned tab)
+    if ($activeTab === 'assigned' && $request->filled('driver_id')) {
+        $driverId = $request->input('driver_id');
+        $query->whereHas('driverTruckAssignment', function($q) use ($driverId) {
+            $q->where('driver_id', $driverId);
+        });
+    }
+
+    // Sticker status filter for ready tab
+    if ($activeTab === 'ready' && $request->filled('sticker_status')) {
+        $stickerStatus = $request->input('sticker_status');
+        
+        if ($stickerStatus === 'with_stickers') {
+            $query->whereHas('deliveryRequest', function($q) {
+                $q->whereDoesntHave('packages', function($q2) {
+                    $q2->whereNull('sticker_printed_at');
+                });
             });
-        } elseif ($backhaulFilter === 'regular') {
-            $query->whereHas('driverTruckAssignment', function($q) {
-                $q->where('available_for_backhaul', false);
+        } elseif ($stickerStatus === 'missing_stickers') {
+            $query->whereHas('deliveryRequest.packages', function($q) {
+                $q->whereNull('sticker_printed_at');
             });
         }
     }
 
-    $deliveries = $query->latest()->paginate($perPage)->withQueryString();
+    \Log::info('Cargo Assignment Query Debug', [
+        'activeTab' => $activeTab,
+        'driver_id' => $request->input('driver_id'),
+        'sticker_status' => $request->input('sticker_status'),
+        'region_id' => $request->input('region_id'),
+        'total_results' => $query->count()
+    ]);
 
-    // Get driver-truck sets with capacity calculations
-    $driverTruckSets = $this->getAvailableDriverTruckSets(request('region_id')) ?? [];
+    $deliveries = $query->latest()->paginate($perPage);
+
+    $driverTruckSets = $this->getAvailableDriverTruckSets($request->input('region_id')) ?? [];
 
     $regions = Region::where('is_active', true)->get();
 
     // Get batch suggestions for batch planning mode
     $batchSuggestions = $this->getBatchSuggestions($workflowMode);
 
-    // ✅ ADDED: Process deliveries to include manifest status
+    // Process deliveries to include manifest status
     $processedDeliveries = $deliveries->getCollection()->map(function($delivery) {
-        // Check if this delivery's driver-truck assignment has a finalized manifest
         if ($delivery->driver_truck_assignment) {
             $hasFinalizedManifest = Manifest::where('driver_id', $delivery->driver_truck_assignment->driver_id)
                 ->where('truck_id', $delivery->driver_truck_assignment->truck_id)
                 ->where('status', 'finalized')
                 ->exists();
             
-            // Add the manifest status to the delivery object
             $delivery->driver_truck_assignment->has_finalized_manifest = $hasFinalizedManifest;
             $delivery->driver_truck_assignment->manifest_status = $hasFinalizedManifest ? 'finalized' : 'none';
         }
@@ -122,33 +157,95 @@ class CargoAssignmentController extends Controller
     $deliveries->setCollection($processedDeliveries);
 
     return Inertia::render('Admin/CargoAssignment/Index', [
-        'deliveries' => $deliveries,
+        'deliveries' => [
+            'data' => $deliveries->items(),
+            'meta' => [
+                'current_page' => $deliveries->currentPage(),
+                'last_page' => $deliveries->lastPage(),
+                'per_page' => $deliveries->perPage(),
+                'total' => $deliveries->total(),
+                'from' => $deliveries->firstItem(),
+                'to' => $deliveries->lastItem(),
+            ]
+        ],
         'driverTruckSets' => $driverTruckSets,
         'regions' => $regions,
-        'filters' => request()->all(['search', 'status', 'region_id', 'backhaul_filter']),
+        'filters' => $request->only(['search', 'region_id', 'driver_id', 'sticker_status', 'activeTab', 'page']),
         'workflow_mode' => $workflowMode,
         'batch_suggestions' => $batchSuggestions,
     ]);
 }
 
-
-    protected function hasFinalizedManifest(DriverTruckAssignment $assignment): bool
+protected function hasFinalizedManifest(DriverTruckAssignment $assignment): bool
 {
-    // Check for finalized manifest using driver_truck_assignment_id
+    \Log::info("🎯 STARTING MANIFEST CHECK - FIXED FOR NEW SETS", [
+        'assignment_id' => $assignment->id,
+        'driver_id' => $assignment->driver_id,
+        'truck_id' => $assignment->truck_id,
+        'assignment_created_at' => $assignment->created_at
+    ]);
+
+    // 1. FIRST: Check for finalized manifest using ONLY the driver_truck_assignment_id
     $hasFinalizedManifest = Manifest::where('driver_truck_assignment_id', $assignment->id)
         ->where('status', 'finalized')
+        ->whereNull('archived_at')
         ->exists();
 
-    // If no manifest found by assignment ID, check by driver_id and truck_id for backward compatibility
+    \Log::info("🎯 CHECK 1 - By assignment ID only", [
+        'assignment_id' => $assignment->id,
+        'result' => $hasFinalizedManifest
+    ]);
+
+    // 2. ONLY check by driver_id + truck_id if:
+    //    - No manifest found by assignment ID
+    //    - AND this assignment has active orders
+    //    - AND the assignment is not brand new (created in the last few minutes)
     if (!$hasFinalizedManifest) {
-        $hasFinalizedManifest = Manifest::where('driver_id', $assignment->driver_id)
-            ->where('truck_id', $assignment->truck_id)
-            ->where('status', 'finalized')
+        $hasActiveOrders = DeliveryOrder::where('driver_truck_assignment_id', $assignment->id)
+            ->whereIn('status', ['assigned', 'dispatched', 'in_transit'])
             ->exists();
+
+        $isBrandNewAssignment = $assignment->created_at && 
+                               $assignment->created_at->gt(now()->subMinutes(10));
+
+        \Log::info("🎯 CHECK 2 - Conditions for driver/truck check", [
+            'assignment_id' => $assignment->id,
+            'has_active_orders' => $hasActiveOrders,
+            'is_brand_new' => $isBrandNewAssignment,
+            'assignment_age_minutes' => $isBrandNewAssignment ? $assignment->created_at->diffInMinutes(now()) : 'old'
+        ]);
+
+        // For brand new assignments without active orders, skip the driver/truck check entirely
+        if ($isBrandNewAssignment && !$hasActiveOrders) {
+            \Log::info("🎯 CHECK 3 - SKIPPING driver/truck check for brand new assignment", [
+                'assignment_id' => $assignment->id,
+                'reason' => 'Brand new assignment with no active orders'
+            ]);
+        } 
+        // Only check by driver/truck if there are active orders AND it's not a brand new assignment
+        elseif ($hasActiveOrders && !$isBrandNewAssignment) {
+            $hasFinalizedManifest = Manifest::where('driver_id', $assignment->driver_id)
+                ->where('truck_id', $assignment->truck_id)
+                ->where('status', 'finalized')
+                ->whereNull('archived_at')
+                ->exists();
+
+            \Log::info("🎯 CHECK 3 - By driver/truck (only if active orders and not brand new)", [
+                'assignment_id' => $assignment->id,
+                'result' => $hasFinalizedManifest
+            ]);
+        }
     }
+
+    \Log::info("🎯 FINAL MANIFEST CHECK RESULT", [
+        'assignment_id' => $assignment->id,
+        'has_finalized_manifest' => $hasFinalizedManifest,
+        'available' => !$hasFinalizedManifest
+    ]);
 
     return $hasFinalizedManifest;
 }
+
 
     /**
      * Get batch suggestions based on workflow mode
@@ -435,23 +532,11 @@ public function checkManifestStatus(DeliveryOrder $deliveryOrder)
             return null;
         }
 
-        // ✅ FIXED: Check for finalized manifest using driver_id and truck_id
-        $hasFinalizedManifest = Manifest::where('driver_id', $assignment->driver_id)
-            ->where('truck_id', $assignment->truck_id)
-            ->where('status', 'finalized')
-            ->exists();
+        // ✅ FIXED: Use the updated manifest check logic
+        $hasFinalizedManifest = $this->hasFinalizedManifest($assignment);
 
-        // ✅ DEBUG: Log the manifest check
-        \Log::info("Manifest check for DriverTruckAssignment", [
-            'assignment_id' => $assignment->id,
-            'driver_id' => $assignment->driver_id,
-            'truck_id' => $assignment->truck_id,
-            'has_finalized_manifest' => $hasFinalizedManifest
-        ]);
-
-        // Get ALL active orders (assigned, in_transit) for this set
-        $activeOrders = DeliveryOrder::where('truck_id', $truck->id)
-            ->where('driver_id', $driver->id)
+        // Rest of the method remains the same...
+        $activeOrders = DeliveryOrder::where('driver_truck_assignment_id', $assignment->id)
             ->whereIn('status', ['assigned', 'in_transit'])
             ->with(['deliveryRequest.packages'])
             ->get();
@@ -487,10 +572,11 @@ public function checkManifestStatus(DeliveryOrder $deliveryOrder)
         }
 
         // Availability check
-        $isAvailable = $driver->isAvailable() && 
-                      $truck->is_active &&
-                      ($truck->volume_capacity > $currentVolume || $truck->volume_capacity == 0) &&
-                      ($truck->weight_capacity > $currentWeight || $truck->weight_capacity == 0);
+     $isAvailable = $driver->isAvailable() && 
+              $truck->is_active &&
+              ($truck->volume_capacity > $currentVolume || $truck->volume_capacity == 0) &&
+              ($truck->weight_capacity > $currentWeight || $truck->weight_capacity == 0);
+// ✅ REMOVED: && !$hasFinalizedManifest - Keep sets available even with finalized manifests
 
         return [
             'id' => $assignment->id,
@@ -523,6 +609,16 @@ public function checkManifestStatus(DeliveryOrder $deliveryOrder)
     ->toArray();
 
     return $result;
+}
+
+/**
+ * Check if delivery request has packages without stickers
+ */
+protected function hasUnstickerizedPackages(DeliveryRequest $deliveryRequest): bool
+{
+    return $deliveryRequest->packages()
+        ->whereNull('sticker_printed_at')
+        ->exists();
 }
 
     /**

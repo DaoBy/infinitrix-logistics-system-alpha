@@ -1,8 +1,7 @@
 <template>
   <EmployeeLayout>
     <template #header>
-      <div class="flex flex-wrap justify-between items-center gap-4 px-4 md:px-6 max-w-screen-xl mx-auto w-full">
-        <div>
+<div class="flex flex-wrap justify-between items-center gap-4 px-4 md:px-6 w-full">        <div>
           <h2 class="text-xl font-semibold leading-tight text-gray-800">
             Driver-Truck Assignments
           </h2>

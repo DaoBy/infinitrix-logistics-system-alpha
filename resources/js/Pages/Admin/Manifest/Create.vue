@@ -68,55 +68,60 @@
                   Packages to Include ({{ packages.length }})
                 </label>
                 <div class="overflow-x-auto">
-                  <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead class="bg-gray-50 dark:bg-gray-700">
-                      <tr>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          DO #
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Category
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Package Name
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Destination
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Waybill #
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      <tr v-for="pkg in packages" :key="pkg.id">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                          DO-{{ pkg.delivery_order_id.toString().padStart(6, '0') }}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                          {{ pkg.category }}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                          {{ pkg.item_name }}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                          {{ pkg.drop_off_region || 'N/A' }}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                          {{ pkg.waybill_number || 'Pending' }}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
+             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+    <thead class="bg-gray-50 dark:bg-gray-700">
+        <tr>
+            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Item Code
+            </th>
+            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Category
+            </th>
+            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Package Name
+            </th>
+            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Destination
+            </th>
+            <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Waybill #
+            </th>
+        </tr>
+    </thead>
+    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+        <tr v-for="pkg in packages" :key="pkg.id">
+            <td class="px-4 py-2 whitespace-nowrap text-sm font-mono text-gray-900 dark:text-gray-100 font-medium">
+                {{ pkg.item_code }}
+            </td>
+            <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                {{ pkg.category }}
+            </td>
+            <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                {{ pkg.item_name }}
+            </td>
+            <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                {{ pkg.drop_off_region || 'N/A' }}
+            </td>
+            <td class="px-4 py-2 whitespace-nowrap text-sm text-green-600 font-semibold">
+                {{ pkg.waybill_number }}
+            </td>
+        </tr>
+    </tbody>
+</table>
                 </div>
               </div>
 
               <div class="flex justify-end">
-                <PrimaryButton type="submit" class="inline-flex items-center">
+                <PrimaryButton 
+                  type="submit" 
+                  class="inline-flex items-center"
+                  :disabled="form.processing"
+                >
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                   </svg>
-                  Create Manifest
+                  <span v-if="form.processing">Creating...</span>
+                  <span v-else>Create Finalized Manifest</span>
                 </PrimaryButton>
               </div>
             </div>
@@ -174,7 +179,7 @@ const submitForm = () => {
   form.post(route('manifests.store', { truck: props.truck.id }), {
     preserveScroll: true,
     onSuccess: () => {
-      // Handled by the controller
+      // Success handled by controller redirect
     },
     onError: (errors) => {
       console.error('Error creating manifest:', errors);

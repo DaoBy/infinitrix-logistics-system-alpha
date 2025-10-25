@@ -1,198 +1,232 @@
-{{-- This is the complete/final waybill PDF template --}}
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>Waybill - {{ $waybill->waybill_number }} (Complete)</title>
     <style>
-        body { font-family: 'Inter', Arial, sans-serif; margin: 0; padding: 32px; background: #f9fafb; color: #222; }
-        .header { text-align: center; margin-bottom: 32px; }
-        .header h1 { margin: 0; font-size: 32px; font-weight: bold; color: #111827; }
-        .header p { margin: 8px 0 0; font-size: 20px; color: #6b7280; }
-        .section { margin-bottom: 24px; }
-        .section-title { font-weight: 600; font-size: 18px; color: #111827; margin-bottom: 8px; }
-        .info-box { background: #f3f4f6; border-radius: 8px; padding: 16px; margin-bottom: 24px; }
-        .row { display: flex; gap: 24px; }
-        .col { flex: 1; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
-        table, th, td { border: 1px solid #e5e7eb; }
-        th, td { padding: 10px; text-align: left; font-size: 14px; }
-        th { background: #f3f4f6; color: #374151; font-weight: 600; }
-        .footer { margin-top: 40px; text-align: center; font-size: 13px; color: #6b7280; }
-        .notice { font-size: 11px; color: #9ca3af; margin-top: 16px; }
-        .flex { display: flex; gap: 32px; justify-content: center; align-items: center; }
-        .label { font-weight: 600; color: #374151; }
-        .value { color: #111827; }
-        .border-t { border-top: 1px solid #e5e7eb; }
-        .pt-4 { padding-top: 16px; }
-        .text-xs { font-size: 12px; }
-        .text-sm { font-size: 14px; }
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 20px; 
+            color: #000; 
+            background: #fff; 
+        }
+        .header { 
+            text-align: center; 
+            margin-bottom: 30px; 
+            border-bottom: 2px solid #000;
+            padding-bottom: 15px;
+        }
+        .header h1 { 
+            margin: 0; 
+            font-size: 24px; 
+            font-weight: bold; 
+        }
+        .header p { 
+            margin: 5px 0 0; 
+            font-size: 16px; 
+        }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 20px; 
+        }
+        th, td { 
+            border: 1px solid #000; 
+            padding: 8px; 
+            text-align: left; 
+            font-size: 12px; 
+            vertical-align: top;
+        }
+        th { 
+            background: #f0f0f0; 
+            font-weight: bold; 
+        }
+        .section-title { 
+            font-weight: bold; 
+            font-size: 14px; 
+            margin-bottom: 10px; 
+            border-bottom: 1px solid #000;
+            padding-bottom: 5px;
+        }
+        .info-table { margin-bottom: 25px; }
+        .footer { 
+            margin-top: 30px; 
+            text-align: center; 
+            font-size: 12px; 
+            border-top: 1px solid #000;
+            padding-top: 15px;
+        }
+        .label { font-weight: bold; }
         .text-center { text-align: center; }
-        .rounded { border-radius: 8px; }
-        .bg-gray { background: #f3f4f6; }
+        .mb-3 { margin-bottom: 15px; }
+        .mt-3 { margin-top: 15px; }
     </style>
 </head>
 <body>
+    <!-- Header -->
     <div class="header">
         <h1>INFINITRIX EXPRESS CARGO</h1>
         <p>DELIVERY RECEIPT / WAYBILL (COMPLETED)</p>
     </div>
 
     <!-- Waybill Information -->
-    <div class="row section">
-        <div class="col">
-            <div class="info-box">
-                <div class="text-sm"><span class="label">Waybill No:</span> <span class="value">{{ $waybill->waybill_number }}</span></div>
-                <div class="text-sm"><span class="label">Date:</span> <span class="value">{{ $waybill->created_at->format('M d, Y') }}</span></div>
-            </div>
-        </div>
-        <div class="col">
-            <div class="info-box">
-                <div class="text-sm"><span class="label">Reference No:</span> <span class="value">{{ $waybill->deliveryRequest->reference_number ?? 'N/A' }}</span></div>
-                <div class="text-sm"><span class="label">Delivery Type:</span> <span class="value">Branch to Branch</span></div>
-            </div>
-        </div>
-    </div>
+    <table class="info-table">
+        <tr>
+            <th colspan="2" class="section-title">Waybill Information</th>
+        </tr>
+        <tr>
+            <td width="50%">
+                <span class="label">Waybill No:</span> {{ $waybill->waybill_number }}<br>
+                <span class="label">Date:</span> {{ $waybill->created_at->format('M d, Y') }}
+            </td>
+            <td width="50%">
+                <span class="label">Reference No:</span> {{ $waybill->deliveryRequest->reference_number ?? 'N/A' }}<br>
+                <span class="label">Delivery Type:</span> Branch to Branch
+            </td>
+        </tr>
+    </table>
 
     <!-- Shipper & Consignee -->
-    <div class="row section">
-        <div class="col">
-            <div class="info-box">
-                <div class="section-title">Shipper Information</div>
-                <div class="text-sm"><span class="label">Name:</span> <span class="value">{{ $waybill->deliveryRequest->sender->name ?? $waybill->deliveryRequest->sender->company_name ?? 'N/A' }}</span></div>
-                <div class="text-sm"><span class="label">Address:</span> <span class="value">{{ $waybill->deliveryRequest->sender->address ?? 'N/A' }}</span></div>
-                <div class="text-sm"><span class="label">Mobile:</span> <span class="value">{{ $waybill->deliveryRequest->sender->mobile ?? 'N/A' }}</span></div>
-            </div>
-        </div>
-        <div class="col">
-            <div class="info-box">
-                <div class="section-title">Consignee Information</div>
-                <div class="text-sm"><span class="label">Name:</span> <span class="value">{{ $waybill->deliveryRequest->receiver->name ?? $waybill->deliveryRequest->receiver->company_name ?? 'N/A' }}</span></div>
-                <div class="text-sm"><span class="label">Address:</span> <span class="value">{{ $waybill->deliveryRequest->receiver->address ?? 'N/A' }}</span></div>
-                <div class="text-sm"><span class="label">Mobile:</span> <span class="value">{{ $waybill->deliveryRequest->receiver->mobile ?? 'N/A' }}</span></div>
-            </div>
-        </div>
-    </div>
+    <table class="info-table">
+        <tr>
+            <th colspan="2" class="section-title">Customer Information</th>
+        </tr>
+        <tr>
+            <td width="50%">
+                <span class="label">SHIPPER</span><br>
+                <span class="label">Name:</span> {{ $waybill->deliveryRequest->sender->name ?? $waybill->deliveryRequest->sender->company_name ?? 'N/A' }}<br>
+                <span class="label">Address:</span> {{ $waybill->deliveryRequest->sender->address ?? 'N/A' }}<br>
+                <span class="label">Mobile:</span> {{ $waybill->deliveryRequest->sender->mobile ?? 'N/A' }}
+            </td>
+            <td width="50%">
+                <span class="label">CONSIGNEE</span><br>
+                <span class="label">Name:</span> {{ $waybill->deliveryRequest->receiver->name ?? $waybill->deliveryRequest->receiver->company_name ?? 'N/A' }}<br>
+                <span class="label">Address:</span> {{ $waybill->deliveryRequest->receiver->address ?? 'N/A' }}<br>
+                <span class="label">Mobile:</span> {{ $waybill->deliveryRequest->receiver->mobile ?? 'N/A' }}
+            </td>
+        </tr>
+    </table>
 
-    <!-- Route Information (split into Pickup and Drop-off) -->
-    <div class="row section">
-        <div class="col">
-            <div class="info-box">
-                <div class="section-title">Pickup Branch/Region</div>
-                <div class="text-sm"><span class="label">Name:</span> <span class="value">{{ $waybill->deliveryRequest->pickUpRegion->name ?? $waybill->deliveryRequest->pick_up_region->name ?? 'N/A' }}</span></div>
-                <div class="text-sm"><span class="label">Address:</span> <span class="value">{{ $waybill->deliveryRequest->pickUpRegion->address ?? $waybill->deliveryRequest->pick_up_region->address ?? $waybill->deliveryRequest->pickUpRegion->warehouse_address ?? $waybill->deliveryRequest->pick_up_region->warehouse_address ?? 'N/A' }}</span></div>
-            </div>
-        </div>
-        <div class="col">
-            <div class="info-box">
-                <div class="section-title">Drop-off Branch/Region</div>
-                <div class="text-sm"><span class="label">Name:</span> <span class="value">{{ $waybill->deliveryRequest->dropOffRegion->name ?? $waybill->deliveryRequest->drop_off_region->name ?? 'N/A' }}</span></div>
-                <div class="text-sm"><span class="label">Address:</span> <span class="value">{{ $waybill->deliveryRequest->dropOffRegion->warehouse_address ?? $waybill->deliveryRequest->drop_off_region->warehouse_address ?? $waybill->deliveryRequest->dropOffRegion->address ?? $waybill->deliveryRequest->drop_off_region->address ?? 'N/A' }}</span></div>
-            </div>
-        </div>
-    </div>
+    <!-- Route Information -->
+    <table class="info-table">
+        <tr>
+            <th colspan="2" class="section-title">Route Information</th>
+        </tr>
+        <tr>
+            <td width="50%">
+                <span class="label">PICKUP BRANCH/REGION</span><br>
+                <span class="label">Name:</span> {{ $waybill->deliveryRequest->pickUpRegion->name ?? $waybill->deliveryRequest->pick_up_region->name ?? 'N/A' }}<br>
+                <span class="label">Address:</span> {{ $waybill->deliveryRequest->pickUpRegion->address ?? $waybill->deliveryRequest->pick_up_region->address ?? $waybill->deliveryRequest->pickUpRegion->warehouse_address ?? $waybill->deliveryRequest->pick_up_region->warehouse_address ?? 'N/A' }}
+            </td>
+            <td width="50%">
+                <span class="label">DROP-OFF BRANCH/REGION</span><br>
+                <span class="label">Name:</span> {{ $waybill->deliveryRequest->dropOffRegion->name ?? $waybill->deliveryRequest->drop_off_region->name ?? 'N/A' }}<br>
+                <span class="label">Address:</span> {{ $waybill->deliveryRequest->dropOffRegion->warehouse_address ?? $waybill->deliveryRequest->drop_off_region->warehouse_address ?? $waybill->deliveryRequest->dropOffRegion->address ?? $waybill->deliveryRequest->drop_off_region->address ?? 'N/A' }}
+            </td>
+        </tr>
+    </table>
 
-    <!-- Package Info -->
-    <div class="section">
-        <div class="section-title">Package Information</div>
-        <table>
-            <thead>
-                <tr>
-                    <th>Item Code</th>
-                    <th>Description</th>
-                    <th>Weight (kg)</th>
-                    <th>Dimensions (cm)</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($waybill->deliveryRequest->packages ?? [] as $package)
-                <tr>
-                    <td>{{ $package->item_code ?? 'N/A' }}</td>
-                    <td>{{ $package->item_name ?? 'Unspecified Item' }}</td>
-                    <td>{{ $package->weight ?? 'N/A' }}</td>
-                    <td>{{ $package->length }}x{{ $package->width }}x{{ $package->height }}</td>
-                </tr>
-                @empty
-                <tr>
-                    <td colspan="4">No packages found</td>
-                </tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
+    <!-- Package Information -->
+    <table class="info-table">
+        <tr>
+            <th colspan="4" class="section-title">Package Information</th>
+        </tr>
+        <tr>
+            <th width="20%">Item Code</th>
+            <th width="40%">Description</th>
+            <th width="20%">Weight (kg)</th>
+            <th width="20%">Dimensions (cm)</th>
+        </tr>
+        @forelse($waybill->deliveryRequest->packages ?? [] as $package)
+        <tr>
+            <td>{{ $package->item_code ?? 'N/A' }}</td>
+            <td>{{ $package->item_name ?? 'Unspecified Item' }}</td>
+            <td>{{ $package->weight ?? 'N/A' }}</td>
+            <td>{{ $package->length }}x{{ $package->width }}x{{ $package->height }}</td>
+        </tr>
+        @empty
+        <tr>
+            <td colspan="4" class="text-center">No packages found</td>
+        </tr>
+        @endforelse
+    </table>
 
     <!-- Payment Information -->
-    <div class="section">
-        <div class="section-title">Payment Information</div>
-        <div class="row">
-            <div class="col">
-                <div class="text-sm"><span class="label">Payment Type:</span> <span class="value">{{ strtoupper($waybill->deliveryRequest->payment_type ?? 'N/A') }}</span></div>
-                <div class="text-sm"><span class="label">Method:</span> <span class="value">{{ strtoupper($waybill->deliveryRequest->payment_method ?? 'N/A') }}</span></div>
-                <div class="text-sm">
-                    <span class="label">Payment Terms:</span>
-                    <span class="value">
-                        @php
-                            $terms = $waybill->deliveryRequest->payment_terms ?? null;
-                            echo $terms === 'net_7' ? 'Net 7' :
-                                 ($terms === 'net_15' ? 'Net 15' :
-                                 ($terms === 'net_30' ? 'Net 30' :
-                                 ($terms === 'cnd' ? 'CND' : ($terms ?? 'N/A'))));
-                        @endphp
-                    </span>
-                </div>
-                <div class="text-sm">
-                    <span class="label">Due Date:</span>
-                    <span class="value">
-                        {{ $waybill->deliveryRequest->payment_due_date ? \Carbon\Carbon::parse($waybill->deliveryRequest->payment_due_date)->format('M d, Y') : 'N/A' }}
-                    </span>
-                </div>
-            </div>
-            <div class="col">
-                <div class="text-sm"><span class="label">Total Amount:</span> <span class="value">{{ number_format($waybill->deliveryRequest->total_price ?? 0, 2) }}</span></div>
-                <div class="text-sm">
-                    <span class="label">Status:</span>
-                    <span class="value">
-                        @if($waybill->deliveryRequest->payment_type === 'prepaid')
-                            {{ $waybill->deliveryRequest->payment_status === 'paid' && $waybill->deliveryRequest->payment_verified ? 'PAID' : 'PENDING' }}
-                        @else
-                            {{ $order && $order->status === 'completed' ? 'COLLECTED' : 'TO BE COLLECTED' }}
-                        @endif
-                    </span>
-                </div>
-                @if($waybill->deliveryRequest->payment_type === 'prepaid' && $waybill->deliveryRequest->payment_status === 'paid' && $waybill->deliveryRequest->payment && $waybill->deliveryRequest->payment_verified)
-                    <div class="text-sm"><span class="label">Paid At:</span> <span class="value">{{ $waybill->deliveryRequest->payment->created_at->format('M d, Y H:i') ?? 'N/A' }}</span></div>
+    <table class="info-table">
+        <tr>
+            <th colspan="3" class="section-title">Payment Information</th>
+        </tr>
+        <tr>
+            <td width="33%">
+                <span class="label">Payment Type:</span><br>
+                {{ strtoupper($waybill->deliveryRequest->payment_type ?? 'N/A') }}<br><br>
+                
+                <span class="label">Method:</span><br>
+                {{ strtoupper($waybill->deliveryRequest->payment_method ?? 'N/A') }}
+            </td>
+            <td width="33%">
+                <span class="label">Payment Terms:</span><br>
+                @if($waybill->deliveryRequest->payment_type === 'postpaid')
+                    @php
+                        $terms = $waybill->deliveryRequest->payment_terms ?? null;
+                        echo $terms === 'net_7' ? 'Net 7' :
+                             ($terms === 'net_15' ? 'Net 15' :
+                             ($terms === 'net_30' ? 'Net 30' :
+                             ($terms === 'cnd' ? 'CND' : 'N/A')));
+                    @endphp
+                @else
+                    For Postpaid Only
                 @endif
-            </div>
-        </div>
-    </div>
+                <br><br>
+                
+                <span class="label">Due Date:</span><br>
+                @if($waybill->deliveryRequest->payment_type === 'postpaid')
+                    {{ $waybill->deliveryRequest->payment_due_date ? \Carbon\Carbon::parse($waybill->deliveryRequest->payment_due_date)->format('M d, Y') : 'N/A' }}
+                @else
+                    For Postpaid Only
+                @endif
+            </td>
+            <td width="34%">
+                <span class="label">Total Amount:</span><br>
+                <strong>P{{ number_format($waybill->deliveryRequest->total_price ?? 0, 2) }}</strong><br><br>
+                
+                <span class="label">Status:</span><br>
+                @php
+                    // ✅ USE THE SAME LOGIC AS THE CONTROLLER
+                    $paymentType = $waybill->deliveryRequest->payment_type ?? null;
+                    $paymentMethod = $waybill->deliveryRequest->payment_method ?? null;
+                    $paymentStatus = $waybill->deliveryRequest->payment_status ?? null;
+                    $paymentVerified = $waybill->deliveryRequest->payment_verified ?? false;
+                    
+                    $isPaid = false;
+                    if ($paymentType === 'prepaid' && $paymentMethod === 'cash') {
+                        // Cash prepaid is always considered paid
+                        $isPaid = true;
+                        echo '<span style="color: #059669; font-weight: bold;">PAID</span>';
+                    } elseif ($paymentType === 'prepaid') {
+                        // Other prepaid methods need verification
+                        $isPaid = $paymentStatus === 'paid' && $paymentVerified;
+                        echo $isPaid ? 
+                             '<span style="color: #059669; font-weight: bold;">PAID</span>' : 
+                             '<span style="color: #d97706; font-weight: bold;">PENDING PAYMENT</span>';
+                    } else {
+                        // Postpaid
+                        $orderStatus = $order->status ?? null;
+                        echo $orderStatus === 'completed' ? 
+                             '<span style="color: #059669; font-weight: bold;">COLLECTED</span>' : 
+                             '<span style="color: #2563eb; font-weight: bold;">TO BE COLLECTED</span>';
+                    }
+                @endphp
+            </td>
+        </tr>
+    </table>
 
-    <!-- Delivery Assignment -->
-    @if($order && $order->driver)
-    <div class="section">
-        <div class="section-title">Delivery Assignment</div>
-        <div class="text-sm"><span class="label">Driver:</span> <span class="value">{{ $order->driver->name ?? 'N/A' }}</span></div>
-        <div class="text-sm"><span class="label">Truck:</span> <span class="value">{{ $order->truck->license_plate ?? 'N/A' }}</span></div>
-    </div>
-    @endif
-
-    <!-- Footer Message -->
-    <div class="footer border-t pt-4">
-        <div class="flex">
-            <div>
-                <span class="label">Received By:</span>
-                <span class="value">
-                    {{ $waybill->deliveryRequest->receiver->name ?? $waybill->deliveryRequest->receiver->company_name ?? 'N/A' }}
-                </span>
-            </div>
-            <div>
-                <span class="label">Truck Plate:</span>
-                <span class="value">
-                    {{ $order->truck->license_plate ?? 'N/A' }}
-                </span>
-            </div>
-        </div>
-        <p class="mt-2">Thank you for choosing Infinitrix Express!</p>
-        <div class="notice">
-            This is the final/complete waybill. All delivery and payment details are finalized.
+    <!-- Footer -->
+    <div class="footer">
+        <div class="mt-3">
+            <p>Thank you for choosing Infinitrix Express!</p>
+            <p><em>This is the final/complete waybill. All delivery and payment details are finalized.</em></p>
         </div>
     </div>
 </body>

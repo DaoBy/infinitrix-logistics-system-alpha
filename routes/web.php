@@ -9,6 +9,7 @@ use App\Http\Controllers\TruckController;
 use App\Http\Controllers\DriverController;
 use App\Http\Controllers\RefundController;
 use App\Http\Controllers\ManifestController;
+use App\Http\Controllers\UtilitiesController;
 use App\Http\Controllers\TruckMaintenanceController;
 use App\Http\Controllers\TruckComponentController;
 use App\Http\Controllers\CargoAssignmentController;
@@ -48,6 +49,103 @@ use App\Http\Controllers\PaymentController;
 // =============================================================================
 // PUBLIC ROUTES
 // =============================================================================
+// Add to routes/web.php
+Route::get('/debug-new-assignment', function() {
+    // Get the latest assignment
+    $assignment = \App\Models\DriverTruckAssignment::with(['driver', 'truck'])
+        ->latest()
+        ->first();
+    
+    if (!$assignment) {
+        return response()->json(['error' => 'No assignments found']);
+    }
+    
+    // Check manifests by assignment ID
+    $manifestsByAssignment = \App\Models\Manifest::where('driver_truck_assignment_id', $assignment->id)->get();
+    
+    // Check manifests by driver/truck combo
+    $manifestsByDriverTruck = \App\Models\Manifest::where('driver_id', $assignment->driver_id)
+        ->where('truck_id', $assignment->truck_id)
+        ->get();
+    
+    // Check finalized manifests
+    $finalizedByAssignment = \App\Models\Manifest::where('driver_truck_assignment_id', $assignment->id)
+        ->where('status', 'finalized')
+        ->exists();
+        
+    $finalizedByDriverTruck = \App\Models\Manifest::where('driver_id', $assignment->driver_id)
+        ->where('truck_id', $assignment->truck_id)
+        ->where('status', 'finalized')
+        ->exists();
+    
+    return response()->json([
+        'assignment' => [
+            'id' => $assignment->id,
+            'driver_name' => $assignment->driver->name ?? 'N/A',
+            'truck_plate' => $assignment->truck->license_plate ?? 'N/A',
+            'current_status' => $assignment->current_status,
+            'is_active' => $assignment->is_active,
+            'created_at' => $assignment->created_at,
+        ],
+        'manifests_found' => [
+            'by_assignment_id' => $manifestsByAssignment->count(),
+            'by_driver_truck' => $manifestsByDriverTruck->count(),
+            'finalized_by_assignment' => $finalizedByAssignment,
+            'finalized_by_driver_truck' => $finalizedByDriverTruck,
+        ],
+        'manifests_details' => [
+            'by_assignment' => $manifestsByAssignment,
+            'by_driver_truck' => $manifestsByDriverTruck,
+        ]
+    ]);
+});
+// Add to web.php
+Route::get('/debug-all-assignments', function() {
+    $assignments = \App\Models\DriverTruckAssignment::with(['driver', 'truck'])
+        ->latest()
+        ->get()
+        ->map(function($assignment) {
+            return [
+                'id' => $assignment->id,
+                'driver_name' => $assignment->driver->name ?? 'N/A',
+                'truck_plate' => $assignment->truck->license_plate ?? 'N/A',
+                'current_status' => $assignment->current_status,
+                'is_active' => $assignment->is_active,
+                'created_at' => $assignment->created_at,
+                'has_finalized_manifest' => app(\App\Http\Controllers\DriverTruckAssignmentController::class)->hasFinalizedManifest($assignment)
+            ];
+        });
+    
+    return response()->json($assignments);
+});
+
+Route::get('/debug-manifests/{assignmentId}', function($assignmentId) {
+    $assignment = \App\Models\DriverTruckAssignment::find($assignmentId);
+    
+    if (!$assignment) {
+        return response()->json(['error' => 'Assignment not found']);
+    }
+
+    $manifestsByAssignment = \App\Models\Manifest::where('driver_truck_assignment_id', $assignment->id)
+        ->get();
+
+    $manifestsByDriverTruck = \App\Models\Manifest::where('driver_id', $assignment->driver_id)
+        ->where('truck_id', $assignment->truck_id)
+        ->get();
+
+    return response()->json([
+        'assignment' => [
+            'id' => $assignment->id,
+            'driver_id' => $assignment->driver_id,
+            'truck_id' => $assignment->truck_id,
+            'created_at' => $assignment->created_at,
+        ],
+        'manifests_by_assignment_id' => $manifestsByAssignment,
+        'manifests_by_driver_truck' => $manifestsByDriverTruck,
+        'has_any_manifests' => $manifestsByAssignment->count() > 0 || $manifestsByDriverTruck->count() > 0
+    ]);
+});
+
 
 Route::get('/debug/skip-cooldown-direct', function() {
     $driver = auth()->user();
@@ -406,6 +504,37 @@ Route::prefix('admin')->name('admin.')->group(function () {
 // =============================================================================
 // ADMIN-ONLY ROUTES
 // =============================================================================
+
+
+// routes/web.php
+Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function () {
+    Route::prefix('utilities')->group(function () {
+        // Inertia Page Routes
+        Route::get('/', [UtilitiesController::class, 'index'])->name('admin.utilities.index');
+        
+        // Form Submission Routes (redirect back)
+        Route::post('/price-matrix', [UtilitiesController::class, 'updatePriceMatrix'])->name('admin.utilities.price-matrix.update');
+        Route::post('/preferences', [UtilitiesController::class, 'updateUserPreferences'])->name('admin.utilities.preferences.update');
+        Route::post('/backup', [UtilitiesController::class, 'createBackup'])->name('admin.utilities.backup.create');
+        Route::post('/restore', [UtilitiesController::class, 'restoreBackup'])->name('admin.utilities.backup.restore');
+        Route::delete('/backup', [UtilitiesController::class, 'deleteBackup'])->name('admin.utilities.backup.delete');
+        Route::post('/archive', [UtilitiesController::class, 'archiveOldData'])->name('admin.utilities.archive.create');
+        
+        // ✅ ADDED: Download Backup Route
+        Route::get('/backup/download', [UtilitiesController::class, 'downloadBackup'])->name('admin.utilities.backup.download');
+        
+        // API Routes (return JSON)
+        Route::get('/archive/data', [UtilitiesController::class, 'getArchivedData'])->name('admin.utilities.archive.data');
+        Route::post('/archive/restore', [UtilitiesController::class, 'restoreArchivedData'])->name('admin.utilities.archive.restore');
+        
+        // ✅ ADDED: Archive Preview Route
+        Route::get('/archive/preview', [UtilitiesController::class, 'previewArchive'])->name('admin.utilities.archive.preview');
+        
+        // ✅ ADDED: Unified Archive Handler Route
+        Route::patch('/archive', [UtilitiesController::class, 'handleArchive'])->name('admin.utilities.archive.handle');
+    });
+});
+
 
 Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function () {
     // Dashboard

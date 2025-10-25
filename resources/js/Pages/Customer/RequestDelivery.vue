@@ -532,6 +532,60 @@ const cyclePreset = (packageIndex, direction) => {
   handlePresetChange(containerPresets[newIndex].value, packageIndex);
 };
 
+const autoCapitalize = (text) => {
+  return text.replace(/\b\w/g, char => char.toUpperCase());
+};
+
+// Handle name input with auto-capitalization
+const handleNameInputWithCapitalize = (event, field, packageIndex = null) => {
+  let value = event.target.value;
+  value = sanitizeName(value);
+  value = autoCapitalize(value);
+  
+  if (packageIndex !== null) {
+    form.packages[packageIndex][field] = value;
+  } else if (field.includes('.')) {
+    const [parent, child] = field.split('.');
+    form[parent][child] = value;
+  } else {
+    form[field] = value;
+  }
+};
+
+// Handle address input with auto-capitalization
+const handleAddressInputWithCapitalize = (event, field, packageIndex = null) => {
+  let value = event.target.value;
+  value = sanitizeAddress(value);
+  value = autoCapitalize(value);
+  
+  if (packageIndex !== null) {
+    form.packages[packageIndex][field] = value;
+  } else if (field.includes('.')) {
+    const [parent, child] = field.split('.');
+    form[parent][child] = value;
+  } else {
+    form[field] = value;
+  }
+};
+
+// Handle text input with auto-capitalization for package names
+const handleTextInputWithCapitalize = (event, field, packageIndex = null) => {
+  let value = event.target.value;
+  value = sanitizeText(value);
+  value = autoCapitalize(value);
+  
+  if (packageIndex !== null) {
+    form.packages[packageIndex][field] = value;
+  } else if (field.includes('.')) {
+    const [parent, child] = field.split('.');
+    form[parent][child] = value;
+  } else {
+    form[field] = value;
+  }
+};
+
+
+
 const filteredDropoffRegions = computed(() => {
   if (!form.pick_up_region_id) return branches.value;
   return branches.value.filter(region => region.value !== form.pick_up_region_id);
@@ -1758,7 +1812,7 @@ watch(() => form.payment_type, (val) => {
                         <InputError :message="form.errors['sender.building_number']" />
                       </div>
 
-                      <div>
+                    <div>
                         <InputLabel value="Street *" />
                         <TextInput
                           v-model="form.sender.street"
@@ -1829,13 +1883,13 @@ watch(() => form.payment_type, (val) => {
                   <div class="lg:col-span-1 space-y-6">
                     <!-- Pick-up Region -->
                     <div>
-                      <InputLabel value="Pick-up Region *" />
+                      <InputLabel value="Select Pick-up Region *" />
                       <SelectInput
                         v-model="form.pick_up_region_id"
                         class="mt-1 block w-full"
                         :class="{ 'border-red-500': form.errors.pick_up_region_id }"
                         :options="PICKUP_REGIONS"
-                        placeholder="Select pick-up region"
+                        placeholder=""
                       />
                       <InputError :message="form.errors.pick_up_region_id" />
                     </div>
@@ -1941,45 +1995,45 @@ watch(() => form.payment_type, (val) => {
                     </div>
 
                     <!-- Name Fields -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div>
-                        <InputLabel value="First Name *" />
-                        <TextInput
-                          v-model="form.receiver.first_name"
-                          type="text"
-                          class="mt-1 block w-full"
-                          :class="{ 'border-red-500': form.errors['receiver.first_name'] }"
-                          placeholder="Enter first name"
-                          @input="(e) => handleNameInput(e, 'receiver.first_name')"
-                        />
-                        <InputError :message="form.errors['receiver.first_name']" />
-                      </div>
-                      
-                      <div>
-                        <InputLabel value="Middle Name" />
-                        <TextInput
-                          v-model="form.receiver.middle_name"
-                          type="text"
-                          class="mt-1 block w-full"
-                          placeholder="Enter middle name"
-                          @input="(e) => handleNameInput(e, 'receiver.middle_name')"
-                        />
-                        <InputError :message="form.errors['receiver.middle_name']" />
-                      </div>
-                      
-                      <div>
-                        <InputLabel value="Last Name *" />
-                        <TextInput
-                          v-model="form.receiver.last_name"
-                          type="text"
-                          class="mt-1 block w-full"
-                          :class="{ 'border-red-500': form.errors['receiver.last_name'] }"
-                          placeholder="Enter last name"
-                          @input="(e) => handleNameInput(e, 'receiver.last_name')"
-                        />
-                        <InputError :message="form.errors['receiver.last_name']" />
-                      </div>
-                    </div>
+                <div>
+  <InputLabel value="First Name *" />
+  <TextInput
+    v-model="form.receiver.first_name"
+    type="text"
+    class="mt-1 block w-full"
+    :class="{ 'border-red-500': form.errors['receiver.first_name'] }"
+    placeholder="Enter first name"
+    @input="(e) => handleNameInputWithCapitalize(e, 'receiver.first_name')"
+  />
+  <InputError :message="form.errors['receiver.first_name']" />
+</div>
+
+<!-- Middle Name -->
+<div>
+  <InputLabel value="Middle Name" />
+  <TextInput
+    v-model="form.receiver.middle_name"
+    type="text"
+    class="mt-1 block w-full"
+    placeholder="Enter middle name"
+    @input="(e) => handleNameInputWithCapitalize(e, 'receiver.middle_name')"
+  />
+  <InputError :message="form.errors['receiver.middle_name']" />
+</div>
+
+<!-- Last Name -->
+<div>
+  <InputLabel value="Last Name *" />
+  <TextInput
+    v-model="form.receiver.last_name"
+    type="text"
+    class="mt-1 block w-full"
+    :class="{ 'border-red-500': form.errors['receiver.last_name'] }"
+    placeholder="Enter last name"
+    @input="(e) => handleNameInputWithCapitalize(e, 'receiver.last_name')"
+  />
+  <InputError :message="form.errors['receiver.last_name']" />
+</div>
 
                     <!-- Company Name (Conditional) -->
                     <div v-if="form.receiver.customer_category === 'company'" class="space-y-2">
@@ -2056,56 +2110,59 @@ watch(() => form.payment_type, (val) => {
                         <InputError :message="form.errors['receiver.building_number']" />
                       </div>
 
-                      <div>
-                        <InputLabel value="Street *" />
-                        <TextInput
-                          v-model="form.receiver.street"
-                          type="text"
-                          class="mt-1 block w-full"
-                          :class="{ 'border-red-500': form.errors['receiver.street'] }"
-                          placeholder="e.g., Main Street"
-                          @input="(e) => handleAddressInput(e, 'receiver.street')"
-                        />
-                        <InputError :message="form.errors['receiver.street']" />
-                      </div>
+                    <div>
+  <InputLabel value="Street *" />
+  <TextInput
+    v-model="form.receiver.street"
+    type="text"
+    class="mt-1 block w-full"
+    :class="{ 'border-red-500': form.errors['receiver.street'] }"
+    placeholder="e.g., Main Street"
+    @input="(e) => handleAddressInputWithCapitalize(e, 'receiver.street')"
+  />
+  <InputError :message="form.errors['receiver.street']" />
+</div>
 
-                      <div>
-                        <InputLabel value="Barangay" />
-                        <TextInput
-                          v-model="form.receiver.barangay"
-                          type="text"
-                          class="mt-1 block w-full"
-                          placeholder="Enter barangay"
-                          @input="(e) => handleAddressInput(e, 'receiver.barangay')"
-                        />
-                        <InputError :message="form.errors['receiver.barangay']" />
-                      </div>
+<!-- Barangay -->
+<div>
+  <InputLabel value="Barangay" />
+  <TextInput
+    v-model="form.receiver.barangay"
+    type="text"
+    class="mt-1 block w-full"
+    placeholder="Enter barangay"
+    @input="(e) => handleAddressInputWithCapitalize(e, 'receiver.barangay')"
+  />
+  <InputError :message="form.errors['receiver.barangay']" />
+</div>
 
-                      <div>
-                        <InputLabel value="City *" />
-                        <TextInput
-                          v-model="form.receiver.city"
-                          type="text"
-                          class="mt-1 block w-full"
-                          :class="{ 'border-red-500': form.errors['receiver.city'] }"
-                          placeholder="Enter city"
-                          @input="(e) => handleAddressInput(e, 'receiver.city')"
-                        />
-                        <InputError :message="form.errors['receiver.city']" />
-                      </div>
+<!-- City -->
+<div>
+  <InputLabel value="City *" />
+  <TextInput
+    v-model="form.receiver.city"
+    type="text"
+    class="mt-1 block w-full"
+    :class="{ 'border-red-500': form.errors['receiver.city'] }"
+    placeholder="Enter city"
+    @input="(e) => handleAddressInputWithCapitalize(e, 'receiver.city')"
+  />
+  <InputError :message="form.errors['receiver.city']" />
+</div>
 
-                      <div>
-                        <InputLabel value="Province *" />
-                        <TextInput
-                          v-model="form.receiver.province"
-                          type="text"
-                          class="mt-1 block w-full"
-                          :class="{ 'border-red-500': form.errors['receiver.province'] }"
-                          placeholder="Enter province"
-                          @input="(e) => handleAddressInput(e, 'receiver.province')"
-                        />
-                        <InputError :message="form.errors['receiver.province']" />
-                      </div>
+<!-- Province -->
+<div>
+  <InputLabel value="Province *" />
+  <TextInput
+    v-model="form.receiver.province"
+    type="text"
+    class="mt-1 block w-full"
+    :class="{ 'border-red-500': form.errors['receiver.province'] }"
+    placeholder="Enter province"
+    @input="(e) => handleAddressInputWithCapitalize(e, 'receiver.province')"
+  />
+  <InputError :message="form.errors['receiver.province']" />
+</div>
 
                       <div>
                         <InputLabel value="ZIP Code *" />
@@ -2127,13 +2184,13 @@ watch(() => form.payment_type, (val) => {
                   <div class="lg:col-span-1 space-y-6">
                     <!-- Drop-off Region -->
                     <div>
-                      <InputLabel value="Drop-off Region *" />
+                      <InputLabel value="Select Drop-off Region *" />
                       <SelectInput
                         v-model="form.drop_off_region_id"
                         class="mt-1 block w-full"
                         :class="{ 'border-red-500': form.errors.drop_off_region_id }"
                         :options="filteredDropoffRegions"
-                        placeholder="Select drop-off region"
+                        placeholder=""
                       />
                       <InputError :message="form.errors.drop_off_region_id" />
                     </div>
@@ -2330,19 +2387,19 @@ watch(() => form.payment_type, (val) => {
 
         <!-- Package Name and Description -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <InputLabel value="Package Name *" />
-            <TextInput
-              v-model="pkg.item_name"
-              type="text"
-              class="mt-1 block w-full"
-              :class="{ 'border-red-500': form.errors[`packages.${index}.item_name`] }"
-              placeholder="e.g., Documents, Electronics, Clothes"
-              @input="(e) => handleTextInput(e, 'item_name', index)"
-            />
-            <p class="text-xs text-gray-500 mt-1">Descriptive name for identification and tracking</p>
-            <InputError :message="form.errors[`packages.${index}.item_name`]" />
-          </div>
+        <div>
+  <InputLabel value="Package Name *" />
+  <TextInput
+    v-model="pkg.item_name"
+    type="text"
+    class="mt-1 block w-full"
+    :class="{ 'border-red-500': form.errors[`packages.${index}.item_name`] }"
+    placeholder="e.g., Documents, Electronics, Clothes"
+    @input="(e) => handleTextInputWithCapitalize(e, 'item_name', index)"
+  />
+  <p class="text-xs text-gray-500 mt-1">Descriptive name for identification and tracking</p>
+  <InputError :message="form.errors[`packages.${index}.item_name`]" />
+</div>
           <div>
             <InputLabel value="Description (Optional)" />
             <TextInput
@@ -2473,7 +2530,7 @@ watch(() => form.payment_type, (val) => {
               class="mt-1 block w-full"
               :class="{ 'border-red-500': form.errors[`packages.${index}.weight`] }"
               :options="weightRangeOptions"
-              placeholder="Select weight"
+              placeholder=""
             />
             <p class="text-xs text-gray-500 mt-1">Select weight range - charged at upper limit</p>
             <InputError :message="form.errors[`packages.${index}.weight`]" />
@@ -2489,7 +2546,7 @@ watch(() => form.payment_type, (val) => {
               class="mt-1 block w-full"
               :class="{ 'border-red-500': form.errors[`packages.${index}.value`] }"
               :options="packageValueOptions"
-              placeholder="Select value range"
+              placeholder=""
             />
             <p class="text-xs text-gray-500 mt-1">Select the estimated value range for insurance purposes</p>
             <InputError :message="form.errors[`packages.${index}.value`]" />
@@ -2548,7 +2605,7 @@ watch(() => form.payment_type, (val) => {
   
   <!-- Display uploaded photos with file sizes and remove buttons -->
 <div v-if="pkg.photo_urls && pkg.photo_urls.length > 0" class="mt-3">
-  <div class="flex flex-wrap gap-2 mb-2">
+  <div class="flex flex-wrap gap-3 mb-3">
     <div
       v-for="(photoUrl, photoIndex) in pkg.photo_urls"
       :key="photoIndex"
@@ -2557,40 +2614,37 @@ watch(() => form.payment_type, (val) => {
       <img
         :src="photoUrl"
         :alt="`Package ${index + 1} photo ${photoIndex + 1}`"
-        class="w-20 h-20 object-cover rounded-lg border border-gray-300"
+        class="w-24 h-24 object-cover rounded-lg border-2 border-gray-300 shadow-sm transition-all duration-200 group-hover:border-red-400"
       />
       <!-- File size overlay -->
-      <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 text-center">
+      <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white text-xs p-1 text-center rounded-b-lg">
         {{ formatFileSize(pkg.photos[photoIndex]?.size) }}
       </div>
-      <!-- Remove button -->
+      <!-- Enhanced Remove button - Always visible but more prominent on hover -->
       <button
         type="button"
         @click="removePhoto(index, photoIndex)"
-        class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-red-600"
+        class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold shadow-lg transition-all duration-200 hover:bg-red-600 hover:scale-110 hover:shadow-xl border-2 border-white"
         title="Remove this photo"
       >
         ×
       </button>
-      <!-- Photo number badge -->
-      <div class="absolute -top-2 -left-2 bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs text-white">
-        {{ photoIndex + 1 }}
-      </div>
+    
     </div>
   </div>
   
   <!-- Photo management controls -->
-  <div class="flex items-center justify-between text-xs text-gray-500">
-    <div>
-      <span class="font-medium">Total: {{ pkg.photo_urls.length }} photo(s)</span> • 
-      {{ calculateTotalSize(pkg.photos) }}
+  <div class="flex items-center justify-between text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
+    <div class="flex items-center space-x-2">
+      <span class="font-semibold">Total: {{ pkg.photo_urls.length }} photo(s)</span>
+      <span class="text-gray-400">•</span>
+      <span class="text-blue-600 font-medium">{{ calculateTotalSize(pkg.photos) }}</span>
     </div>
-    <div class="flex gap-2">
-  
+    <div class="flex gap-3">
       <button
         type="button"
         @click="form.packages[index].photos = []; form.packages[index].photo_urls = []; clearPhotoErrors(index);"
-        class="text-red-600 hover:text-red-700 font-medium"
+        class="text-red-600 hover:text-red-700 font-semibold text-sm bg-red-50 hover:bg-red-100 px-3 py-1 rounded-md transition-colors duration-200"
       >
         Remove All
       </button>
@@ -2951,23 +3005,11 @@ watch(() => form.payment_type, (val) => {
 
   <!-- Original Payment Form (shown when NOT in success state) -->
   <div v-else class="space-y-6">
-    <!-- Step Information Notice -->
-    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-      <h3 class="font-semibold text-blue-800 flex items-center">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        Payment Information
-      </h3>
-      <p class="text-sm text-blue-700 mt-1">
-        Review your delivery summary and select your preferred payment method. All prices are final and include applicable fees.
-      </p>
-    </div>
+ 
 
     <!-- Your existing payment form content goes here -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <!-- Step 4: Payment Information -->
-      <h2 class="text-xl font-semibold text-gray-900">Payment Information</h2>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Left Column - Information Sections (2/3 width) -->

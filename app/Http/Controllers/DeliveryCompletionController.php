@@ -13,92 +13,92 @@ use Inertia\Inertia;
 
 class DeliveryCompletionController extends Controller
 {
-  public function showCompletionForm(DeliveryOrder $order)
-{
-      $order->load([
-        'deliveryRequest.sender',
-        'deliveryRequest.receiver', 
-        'deliveryRequest.packages' => function($query) {
-            $query->with(['currentRegion', 'incidentReporter']);
-        },
-        'deliveryRequest.payment',
-        'deliveryRequest.dropOffRegion',
-        'deliveryRequest.pickUpRegion', // ADD THIS LINE
-        'deliveryRequest.refunds',
-        'driver',
-        'truck'
-    ]);
+    public function showCompletionForm(DeliveryOrder $order)
+    {
+        $order->load([
+            'deliveryRequest.sender',
+            'deliveryRequest.receiver', 
+            'deliveryRequest.packages' => function($query) {
+                $query->with(['currentRegion', 'incidentReporter']);
+            },
+            'deliveryRequest.payment',
+            'deliveryRequest.dropOffRegion',
+            'deliveryRequest.pickUpRegion',
+            'deliveryRequest.refunds',
+            'driver',
+            'truck'
+        ]);
 
-    // Calculate delivery outcome statistics
-    $outcomeStats = $this->calculateDeliveryOutcome($order);
-    
-    // Check if refund is needed (prepaid with issues)
-    $requiresRefund = $order->needsReview() && $order->deliveryRequest->isPrepaid();
+        // Calculate delivery outcome statistics
+        $outcomeStats = $this->calculateDeliveryOutcome($order);
+        
+        // Check if refund is needed (prepaid with issues)
+        $requiresRefund = $order->needsReview() && $order->deliveryRequest->isPrepaid();
 
-    // Get existing refund details
-    $existingRefund = $order->deliveryRequest->refunds->first();
-    $hasExistingRefund = $existingRefund ? true : false;
-    $existingRefundStatus = $existingRefund ? $existingRefund->status : null;
-    $existingRefundId = $existingRefund ? $existingRefund->id : null;
+        // Get existing refund details
+        $existingRefund = $order->deliveryRequest->refunds->first();
+        $hasExistingRefund = $existingRefund ? true : false;
+        $existingRefundStatus = $existingRefund ? $existingRefund->status : null;
+        $existingRefundId = $existingRefund ? $existingRefund->id : null;
 
-    return Inertia::render('Admin/DeliveryCompletion/CompletionForm', [
-        'order' => $order,
-        'outcomeStats' => $outcomeStats,
-        'requiresRefund' => $requiresRefund,
-        'hasExistingRefund' => $hasExistingRefund,
-        'existingRefundStatus' => $existingRefundStatus,
-        'existingRefundId' => $existingRefundId,
-    ]);
-}
+        return Inertia::render('Admin/DeliveryCompletion/CompletionForm', [
+            'order' => $order,
+            'outcomeStats' => $outcomeStats,
+            'requiresRefund' => $requiresRefund,
+            'hasExistingRefund' => $hasExistingRefund,
+            'existingRefundStatus' => $existingRefundStatus,
+            'existingRefundId' => $existingRefundId,
+        ]);
+    }
 
     public function processCompletion(Request $request, DeliveryOrder $order)
-{
-    $request->validate([
-        'receiver_name' => 'required|string|max:255',
-        'receiver_contact' => 'nullable|string|max:50',
-        'signature' => 'nullable|string',
-        'notes' => 'nullable|string|max:500',
-        'release_packages' => 'required|array',
-        'release_packages.*' => 'exists:packages,id',
-    ]);
+    {
+        $request->validate([
+            'receiver_name' => 'required|string|max:255',
+            'receiver_contact' => 'nullable|string|max:50',
+            'signature' => 'nullable|string',
+            'notes' => 'nullable|string|max:500',
+            'release_packages' => 'required|array',
+            'release_packages.*' => 'exists:packages,id',
+        ]);
 
-    Log::info('📦 Starting delivery completion process', [
-        'order_id' => $order->id,
-        'user_id' => auth()->id(),
-        'release_packages' => $request->release_packages,
-        'order_status' => $order->status,
-    ]);
-
-    // PREVENT DUPLICATE PROCESSING - Check if already completed
-    if ($order->status === 'completed') {
-        Log::warning('❌ Duplicate completion attempt for already completed order', [
+        Log::info('📦 Starting delivery completion process', [
             'order_id' => $order->id,
             'user_id' => auth()->id(),
+            'release_packages' => $request->release_packages,
+            'order_status' => $order->status,
         ]);
-        return back()->with('error', 'This delivery order has already been completed.');
-    }
 
-    // PREVENT DUPLICATE REFUND CREATION - More specific check
-    if ($order->needsReview() && $order->deliveryRequest->isPrepaid()) {
-        $existingRefund = Refund::where('delivery_request_id', $order->delivery_request_id)
-            ->whereIn('status', ['pending', 'processed'])
-            ->first();
-            
-        if ($existingRefund) {
-            Log::warning('❌ Duplicate refund creation attempt', [
+        // PREVENT DUPLICATE PROCESSING - Check if already completed
+        if ($order->status === 'completed') {
+            Log::warning('❌ Duplicate completion attempt for already completed order', [
                 'order_id' => $order->id,
                 'user_id' => auth()->id(),
-                'existing_refund_id' => $existingRefund->id,
-                'existing_refund_status' => $existingRefund->status
             ]);
-            
-            $message = $existingRefund->status === 'processed' 
-                ? "A refund has already been processed for this delivery. No further action needed."
-                : "A refund request (#{$existingRefund->id}) is already pending review.";
-                
-            return back()->with('error', $message);
+            return back()->with('error', 'This delivery order has already been completed.');
         }
-    }
+
+        // PREVENT DUPLICATE REFUND CREATION - More specific check
+        if ($order->needsReview() && $order->deliveryRequest->isPrepaid()) {
+            $existingRefund = Refund::where('delivery_request_id', $order->delivery_request_id)
+                ->whereIn('status', ['pending', 'processed'])
+                ->first();
+                
+            if ($existingRefund) {
+                Log::warning('❌ Duplicate refund creation attempt', [
+                    'order_id' => $order->id,
+                    'user_id' => auth()->id(),
+                    'existing_refund_id' => $existingRefund->id,
+                    'existing_refund_status' => $existingRefund->status
+                ]);
+                
+                $message = $existingRefund->status === 'processed' 
+                    ? "A refund has already been processed for this delivery. No further action needed."
+                    : "A refund request (#{$existingRefund->id}) is already pending review.";
+                    
+                return back()->with('error', $message);
+            }
+        }
 
         return DB::transaction(function () use ($order, $request) {
             $deliveryRequest = $order->deliveryRequest;
@@ -185,62 +185,63 @@ class DeliveryCompletionController extends Controller
         ]);
     }
 
-   private function handlePrepaidWithIssues(DeliveryOrder $order, Request $request)
-{
-    $deliveryRequest = $order->deliveryRequest;
-    
-    // CHECK FOR EXISTING REFUND FIRST
-    $existingRefund = Refund::where('delivery_request_id', $deliveryRequest->id)
-        ->whereIn('status', ['pending', 'processed'])
-        ->first();
-
-    if ($existingRefund) {
-        Log::warning("Prepaid delivery with issues - refund already exists", [
-            'order_id' => $order->id,
-            'existing_refund_id' => $existingRefund->id,
-            'existing_refund_status' => $existingRefund->status
-        ]);
+    private function handlePrepaidWithIssues(DeliveryOrder $order, Request $request)
+    {
+        $deliveryRequest = $order->deliveryRequest;
         
-        // Return specific message based on refund status
-        $message = $existingRefund->status === 'processed' 
-            ? "A refund has already been processed for this delivery order. No further action required."
-            : "A refund request is already pending review for this delivery order.";
-            
-        throw new \Exception($message);
-    }
-    
-    // Get incident packages (damaged/lost)
-    $incidentPackages = $this->getIncidentPackages($order);
-    $incidentPackageIds = $incidentPackages->pluck('id')->toArray();
-    
-    // Calculate refund amount: DELIVERY COST + INCIDENT PACKAGE VALUES
-    $deliveryCost = $deliveryRequest->total_price;
-    $incidentPackageValues = $incidentPackages->sum('value');
-    $refundAmount = $deliveryCost + $incidentPackageValues;
-    
-    // Create PENDING refund for negotiation (holds packages)
-    $refund = Refund::create([
-        'delivery_request_id' => $deliveryRequest->id,
-        'processed_by' => auth()->id(),
-        'refund_amount' => $refundAmount,
-        'original_amount' => $deliveryCost,
-        'reason' => 'incomplete',
-        'description' => 'Delivery issues require refund negotiation',
-        'refunded_packages' => $incidentPackageIds, // Auto-select incident packages
-        'notes' => $request->notes ?? "Automatic refund: Delivery cost + " . count($incidentPackageIds) . " incident package(s)",
-        'status' => 'pending', // PENDING = holds packages
-    ]);
+        // CHECK FOR EXISTING REFUND FIRST
+        $existingRefund = Refund::where('delivery_request_id', $deliveryRequest->id)
+            ->whereIn('status', ['pending', 'processed'])
+            ->first();
 
-    Log::info("Prepaid delivery with issues - refund created with delivery cost + package values", [
-        'order_id' => $order->id,
-        'refund_id' => $refund->id,
-        'refund_amount' => $refundAmount,
-        'delivery_cost' => $deliveryCost,
-        'incident_package_values' => $incidentPackageValues,
-        'incident_packages' => $incidentPackageIds,
-        'incident_count' => count($incidentPackageIds)
-    ]);
-}
+        if ($existingRefund) {
+            Log::warning("Prepaid delivery with issues - refund already exists", [
+                'order_id' => $order->id,
+                'existing_refund_id' => $existingRefund->id,
+                'existing_refund_status' => $existingRefund->status
+            ]);
+            
+            // Return specific message based on refund status
+            $message = $existingRefund->status === 'processed' 
+                ? "A refund has already been processed for this delivery order. No further action required."
+                : "A refund request is already pending review for this delivery order.";
+                
+            throw new \Exception($message);
+        }
+        
+        // Get incident packages (damaged/lost)
+        $incidentPackages = $this->getIncidentPackages($order);
+        $incidentPackageIds = $incidentPackages->pluck('id')->toArray();
+        
+        // Calculate refund amount: DELIVERY COST + INCIDENT PACKAGE VALUES
+        $deliveryCost = $deliveryRequest->total_price;
+        $incidentPackageValues = $incidentPackages->sum('value');
+        $refundAmount = $deliveryCost + $incidentPackageValues;
+        
+        // Create PENDING refund for negotiation (holds packages)
+        $refund = Refund::create([
+            'delivery_request_id' => $deliveryRequest->id,
+            'processed_by' => auth()->id(),
+            'refund_amount' => $refundAmount,
+            'original_amount' => $deliveryCost,
+            'reason' => 'incomplete',
+            'description' => 'Delivery issues require refund negotiation',
+            'refunded_packages' => $incidentPackageIds, // Auto-select incident packages
+            'notes' => $request->notes ?? "Automatic refund: Delivery cost + " . count($incidentPackageIds) . " incident package(s)",
+            'status' => 'pending', // PENDING = holds packages
+        ]);
+
+        Log::info("Prepaid delivery with issues - refund created with delivery cost + package values", [
+            'order_id' => $order->id,
+            'refund_id' => $refund->id,
+            'refund_amount' => $refundAmount,
+            'delivery_cost' => $deliveryCost,
+            'incident_package_values' => $incidentPackageValues,
+            'incident_packages' => $incidentPackageIds,
+            'incident_count' => count($incidentPackageIds)
+        ]);
+    }
+
     private function handlePostpaidWithIssues(DeliveryOrder $order, Request $request)
     {
         $deliveryRequest = $order->deliveryRequest;
@@ -328,63 +329,134 @@ class DeliveryCompletionController extends Controller
     }
 
     public function readyForCompletion(Request $request)
-{
-    // Orders that have delivery outcomes but not yet completed
-    $pendingQuery = DeliveryOrder::with([
+    {
+        $activeTab = $request->input('tab', 'pending');
+        
+        // TAB 1: Pending Completion Data
+        $pendingQuery = DeliveryOrder::with([
             'deliveryRequest.sender',
             'deliveryRequest.receiver',
             'deliveryRequest.packages',
             'deliveryRequest.payment',
             'deliveryRequest.dropOffRegion',
-            'deliveryRequest.pickUpRegion', // ADD THIS LINE
+            'deliveryRequest.pickUpRegion',
             'deliveryRequest.refunds',
             'driver'
         ])
         ->whereIn('status', ['delivered', 'needs_review'])
         ->latest();
 
-    $completedQuery = DeliveryOrder::with([
+        // Apply search filter for pending
+        if ($request->search && $activeTab === 'pending') {
+            $pendingQuery->where(function($q) use ($request) {
+                $q->whereHas('deliveryRequest', function($q2) use ($request) {
+                    $q2->where('reference_number', 'like', "%{$request->search}%")
+                       ->orWhereHas('sender', function($q3) use ($request) {
+                           $q3->where('name', 'like', "%{$request->search}%");
+                       })
+                       ->orWhereHas('receiver', function($q3) use ($request) {
+                           $q3->where('name', 'like', "%{$request->search}%");
+                       });
+                })
+                ->orWhereHas('driver', function($q2) use ($request) {
+                    $q2->where('name', 'like', "%{$request->search}%");
+                });
+            });
+        }
+        
+        // Apply status filter for pending
+        if ($request->status && $activeTab === 'pending') {
+            $pendingQuery->where('status', $request->status);
+        }
+
+        $pendingOrders = $pendingQuery->paginate(10, ['*'], 'pending_page');
+
+        // TAB 2: Completed Orders Data
+        $completedQuery = DeliveryOrder::with([
             'deliveryRequest.sender', 
             'deliveryRequest.receiver',
             'deliveryRequest.packages',
             'deliveryRequest.payment',
             'deliveryRequest.dropOffRegion',
-            'deliveryRequest.pickUpRegion', // ADD THIS LINE
+            'deliveryRequest.pickUpRegion',
             'deliveryRequest.refunds',
             'driver'
         ])
         ->where('status', 'completed')
         ->latest();
 
-    // Apply filters
-    if ($request->search) {
-        $search = $request->search;
-        $pendingQuery->where(function($q) use ($search) {
-            $q->whereHas('deliveryRequest', function($q) use ($search) {
-                $q->where('reference_number', 'like', "%{$search}%")
-                  ->orWhereHas('sender', function($q) use ($search) {
-                      $q->where('name', 'like', "%{$search}%");
-                  });
+        // Apply search filter for completed
+        if ($request->search && $activeTab === 'completed') {
+            $completedQuery->where(function($q) use ($request) {
+                $q->whereHas('deliveryRequest', function($q2) use ($request) {
+                    $q2->where('reference_number', 'like', "%{$request->search}%")
+                       ->orWhereHas('sender', function($q3) use ($request) {
+                           $q3->where('name', 'like', "%{$request->search}%");
+                       })
+                       ->orWhereHas('receiver', function($q3) use ($request) {
+                           $q3->where('name', 'like', "%{$request->search}%");
+                       });
+                })
+                ->orWhereHas('driver', function($q2) use ($request) {
+                    $q2->where('name', 'like', "%{$request->search}%");
+                });
             });
-        });
-        $completedQuery->where(function($q) use ($search) {
-            $q->whereHas('deliveryRequest', function($q) use ($search) {
-                $q->where('reference_number', 'like', "%{$search}%")
-                  ->orWhereHas('sender', function($q) use ($search) {
-                      $q->where('name', 'like', "%{$search}%");
-                  });
-            });
-        });
-    }
+        }
 
-    if ($request->status) {
-        $pendingQuery->where('status', $request->status);
-    }
+        // Apply status filter for completed (though they're all completed, but for consistency)
+        if ($request->status && $activeTab === 'completed') {
+            $completedQuery->where('status', $request->status);
+        }
 
-    return Inertia::render('Admin/DeliveryCompletion/CompletionIndex', [
-        'pendingOrders' => $pendingQuery->paginate(10, ['*'], 'pending_page'),
-        'completedOrders' => $completedQuery->paginate(10, ['*'], 'completed_page'),
-        'filters' => $request->only(['search', 'status'])
-    ]);
-}
+        $completedOrders = $completedQuery->paginate(10, ['*'], 'completed_page');
+
+        // Stats for badges
+        $stats = [
+            'pending_total' => DeliveryOrder::whereIn('status', ['delivered', 'needs_review'])->count(),
+            'completed_total' => DeliveryOrder::where('status', 'completed')->count(),
+            'needs_review_count' => DeliveryOrder::where('status', 'needs_review')->count(),
+            'delivered_count' => DeliveryOrder::where('status', 'delivered')->count(),
+        ];
+
+        // Return with proper pagination structure for Inertia
+        return Inertia::render('Admin/DeliveryCompletion/CompletionIndex', [
+            'activeTab' => $activeTab,
+            'pendingOrders' => [
+                'data' => $pendingOrders->items(),
+                'meta' => [
+                    'current_page' => $pendingOrders->currentPage(),
+                    'last_page' => $pendingOrders->lastPage(),
+                    'per_page' => $pendingOrders->perPage(),
+                    'total' => $pendingOrders->total(),
+                    'from' => $pendingOrders->firstItem(),
+                    'to' => $pendingOrders->lastItem(),
+                ],
+                'links' => [
+                    'first' => $pendingOrders->url(1),
+                    'last' => $pendingOrders->url($pendingOrders->lastPage()),
+                    'prev' => $pendingOrders->previousPageUrl(),
+                    'next' => $pendingOrders->nextPageUrl(),
+                ]
+            ],
+            'completedOrders' => [
+                'data' => $completedOrders->items(),
+                'meta' => [
+                    'current_page' => $completedOrders->currentPage(),
+                    'last_page' => $completedOrders->lastPage(),
+                    'per_page' => $completedOrders->perPage(),
+                    'total' => $completedOrders->total(),
+                    'from' => $completedOrders->firstItem(),
+                    'to' => $completedOrders->lastItem(),
+                ],
+                'links' => [
+                    'first' => $completedOrders->url(1),
+                    'last' => $completedOrders->url($completedOrders->lastPage()),
+                    'prev' => $completedOrders->previousPageUrl(),
+                    'next' => $completedOrders->nextPageUrl(),
+                ]
+            ],
+            'stats' => $stats,
+            'filters' => $request->all(),
+        ]);
+    }
 }

@@ -40,11 +40,11 @@ class ManifestController extends Controller
                     return $order->deliveryRequest->packages->pluck('id');
                 })->values()->toArray();
 
-                // Fix: Check if any of the current package IDs exist in any manifest's package_ids
-                $hasActiveManifest = false;
+                // Check if any of the current package IDs exist in any finalized manifest's package_ids
+                $hasFinalizedManifest = false;
                 if (!empty($currentPackageIds)) {
-                    $hasActiveManifest = Manifest::where('truck_id', $truck->id)
-                        ->whereIn('status', ['draft', 'finalized'])
+                    $hasFinalizedManifest = Manifest::where('truck_id', $truck->id)
+                        ->where('status', 'finalized')
                         ->where(function($query) use ($currentPackageIds) {
                             foreach ($currentPackageIds as $pid) {
                                 $query->orWhereJsonContains('package_ids', $pid);
@@ -53,7 +53,7 @@ class ManifestController extends Controller
                         ->exists();
                 }
 
-                return !$hasActiveManifest;
+                return !$hasFinalizedManifest;
             })
             ->values()
             ->map(function($truck) {
@@ -114,6 +114,7 @@ class ManifestController extends Controller
         return redirect()->back()->with('error', 'Unable to load manifests. Please try again.');
     }
 }
+
     public function create(Truck $truck)
     {
         // Get all current package IDs for this truck's active delivery orders
@@ -133,11 +134,11 @@ class ManifestController extends Controller
             return $order->deliveryRequest->packages->pluck('id');
         })->values()->toArray();
 
-        // Fix: Only block if a draft manifest exists for any of these packages
-        $existingDraft = null;
+        // Check if packages already exist in any finalized manifest
+        $existingFinalized = null;
         if (!empty($currentPackageIds)) {
-            $existingDraft = Manifest::where('truck_id', $truck->id)
-                ->where('status', 'draft')
+            $existingFinalized = Manifest::where('truck_id', $truck->id)
+                ->where('status', 'finalized')
                 ->where(function($query) use ($currentPackageIds) {
                     foreach ($currentPackageIds as $pid) {
                         $query->orWhereJsonContains('package_ids', $pid);
@@ -146,19 +147,20 @@ class ManifestController extends Controller
                 ->first();
         }
 
-        if ($existingDraft) {
-            return redirect()->route('manifests.show', $existingDraft->id)
-                ->with('info', 'A draft manifest already exists for this truck and these packages. Please finalize or delete it before creating a new one.');
+        if ($existingFinalized) {
+            return redirect()->route('manifests.show', $existingFinalized->id)
+                ->with('info', 'A finalized manifest already exists for this truck and these packages.');
         }
 
         $packages = $deliveries->flatMap(function ($order) {
             return $order->deliveryRequest->packages->map(function ($package) use ($order) {
                 return [
                     'id' => $package->id,
-                    'delivery_order_id' => $order->id,
+                    'item_code' => $package->item_code,
+                    'delivery_request_id' => $package->delivery_request_id,
+                    'delivery_request_reference' => $package->deliveryRequest->reference_number, // Added reference number
                     'category' => $package->category,
                     'item_name' => $package->item_name,
-                    // Use the waybill relationship if loaded, else null
                     'waybill_number' => $package->waybill?->waybill_number,
                     'drop_off_region' => $package->deliveryRequest->dropOffRegion?->name,
                     'volume' => $package->volume,
@@ -176,7 +178,6 @@ class ManifestController extends Controller
             $driverData = [
                 'id' => $driver->id,
                 'name' => $driver->name,
-                // Fix: Always eager load employeeProfile and get the correct employee_id
                 'employee_id' => $driver->employeeProfile->employee_id ?? 'N/A',
             ];
         }
@@ -203,11 +204,11 @@ class ManifestController extends Controller
             return $order->deliveryRequest->packages->pluck('id');
         })->values()->toArray();
 
-        // Fix: Only block if a draft manifest exists for any of these packages
-        $existingDraft = null;
+        // Check if packages already exist in any finalized manifest
+        $existingFinalized = null;
         if (!empty($currentPackageIds)) {
-            $existingDraft = Manifest::where('truck_id', $truck->id)
-                ->where('status', 'draft')
+            $existingFinalized = Manifest::where('truck_id', $truck->id)
+                ->where('status', 'finalized')
                 ->where(function($query) use ($currentPackageIds) {
                     foreach ($currentPackageIds as $pid) {
                         $query->orWhereJsonContains('package_ids', $pid);
@@ -216,9 +217,9 @@ class ManifestController extends Controller
                 ->first();
         }
 
-        if ($existingDraft) {
-            return redirect()->route('manifests.show', $existingDraft->id)
-                ->with('info', 'A draft manifest already exists for this truck and these packages. Please finalize or delete it before creating a new one.');
+        if ($existingFinalized) {
+            return redirect()->route('manifests.show', $existingFinalized->id)
+                ->with('info', 'A finalized manifest already exists for this truck and these packages.');
         }
 
         $request->validate([
@@ -242,13 +243,15 @@ class ManifestController extends Controller
                 return $order->deliveryRequest->packages->pluck('id');
             })->toArray();
 
+            // Create finalized manifest directly
             $manifest = Manifest::create([
                 'manifest_number' => $request->manifest_number,
                 'truck_id' => $truck->id,
                 'driver_id' => $driver?->id,
-                'status' => 'draft',
+                'status' => 'finalized', // Create as finalized directly
                 'package_ids' => $packageIds,
                 'generated_by' => auth()->id(),
+                'finalized_by' => auth()->id(), // Set finalized_by as well
                 'manifest_pdf_path' => null,
                 'notes' => $request->notes
             ]);
@@ -257,7 +260,7 @@ class ManifestController extends Controller
         });
 
         return redirect()->route('manifests.show', $manifest)
-            ->with('success', 'Manifest created successfully!');
+            ->with('success', 'Manifest created and finalized successfully!');
     }
 
     public function show(Manifest $manifest)
@@ -288,8 +291,9 @@ class ManifestController extends Controller
             ->map(function ($package) {
                 return [
                     'id' => $package->id,
-                    // Use delivery_request_id as delivery_order_id (1:1 mapping)
-                    'delivery_order_id' => $package->delivery_request_id,
+                    'item_code' => $package->item_code,
+                    'delivery_request_id' => $package->delivery_request_id,
+                    'delivery_request_reference' => $package->deliveryRequest->reference_number, // Added reference number
                     'category' => $package->category,
                     'item_name' => $package->item_name,
                     'waybill_number' => $package->waybill?->waybill_number,
@@ -302,49 +306,9 @@ class ManifestController extends Controller
         return Inertia::render('Admin/Manifest/Show', [
             'manifest' => $manifest,
             'truck' => $manifest->truck,
-            'driver' => $driverData, // <-- pass driver info with employee_id
+            'driver' => $driverData,
             'packages' => $packages,
         ]);
-    }
-
-    public function finalize(Manifest $manifest)
-    {
-        if ($manifest->status === 'finalized') {
-            return back()->with('manifest_finalize_error', [
-                'message' => 'Manifest is already finalized.'
-            ]);
-        }
-
-        // Get all packages in the manifest
-        $packages = \App\Models\Package::whereIn('id', $manifest->package_ids)->get();
-
-        // Find packages with missing or pending waybills
-        $invalidPackages = [];
-        foreach ($packages as $package) {
-            $waybill = \App\Models\Waybill::where('delivery_request_id', $package->delivery_request_id)->first();
-            if (!$waybill || $waybill->status === 'pending') {
-                $invalidPackages[] = [
-                    'package_id' => $package->id,
-                    'item_name' => $package->item_name ?? 'N/A',
-                    'waybill_status' => $waybill?->status ?? 'none'
-                ];
-            }
-        }
-
-        if (count($invalidPackages) > 0) {
-            return back()->with('manifest_finalize_error', [
-                'message' => 'Some packages are missing valid waybills. Please resolve before finalizing.',
-                'missing_packages' => $invalidPackages,
-            ]);
-        }
-
-        // All waybills are valid - proceed with finalization
-        $manifest->update([
-            'status' => 'finalized',
-            'finalized_by' => auth()->id()
-        ]);
-
-        return back()->with('success', 'Manifest finalized successfully!');
     }
 
     public function print(Manifest $manifest)
@@ -373,10 +337,8 @@ class ManifestController extends Controller
 
     public function destroy(Manifest $manifest)
     {
-        if ($manifest->status === 'finalized') {
-            return back()->with('error', 'Cannot delete a finalized manifest');
-        }
-
+        // Allow deletion of finalized manifests if needed
+        // You might want to add additional checks here based on your business logic
         $manifest->delete();
 
         return redirect()->route('manifests.index')

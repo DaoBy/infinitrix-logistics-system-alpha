@@ -8,26 +8,32 @@ import { createApp, h } from 'vue';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 import vuetify from './plugins/vuetify';
 import 'leaflet/dist/leaflet.css';
+// Use relative path
+import { loadPreferences, applyGlobalPreferences } from './stores/preferences.js';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
-createInertiaApp({
-  title: (title) => `${title} - ${appName}`,
-  resolve: (name) =>
-    resolvePageComponent(
-      `./Pages/${name}.vue`,
-      import.meta.glob('./Pages/**/*.vue')
-    ),
-  setup({ el, App, props, plugin }) {
-    return createApp({ render: () => h(App, props) })
-      .use(plugin)
-      .use(ZiggyVue)
-      .use(vuetify)
-            .use(MotionPlugin)
+// Load and apply preferences immediately
+loadPreferences();
 
-      .mount(el);
-  },
-  progress: {
-    color: '#4B5563',
-  },
+createInertiaApp({
+    title: (title) => `${title} - ${appName}`,
+    resolve: (name) =>
+        resolvePageComponent(
+            `./Pages/${name}.vue`,
+            import.meta.glob('./Pages/**/*.vue')
+        ),
+    setup({ el, App, props, plugin }) {
+        const vueApp = createApp({ render: () => h(App, props) })
+            .use(plugin)
+            .use(ZiggyVue)
+            .use(vuetify)
+            .use(MotionPlugin)
+            .mount(el);
+
+        return vueApp;
+    },
+    progress: {
+        color: '#4B5563',
+    },
 });

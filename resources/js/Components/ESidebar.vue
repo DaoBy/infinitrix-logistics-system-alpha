@@ -219,6 +219,13 @@ const navLinks = {
     { name: 'Truck Manifest', href: '/admin/manifests', route: 'manifests.index', icon: 'mdi-file-tree' },
     { name: 'Payments', href: '/staff/payments', route: 'staff.payments.dashboard', icon: 'mdi-cash-multiple' },
     { name: 'Settings', href: '/admin/price-matrix/edit', route: 'admin.price-matrix.edit', icon: 'mdi-cog' }, 
+
+    // ✅ NEW UTILITIES LINK
+    { name: 'Utilities', href: '/admin/utilities', route: 'admin.utilities.index', icon: 'mdi-tools' },
+
+    // ✅ NEW REPORTS LINK
+    { name: 'Reports', href: '/admin/reports', route: 'reports.dashboard', icon: 'mdi-chart-bar' },
+
     { name: 'Region Durations', href: '/region-durations', route: 'region-durations.index', icon: 'mdi-clock-outline' },
     { name: 'Refunds', href: '/refunds', route: 'refunds.index', icon: 'mdi-cash-refund' },
   ],
@@ -236,7 +243,7 @@ const navLinks = {
       href: '/cargo-assignments/delivery-completion/ready-for-completion',
       route: 'cargo-assignments.delivery-completion.ready-for-completion',
       icon: 'mdi-package-up'
-    }, 
+    },
     { name: 'Payments', href: '/staff/payments', route: 'staff.payments.index', icon: 'mdi-cash-multiple' },
     { name: 'Payment Verification', href: '/staff/payments/verification', route: 'staff.payments.verification.index', icon: 'mdi-check-decagram' },
     { name: 'Waybills', href: '/waybills', route: 'waybills.index', icon: 'mdi-cash' },
@@ -244,27 +251,15 @@ const navLinks = {
     { name: 'Truck Manifest', href: '/admin/manifests', route: 'manifests.index', icon: 'mdi-file-tree' },
     { name: 'Package Verification', href: '/package-verification/pending', route: 'package-verification.pending', icon: 'mdi-checkbox-marked-circle-outline' },
     { name: 'Refunds', href: '/refunds', route: 'refunds.index', icon: 'mdi-cash-refund' },
+
+    // ✅ NEW REPORTS LINK (shared route)
+    { name: 'Reports', href: '/admin/reports', route: 'reports.dashboard', icon: 'mdi-chart-bar' },
   ],
 
   driver: [
-    {
-      name: 'Dashboard',
-      href: '/driver/dashboard',
-      route: 'driver.dashboard',
-      icon: 'mdi-home',
-    },
-    {
-      name: 'Assigned Deliveries',
-      href: '/driver/deliveries/assigned',
-      route: 'driver.assigned-deliveries',
-      icon: 'mdi-package-variant',
-    },
-    {
-      name: 'Update Location',
-      href: '/driver/packages/status-update',
-      route: 'driver.status-update',
-      icon: 'mdi-map-marker',
-    },
+    { name: 'Dashboard', href: '/driver/dashboard', route: 'driver.dashboard', icon: 'mdi-home' },
+    { name: 'Assigned Deliveries', href: '/driver/deliveries/assigned', route: 'driver.assigned-deliveries', icon: 'mdi-package-variant' },
+    { name: 'Update Location', href: '/driver/packages/status-update', route: 'driver.status-update', icon: 'mdi-map-marker' },
   ],
 
   collector: [
@@ -277,6 +272,7 @@ const navLinks = {
 
   guest: [],
 };
+
 
 // Filter Links by User Role
 const filteredLinks = navLinks[role] || [];

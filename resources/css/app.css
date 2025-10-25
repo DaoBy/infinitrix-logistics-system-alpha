@@ -2,6 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+/* CSS Variables for font preferences ONLY */
+:root {
+    --font-family: "Inter", system-ui, -apple-system, sans-serif;
+    --font-size: 16px;
+}
+
+/* Apply font variables to entire document */
+html {
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+}
+
+body {
+    font-family: inherit;
+    font-size: inherit;
+}
+
+/* Your existing styles below */
 .leaflet-default-icon-path {
   background-image: url(https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png);
 }
@@ -25,7 +43,6 @@ input {
 }
 
 .search-input-outline {
-  /* You can add even more custom outline if needed */
-  outline: 1px solid #d1d5db; /* Tailwind gray-300 */
+  outline: 1px solid #d1d5db;
   outline-offset: 1px;
 }

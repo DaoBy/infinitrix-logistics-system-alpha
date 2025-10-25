@@ -19,11 +19,13 @@ class Manifest extends Model
         'package_ids',
         'generated_by',
         'manifest_pdf_path',
-        'notes'
+        'notes',
+        'archived_at' // ✅ ADDED
     ];
 
     protected $casts = [
         'package_ids' => 'array',
+        'archived_at' => 'datetime', // ✅ ADDED
     ];
 
     // Relationships
@@ -52,5 +54,17 @@ class Manifest extends Model
     public function getPackages()
     {
         return Package::whereIn('id', $this->package_ids)->get();
+    }
+
+    // ✅ ADDED: Scope for non-archived records
+    public function scopeActive($query)
+    {
+        return $query->whereNull('archived_at');
+    }
+
+    // ✅ ADDED: Scope for archived records
+    public function scopeArchived($query)
+    {
+        return $query->whereNotNull('archived_at');
     }
 }

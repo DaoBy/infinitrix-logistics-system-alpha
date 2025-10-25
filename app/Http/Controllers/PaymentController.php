@@ -14,134 +14,207 @@ use Inertia\Inertia;
 class PaymentController extends Controller
 {
     // Main dashboard - replaces multiple index methods
-    public function dashboard(Request $request)
-    {
-        $activeTab = $request->input('tab', 'verification');
+   public function dashboard(Request $request)
+{
+    $activeTab = $request->input('tab', 'verification');
+    
+    // TAB 1: Verification Queue Data
+    $verificationQuery = Payment::with([
+        'deliveryRequest.sender', 
+        'deliveryRequest.receiver', 
+        'submittedBy',
+        'verifiedBy',
+        'rejectedBy'
+    ])->where('status', 'pending_verification');
+    
+    // Apply search filter for verification
+    if ($request->search && $activeTab === 'verification') {
+        $verificationQuery->where(function($q) use ($request) {
+            $q->where('reference_number', 'like', "%{$request->search}%")
+              ->orWhereHas('deliveryRequest', function($q2) use ($request) {
+                  $q2->where('reference_number', 'like', "%{$request->search}%")
+                     ->orWhereHas('sender', function($q3) use ($request) {
+                         $q3->where('name', 'like', "%{$request->search}%");
+                     });
+              })
+              ->orWhere('amount', 'like', "%{$request->search}%");
+        });
+    }
+    
+    // Apply payment method filter
+    if ($request->payment_method && $activeTab === 'verification') {
+        $verificationQuery->where('method', $request->payment_method);
+    }
+    
+    // Apply payment source filter
+    if ($request->payment_source && $activeTab === 'verification') {
+        $verificationQuery->where('source', $request->payment_source);
+    }
+    
+    $verificationPayments = $verificationQuery->latest()->paginate(10, ['*'], 'verification_page');
+
+   // TAB 2: Collection Management Data
+$collectionSearch = $request->input('search', '');
+$collectionType = $request->input('collection_type', 'all');
+
+// Prepaid deliveries needing payment - EXCLUDE verified payments
+$prepaidQuery = DeliveryRequest::query()
+    ->with(['sender', 'receiver', 'packages', 'payment'])
+    ->whereIn('payment_method', ['cash', 'gcash', 'bank'])
+    ->whereIn('status', ['approved', 'pending_payment', 'completed'])
+    ->where(function($q) {
+        $q->whereNull('payment_status')
+          ->orWhere('payment_status', 'pending')
+          ->orWhere('payment_status', 'unpaid')
+          ->orWhere('payment_status', '!=', 'paid');
+    })
+    // Exclude deliveries with verified payments
+    ->whereDoesntHave('payment', function($q) {
+        $q->where('status', 'verified');
+    });
+
+// Postpaid deliveries needing collection - EXCLUDE verified payments
+$postpaidQuery = DeliveryOrder::query()
+    ->with([
+        'deliveryRequest.sender',
+        'deliveryRequest.receiver', 
+        'deliveryRequest.packages',
+        'deliveryRequest.payment',
+        'driver'
+    ])
+    ->whereHas('deliveryRequest', function($q) {
+        $q->where('payment_method', 'postpaid')
+          ->whereIn('status', ['approved', 'completed', 'delivered'])
+          ->where(function($q2) {
+              $q2->whereNull('payment_status')
+                 ->orWhereIn('payment_status', ['pending', 'pending_payment', 'unpaid']);
+          })
+          // Exclude deliveries with verified payments
+          ->whereDoesntHave('payment', function($q3) {
+              $q3->where('status', 'verified');
+          });
+    });
+
+    // Apply search to both prepaid and postpaid
+    if ($collectionSearch && $activeTab === 'collection') {
+        $prepaidQuery->where(function($q) use ($collectionSearch) {
+            $q->where('reference_number', 'like', "%$collectionSearch%")
+              ->orWhereHas('sender', function($q2) use ($collectionSearch) {
+                  $q2->where('name', 'like', "%$collectionSearch%");
+              })
+              ->orWhere('total_price', 'like', "%$collectionSearch%");
+        });
         
-        // TAB 1: Verification Queue Data
-        $verificationQuery = Payment::with([
-            'deliveryRequest.sender', 
-            'deliveryRequest.receiver', 
-            'submittedBy',
-            'verifiedBy',
-            'rejectedBy'
-        ])->where('status', 'pending_verification');
-        
-        if ($request->search) {
-            $verificationQuery->where(function($q) use ($request) {
-                $q->where('reference_number', 'like', "%{$request->search}%")
-                  ->orWhereHas('deliveryRequest', function($q2) use ($request) {
-                      $q2->where('reference_number', 'like', "%{$request->search}%")
-                         ->orWhereHas('sender', function($q3) use ($request) {
-                             $q3->where('name', 'like', "%{$request->search}%");
-                         });
-                  });
-            });
-        }
-        
-        $verificationPayments = $verificationQuery->latest()->paginate(10, ['*'], 'verification_page');
-
-        // TAB 2: Collection Management Data
-        $collectionSearch = $request->input('collection_search', '');
-        $collectionType = $request->input('collection_type', 'all');
-        
-        // Prepaid deliveries needing payment
-        $prepaidQuery = DeliveryRequest::query()
-            ->whereIn('payment_method', ['cash', 'gcash', 'bank'])
-            ->whereIn('status', ['approved', 'pending_payment', 'completed'])
-            ->where(function($q) {
-                $q->whereNull('payment_status')
-                  ->orWhere('payment_status', 'pending')
-                  ->orWhere('payment_status', 'unpaid');
-            });
-
-        // Postpaid deliveries needing collection
-        $postpaidQuery = DeliveryOrder::query()
-            ->whereHas('deliveryRequest', function($q) {
-                $q->whereNotNull('payment_method')
-                  ->whereNotIn('payment_method', ['cash', 'gcash', 'bank'])
-                  ->whereIn('status', ['approved', 'completed'])
-                  ->where(function($q2) {
-                      $q2->whereNull('payment_status')
-                         ->orWhereIn('payment_status', ['pending', 'pending_payment', 'unpaid']);
-                  });
-            });
-
-        // Apply search to both
-        if ($collectionSearch) {
-            $prepaidQuery->where(function($q) use ($collectionSearch) {
-                $q->where('reference_number', 'like', "%$collectionSearch%")
-                  ->orWhereHas('sender', function($q2) use ($collectionSearch) {
-                      $q2->where('name', 'like', "%$collectionSearch%");
-                  });
-            });
-            
-            $postpaidQuery->where(function($q) use ($collectionSearch) {
-                $q->where('id', 'like', "%$collectionSearch%")
-                  ->orWhereHas('deliveryRequest', function($q2) use ($collectionSearch) {
-                      $q2->where('reference_number', 'like', "%$collectionSearch%")
-                         ->orWhereHas('sender', function($q3) use ($collectionSearch) {
-                             $q3->where('name', 'like', "%$collectionSearch%");
-                         });
-                  });
-            });
-        }
-
-        // Filter by type
-        if ($collectionType === 'prepaid') {
-            $postpaidQuery->whereRaw('1 = 0'); // Exclude postpaid
-        } elseif ($collectionType === 'postpaid') {
-            $prepaidQuery->whereRaw('1 = 0'); // Exclude prepaid
-        }
-
-        $prepaidRequests = $prepaidQuery->with(['sender', 'receiver', 'packages', 'payment'])
-            ->orderByDesc('id')->paginate(5, ['*'], 'prepaid_page');
-        
-        $postpaidRequests = $postpaidQuery->with([
-            'deliveryRequest.sender',
-            'deliveryRequest.receiver', 
-            'deliveryRequest.packages',
-            'deliveryRequest.payment',
-        ])->orderByDesc('id')->paginate(5, ['*'], 'postpaid_page');
-
-        // TAB 3: Payment History Data
-        $historyQuery = Payment::with([
-            'deliveryRequest.sender',
-            'deliveryRequest.receiver',
-            'verifiedBy',
-            'rejectedBy'
-        ])->whereIn('status', ['verified', 'rejected', 'cancelled']);
-
-        if ($request->history_search) {
-            $historyQuery->where(function($q) use ($request) {
-                $q->where('reference_number', 'like', "%{$request->history_search}%")
-                  ->orWhereHas('deliveryRequest', function($q2) use ($request) {
-                      $q2->where('reference_number', 'like', "%{$request->history_search}%");
-                  });
-            });
-        }
-
-        $historyPayments = $historyQuery->latest()->paginate(15, ['*'], 'history_page');
-
-        // Stats for badges
-        $stats = [
-            'pending_verification' => Payment::where('status', 'pending_verification')->count(),
-            'needs_collection' => $prepaidQuery->clone()->count() + $postpaidQuery->clone()->count(),
-            'verified_today' => Payment::where('status', 'verified')
-                ->whereDate('verified_at', today())->count(),
-        ];
-
-        return Inertia::render('Admin/Payments/Dashboard', [
-            'activeTab' => $activeTab,
-            'verificationPayments' => $verificationPayments,
-            'prepaidRequests' => $prepaidRequests,
-            'postpaidRequests' => $postpaidRequests,
-            'historyPayments' => $historyPayments,
-            'stats' => $stats,
-            'filters' => $request->all(),
-        ]);
+        $postpaidQuery->where(function($q) use ($collectionSearch) {
+            $q->whereHas('deliveryRequest', function($q2) use ($collectionSearch) {
+                  $q2->where('reference_number', 'like', "%$collectionSearch%")
+                     ->orWhereHas('sender', function($q3) use ($collectionSearch) {
+                         $q3->where('name', 'like', "%$collectionSearch%");
+                     })
+                     ->orWhere('total_price', 'like', "%$collectionSearch%");
+              });
+        });
     }
 
+    // Filter by collection type
+    if ($collectionType === 'prepaid') {
+        $postpaidQuery->whereRaw('1 = 0'); // Exclude postpaid
+    } elseif ($collectionType === 'postpaid') {
+        $prepaidQuery->whereRaw('1 = 0'); // Exclude prepaid
+    }
+
+    $prepaidRequests = $prepaidQuery->orderByDesc('id')->paginate(10, ['*'], 'prepaid_page');
+    
+    $postpaidRequests = $postpaidQuery->orderByDesc('id')->paginate(10, ['*'], 'postpaid_page');
+
+    // TAB 3: Payment History Data
+    $historyQuery = Payment::with([
+        'deliveryRequest.sender',
+        'deliveryRequest.receiver',
+        'verifiedBy',
+        'rejectedBy'
+    ])->whereIn('status', ['verified', 'rejected', 'cancelled']);
+
+    // Apply search for history
+    if ($request->search && $activeTab === 'history') {
+        $historyQuery->where(function($q) use ($request) {
+            $q->where('reference_number', 'like', "%{$request->search}%")
+              ->orWhereHas('deliveryRequest', function($q2) use ($request) {
+                  $q2->where('reference_number', 'like', "%{$request->search}%")
+                     ->orWhereHas('sender', function($q3) use ($request) {
+                         $q3->where('name', 'like', "%{$request->search}%");
+                     });
+              })
+              ->orWhere('amount', 'like', "%{$request->search}%");
+        });
+    }
+
+    // Apply history status filter
+    if ($request->history_status && $activeTab === 'history') {
+        $historyQuery->where('status', $request->history_status);
+    }
+
+    $historyPayments = $historyQuery->latest()->paginate(10, ['*'], 'history_page');
+
+    // Stats for badges
+    $stats = [
+        'pending_verification' => Payment::where('status', 'pending_verification')->count(),
+        'needs_collection' => $prepaidQuery->clone()->count() + $postpaidQuery->clone()->count(),
+        'verified_today' => Payment::where('status', 'verified')
+            ->whereDate('verified_at', today())->count(),
+    ];
+
+    // Return with proper pagination structure for Inertia
+    return Inertia::render('Admin/Payments/Dashboard', [
+        'activeTab' => $activeTab,
+        'verificationPayments' => [
+            'data' => $verificationPayments->items(),
+            'meta' => [
+                'current_page' => $verificationPayments->currentPage(),
+                'last_page' => $verificationPayments->lastPage(),
+                'per_page' => $verificationPayments->perPage(),
+                'total' => $verificationPayments->total(),
+                'from' => $verificationPayments->firstItem(),
+                'to' => $verificationPayments->lastItem(),
+            ]
+        ],
+        'prepaidRequests' => [
+            'data' => $prepaidRequests->items(),
+            'meta' => [
+                'current_page' => $prepaidRequests->currentPage(),
+                'last_page' => $prepaidRequests->lastPage(),
+                'per_page' => $prepaidRequests->perPage(),
+                'total' => $prepaidRequests->total(),
+                'from' => $prepaidRequests->firstItem(),
+                'to' => $prepaidRequests->lastItem(),
+            ]
+        ],
+        'postpaidRequests' => [
+            'data' => $postpaidRequests->items(),
+            'meta' => [
+                'current_page' => $postpaidRequests->currentPage(),
+                'last_page' => $postpaidRequests->lastPage(),
+                'per_page' => $postpaidRequests->perPage(),
+                'total' => $postpaidRequests->total(),
+                'from' => $postpaidRequests->firstItem(),
+                'to' => $postpaidRequests->lastItem(),
+            ]
+        ],
+        'historyPayments' => [
+            'data' => $historyPayments->items(),
+            'meta' => [
+                'current_page' => $historyPayments->currentPage(),
+                'last_page' => $historyPayments->lastPage(),
+                'per_page' => $historyPayments->perPage(),
+                'total' => $historyPayments->total(),
+                'from' => $historyPayments->firstItem(),
+                'to' => $historyPayments->lastItem(),
+            ]
+        ],
+        'stats' => $stats,
+        'filters' => $request->all(),
+    ]);
+}
     // Show form to record over-the-counter payment
     public function create(Request $request)
     {
