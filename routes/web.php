@@ -50,6 +50,25 @@ use App\Http\Controllers\PaymentController;
 // PUBLIC ROUTES
 // =============================================================================
 // Add to routes/web.php
+Route::get('/test-contact-email', function () {
+    try {
+        $testData = [
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+            'subject' => 'Test Contact Form',
+            'message' => 'This is a test message from the contact form'
+        ];
+
+        Mail::to('infinitrixexpress@gmail.com')
+            ->send(new \App\Mail\ContactFormSubmitted($testData));
+
+        return 'Test contact email sent to infinitrixexpress@gmail.com! Check your logs and email.';
+        
+    } catch (\Exception $e) {
+        return 'Email failed: ' . $e->getMessage();
+    }
+});
+
 Route::get('/debug-new-assignment', function() {
     // Get the latest assignment
     $assignment = \App\Models\DriverTruckAssignment::with(['driver', 'truck'])

@@ -38,13 +38,11 @@ import caseStudy7 from '@/assets/caseStudy7.jpg';
 
 const faqs = ref([
   { question: 'How can I track my package?', answer: 'You can track your package by entering your tracking ID on our tracking page.', open: false },
-  { question: 'What areas do you deliver to?', answer: 'We currently deliver packages from Malabon, Naga, and Legazpi to Manila. Deliveries from Manila to these areas are not yet available.', open: false },
-  { question: 'What happens if my package is delayed?', answer: 'We will notify you immediately if there are any delays and work to resolve the issue.', open: false },
-  { question: 'How do I request a delivery?', answer: 'Simply visit our delivery request page and provide the necessary information.', open: false },
-  { question: 'Is my package insured?', answer: 'Yes, all shipments are insured against damage or loss during transit.', open: false },
-  { question: 'Can I change my delivery address?', answer: 'You can update your address before the package is out for delivery.', open: false },
+  { question: 'What areas do you deliver to?', answer: 'We deliver packages to any municipality in Bicol except to those in Catanduanes Island. We also deliver supplies from Bicol to Metro Manila.', open: false },
+  { question: 'What happens if my package is delayed/lost/damaged?', answer: 'We will notify you immediately if there are any issues and work to resolve the issue. You can also try contacting us through our phone number.', open: false },
+  { question: 'How do I request a delivery?', answer: 'Simply visit our delivery request page and provide the necessary information. After your request is approved, drop off your packages in our warehouse in Malabon or Legazpi City.', open: false },
+  { question: 'Can I change my delivery address?', answer: 'You can update your address by clicking Delivery Information in the settings. You cannot update your account info if you have pending transactions.', open: false },
   { question: 'What are your delivery hours?', answer: 'Our deliveries are made between 8 AM and 8 PM from Monday to Saturday.', open: false },
-  { question: 'Do you offer express delivery?', answer: 'Yes, we offer same-day and next-day delivery options for urgent shipments.', open: false },
 ]);
 
 const toggleFAQ = (index) => {
@@ -553,39 +551,39 @@ const navigateToCompleteProfile = () => {
       </div>
     </div>
 
-    <!-- FAQ Section -->
-    <div class="w-full py-12 px-6 md:px-12 lg:px-20">
-      <div class="max-w-[90%] xl:max-w-[1280px] mx-auto">
-        <h2 class="text-3xl font-semibold text-green-700 text-center mb-8">Frequently Asked Questions</h2>
-        <div class="space-y-4">
-          <div
-            v-for="(faq, index) in faqs"
-            :key="index"
-            class="border border-gray-300 rounded-lg"
-          >
-            <button
-              @click="toggleFAQ(index)"
-              class="w-full p-4 text-left flex justify-between items-center focus:outline-none"
-              :aria-expanded="faq.open.toString()"
-              :aria-controls="'faq-' + index"
-              :id="'faq-btn-' + index"
-            >
-              <span class="text-lg text-gray-900">{{ faq.question }}</span>
-              <span aria-hidden="true" class="text-2xl">{{ faq.open ? '−' : '+' }}</span>
-            </button>
-            <div
-              v-if="faq.open"
-              class="p-4 border-t text-gray-600"
-              :id="'faq-' + index"
-              role="region"
-              :aria-labelledby="'faq-btn-' + index"
-            >
-              {{ faq.answer }}
-            </div>
-          </div>
+   <!-- FAQ Section -->
+<div class="w-full py-12 px-6 md:px-12 lg:px-20">
+  <div class="max-w-[90%] xl:max-w-[1280px] mx-auto">
+    <h2 class="text-3xl font-semibold text-green-700 text-center mb-8">Frequently Asked Questions</h2>
+    <div class="space-y-4">
+      <div
+        v-for="(faq, index) in faqs"
+        :key="index"
+        class="border border-gray-300 rounded-lg"
+      >
+        <button
+          @click="toggleFAQ(index)"
+          class="w-full p-4 text-left flex justify-between items-center focus:outline-none"
+          :aria-expanded="faq.open.toString()"
+          :aria-controls="'faq-' + index"
+          :id="'faq-btn-' + index"
+        >
+          <span class="text-lg text-gray-900">{{ faq.question }}</span>
+          <span aria-hidden="true" class="text-2xl">{{ faq.open ? '−' : '+' }}</span>
+        </button>
+        <div
+          v-if="faq.open"
+          class="p-4 border-t text-gray-600"
+          :id="'faq-' + index"
+          role="region"
+          :aria-labelledby="'faq-btn-' + index"
+        >
+          {{ faq.answer }}
         </div>
       </div>
     </div>
+  </div>
+</div>
   </GuestLayout>
 </template>
 

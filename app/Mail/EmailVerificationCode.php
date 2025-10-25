@@ -25,7 +25,8 @@ class EmailVerificationCode extends Mailable
      */
     public function build()
     {
-        return $this->subject('Your Verification Code')
+        return $this->from('noreply@infinitrix.work', 'Infinitrix Logistics')
+            ->subject('Your Verification Code')
             ->view('emails.verification_code')
             ->with(['code' => $this->code]);
     }

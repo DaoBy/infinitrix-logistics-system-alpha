@@ -120,18 +120,7 @@
 <div class="mb-6">
   <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Payment Information</h3>
   
-  <!-- Debug Information (Remove in production) -->
-  <div class="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4 text-xs">
-    <p class="font-semibold text-yellow-800">Payment Status Debug:</p>
-    <div class="grid grid-cols-2 gap-2 mt-1">
-      <div>Payment Type: <span class="font-mono">{{ waybill.delivery_request?.payment_type }}</span></div>
-      <div>Payment Method: <span class="font-mono">{{ waybill.delivery_request?.payment_method }}</span></div>
-      <div>Payment Status: <span class="font-mono">{{ waybill.delivery_request?.payment_status }}</span></div>
-      <div>Payment Verified: <span class="font-mono">{{ waybill.delivery_request?.payment_verified }}</span></div>
-      <div>is_paid: <span class="font-mono">{{ waybill.delivery_request?.is_paid }}</span></div>
-      <div>Final Status: <span class="font-mono">{{ getFinalPaymentStatus() }}</span></div>
-    </div>
-  </div>
+
 
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
     <!-- Column 1 -->
@@ -210,10 +199,7 @@
           <div class="text-center py-4 border-t border-gray-200 dark:border-gray-700 print:border-t-0">
             <div class="flex flex-col md:flex-row justify-center items-center gap-8 mb-2">
               <div>
-                <span class="font-semibold text-gray-700 dark:text-gray-200">Received By:</span>
-                <span class="text-gray-900 dark:text-gray-100">
-                  {{ waybill.delivery_request?.receiver?.name || waybill.delivery_request?.receiver?.company_name || 'N/A' }}
-                </span>
+          
               </div>
               <div v-if="order?.truck">
                 <span class="font-semibold text-gray-700 dark:text-gray-200">Truck Plate:</span>

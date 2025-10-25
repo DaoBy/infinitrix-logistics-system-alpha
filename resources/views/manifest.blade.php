@@ -4,16 +4,18 @@
     <meta charset="utf-8">
     <title>Manifest: {{ $manifest->manifest_number }}</title>
     <style>
-        body {
-            font-family: 'DejaVu Sans', Arial, sans-serif;
+        body { 
+            font-family: 'DejaVu Sans', Arial, sans-serif; 
+            margin: 0; 
+            padding: 15px; 
+            color: #000; 
+            background: #fff; 
             font-size: 12px;
             line-height: 1.3;
-            margin: 0;
-            padding: 15px;
         }
-        .header {
-            text-align: center;
-            margin-bottom: 20px;
+        .header { 
+            text-align: center; 
+            margin-bottom: 20px; 
             padding-bottom: 10px;
             border-bottom: 2px solid #000;
         }
@@ -30,73 +32,53 @@
             font-size: 11px;
             margin-top: 5px;
         }
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 15px;
-            border: 1px solid #000;
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 15px; 
         }
-        .info-box {
-            flex: 1;
-            padding: 8px;
-            border-right: 1px solid #000;
+        th, td { 
+            border: 1px solid #000; 
+            padding: 6px; 
+            text-align: left; 
+            font-size: 10px; 
+            vertical-align: top;
         }
-        .info-box:last-child {
-            border-right: none;
+        th { 
+            background: #f5f5f5; 
+            font-weight: bold; 
         }
-        .info-label {
-            font-weight: bold;
-            font-size: 10px;
-            margin-bottom: 3px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 15px;
-        }
-        th {
+        .section-title { 
+            font-weight: bold; 
+            font-size: 11px; 
+            margin-bottom: 8px; 
             background-color: #f5f5f5;
-            border: 1px solid #000;
             padding: 6px;
-            text-align: left;
-            font-size: 10px;
-            font-weight: bold;
         }
-        td {
-            border: 1px solid #000;
-            padding: 6px;
-            font-size: 10px;
-        }
-        .summary {
-            margin-top: 15px;
-            padding: 8px;
-            border: 1px solid #000;
-            background-color: #f9f9f9;
-            font-size: 11px;
-            text-align: center;
-        }
-        .footer {
-            margin-top: 20px;
-            padding-top: 15px;
+        .info-table { margin-bottom: 15px; }
+        .footer { 
+            margin-top: 20px; 
+            padding-top: 15px; 
             border-top: 1px solid #000;
+            font-size: 10px;
         }
-        .signature-row {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 40px;
-        }
-        .signature-box {
-            flex: 1;
-            text-align: center;
-        }
-        .signature-box:first-child {
-            border-right: 1px solid #ddd;
+        .label { font-weight: bold; }
+        .text-center { text-align: center; }
+        .signature-table { margin-top: 30px; }
+        .signature-cell { 
+            text-align: center; 
+            padding-top: 40px; 
         }
         .signature-line {
-            border-top: 1px solid #000;
             margin-top: 30px;
             padding-top: 5px;
             font-size: 10px;
+        }
+        .summary-cell {
+            text-align: center;
+            font-weight: bold;
+            padding: 8px;
+            background-color: #f9f9f9;
         }
     </style>
 </head>
@@ -109,78 +91,93 @@
         </div>
     </div>
 
-    <!-- Truck & Driver Info - Side by Side -->
-    <div class="info-row">
-        <div class="info-box">
-            <div class="info-label">TRUCK</div>
-            <div>{{ $manifest->truck->license_plate }} - {{ $manifest->truck->make }} {{ $manifest->truck->model }}</div>
-        </div>
-        <div class="info-box">
-            <div class="info-label">DRIVER</div>
-            <div>
-                {{ $manifest->driver->name ?? 'Not Assigned' }}
+    <!-- Truck & Driver Information -->
+    <table class="info-table">
+        <tr>
+            <th colspan="2" class="section-title">Vehicle & Driver Information</th>
+        </tr>
+        <tr>
+            <td width="50%">
+                <span class="label">TRUCK</span><br>
+                <span class="label">License Plate:</span> {{ $manifest->truck->license_plate }}<br>
+                <span class="label">Make/Model:</span> {{ $manifest->truck->make }} {{ $manifest->truck->model }}
+            </td>
+            <td width="50%">
+                <span class="label">DRIVER</span><br>
+                <span class="label">Name:</span> {{ $manifest->driver->name ?? 'Not Assigned' }}<br>
+                <span class="label">Employee ID:</span> 
                 @if($manifest->driver && $manifest->driver->employeeProfile)
-                    (ID: {{ $manifest->driver->employeeProfile->employee_id }})
+                    {{ $manifest->driver->employeeProfile->employee_id }}
+                @else
+                    N/A
                 @endif
-            </div>
-        </div>
-    </div>
+            </td>
+        </tr>
+    </table>
 
     <!-- Packages Table -->
-    <table>
-        <thead>
-            <tr>
-                <th>Item Code</th>
-                <th>Category</th>
-                <th>Package Name</th>
-                <th>Destination</th>
-                <th>Waybill #</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($packages as $package)
-            <tr>
-                <td style="font-family: 'Courier New', monospace; font-weight: bold;">{{ $package->item_code }}</td>
-                <td>{{ $package->category }}</td>
-                <td>{{ $package->item_name }}</td>
-                <td>{{ $package->deliveryRequest->dropOffRegion->name ?? 'N/A' }}</td>
-                <td style="font-weight: bold;">{{ $package->waybill->waybill_number ?? 'N/A' }}</td>
-            </tr>
-            @endforeach
-        </tbody>
+    <table class="info-table">
+        <tr>
+            <th colspan="5" class="section-title">Package Information</th>
+        </tr>
+        <tr>
+            <th width="20%">Item Code</th>
+            <th width="15%">Category</th>
+            <th width="25%">Package Name</th>
+            <th width="25%">Destination</th>
+            <th width="15%">Waybill #</th>
+        </tr>
+        @foreach($packages as $package)
+        <tr>
+            <td style="font-family: 'Courier New', monospace; font-weight: bold;">{{ $package->item_code }}</td>
+            <td>{{ $package->category }}</td>
+            <td>{{ $package->item_name }}</td>
+            <td>{{ $package->deliveryRequest->dropOffRegion->name ?? 'N/A' }}</td>
+            <td style="font-weight: bold;">{{ $package->waybill->waybill_number ?? 'N/A' }}</td>
+        </tr>
+        @endforeach
     </table>
 
     <!-- Summary -->
-    <div class="summary">
-        <strong>Total Packages: {{ $packages->count() }}</strong> | 
-        <strong>Total Volume: {{ number_format($packages->sum('volume'), 3) }} m³</strong> | 
-        <strong>Total Weight: {{ number_format($packages->sum('weight'), 2) }} kg</strong>
-    </div>
+    <table class="info-table">
+        <tr>
+            <th class="section-title">Summary</th>
+        </tr>
+        <tr>
+            <td class="summary-cell">
+                Total Packages: {{ $packages->count() }} | 
+                Total Volume: {{ number_format($packages->sum('volume'), 3) }} m³ | 
+                Total Weight: {{ number_format($packages->sum('weight'), 2) }} kg
+            </td>
+        </tr>
+    </table>
 
-    <!-- Footer with Signatures Side by Side -->
-    <div class="footer">
-        <div class="signature-row">
-            <div class="signature-box">
+    <!-- Signatures -->
+    <table class="signature-table">
+        <tr>
+            <td width="50%" class="signature-cell">
                 <div class="signature-line">Driver's Signature</div>
                 <div style="font-size: 9px; margin-top: 3px;">
                     Name: {{ $manifest->driver->name ?? 'N/A' }}<br>
                     Date: ________________
                 </div>
-            </div>
-            <div class="signature-box">
+            </td>
+            <td width="50%" class="signature-cell">
                 <div class="signature-line">Dispatcher's Signature</div>
                 <div style="font-size: 9px; margin-top: 3px;">
                     Name: {{ $manifest->generator->name ?? 'N/A' }}<br>
                     Date: ________________
                 </div>
-            </div>
-        </div>
-        
-        @if($manifest->notes)
-        <div style="margin-top: 15px; font-size: 10px;">
+            </td>
+        </tr>
+    </table>
+
+    @if($manifest->notes)
+    <div class="footer">
+        <div style="text-align: left;">
             <strong>Notes:</strong> {{ $manifest->notes }}
         </div>
-        @endif
     </div>
+    @endif
 </body>
 </html>

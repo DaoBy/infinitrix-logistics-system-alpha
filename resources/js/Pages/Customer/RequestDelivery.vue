@@ -61,10 +61,7 @@ const props = defineProps({
 const packageStep = ref(1);
 
 // HARDCODED PICKUP REGIONS (Easily editable)
-const PICKUP_REGIONS = [
-  { value: 1, label: 'Manila' },
-  { value: 2, label: 'Legazpi' }
-];
+const PICKUP_REGIONS = ref([]);
 
 const showPackageNotices = ref(true);
 const showAdvisoryNotice = ref(true);
@@ -190,16 +187,20 @@ const fetchRegions = async () => {
     
     if (!Array.isArray(regionsData)) return;
 
+    // Format regions with capitalized labels
     branches.value = regionsData.map(region => ({
       value: region.id,
-      label: region.name
+      label: region.name ? region.name.replace(/\b\w/g, char => char.toUpperCase()) : ''
     }));
+
+    // Also populate PICKUP_REGIONS with the same formatted data
+    PICKUP_REGIONS.value = branches.value;
 
     regionsData.forEach(region => {
       regionsDataMap.value[region.id] = {
         id: region.id,
-        name: region.name,
-        warehouse_address: region.warehouse_address,
+        name: region.name ? region.name.replace(/\b\w/g, char => char.toUpperCase()) : '',
+        warehouse_address: region.warehouse_address ? region.warehouse_address.replace(/\b\w/g, char => char.toUpperCase()) : '',
         latitude: region.latitude,
         longitude: region.longitude,
         is_active: region.is_active,
@@ -207,20 +208,21 @@ const fetchRegions = async () => {
       };
     });
 
-    // Set Malabon as default (id: 1)
+    // Set default regions if available
     if (regionsData.length > 0) {
-      form.pick_up_region_id = 1;
-      selectedRegionInfo.value = regionsDataMap.value[1];
+      form.pick_up_region_id = regionsData[0].id;
+      selectedRegionInfo.value = regionsDataMap.value[regionsData[0].id];
       
-      // Set default drop-off region if needed
+      // Set default drop-off region if different from first
       if (regionsData.length > 1) {
-        form.drop_off_region_id = 2;
-        selectedDropoffRegionInfo.value = regionsDataMap.value[2];
+        form.drop_off_region_id = regionsData[1].id;
+        selectedDropoffRegionInfo.value = regionsDataMap.value[regionsData[1].id];
       }
     }
 
   } catch (error) {
     branches.value = [];
+    PICKUP_REGIONS.value = [];
   }
 };
 
@@ -586,6 +588,7 @@ const handleTextInputWithCapitalize = (event, field, packageIndex = null) => {
 
 
 
+// Update filteredDropoffRegions to exclude selected pick-up region
 const filteredDropoffRegions = computed(() => {
   if (!form.pick_up_region_id) return branches.value;
   return branches.value.filter(region => region.value !== form.pick_up_region_id);
@@ -1879,72 +1882,72 @@ watch(() => form.payment_type, (val) => {
                     </div>
                   </div>
 
-                  <!-- Right Column - Pick-up Region & Map -->
-                  <div class="lg:col-span-1 space-y-6">
-                    <!-- Pick-up Region -->
-                    <div>
-                      <InputLabel value="Select Pick-up Region *" />
-                      <SelectInput
-                        v-model="form.pick_up_region_id"
-                        class="mt-1 block w-full"
-                        :class="{ 'border-red-500': form.errors.pick_up_region_id }"
-                        :options="PICKUP_REGIONS"
-                        placeholder=""
-                      />
-                      <InputError :message="form.errors.pick_up_region_id" />
-                    </div>
+                <!-- Right Column - Pick-up Region & Map -->
+          <div class="lg:col-span-1 space-y-6">
+            <!-- Pick-up Region -->
+            <div>
+              <InputLabel value="Select Pick-up Region *" />
+              <SelectInput
+                v-model="form.pick_up_region_id"
+                class="mt-1 block w-full"
+                :class="{ 'border-red-500': form.errors.pick_up_region_id }"
+                :options="PICKUP_REGIONS"
+                placeholder=""
+              />
+              <InputError :message="form.errors.pick_up_region_id" />
+            </div>
 
                     <!-- Region Information Display -->
-                    <div v-if="selectedRegionInfo" class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <h3 class="font-semibold text-blue-800 mb-3 flex items-center">
-                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        </svg>
-                        {{ selectedRegionInfo.name || 'Branch' }} Information
-                      </h3>
-                      <div class="space-y-2">
-                        <p class="text-sm text-blue-700">
-                          <strong class="text-blue-800">Address:</strong><br>
-                          {{ selectedRegionInfo.warehouse_address || 'Address information not available' }}
-                        </p>
-                        <p class="text-sm text-blue-700" v-if="selectedRegionInfo.latitude && selectedRegionInfo.longitude">
-                          <strong class="text-blue-800">Coordinates:</strong><br>
-                          {{ selectedRegionInfo.latitude }}, {{ selectedRegionInfo.longitude }}
-                        </p>
-                        <p class="text-sm text-blue-700" v-else>
-                          <strong class="text-blue-800">Coordinates:</strong><br>
-                          <span class="text-orange-600">Coordinates not available - please contact administrator</span>
-                        </p>
-                        <div class="pt-2">
-                          <p class="text-xs text-blue-600">
-                            <strong>Note:</strong> This is your selected pick-up location. 
-                            Please bring your packages to this branch address.
-                          </p>
-                        </div>
-                      </div>
-                      <div class="mt-4">
-                        <LeafletMap
-                          v-if="selectedRegionInfo.latitude && selectedRegionInfo.longitude"
-                          :latitude="selectedRegionInfo.latitude"
-                          :longitude="selectedRegionInfo.longitude"
-                          :region-name="selectedRegionInfo.name"
-                          :zoom="15"
-                          height="200px"
-                        />
-                        <div v-else class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 h-48 flex items-center justify-center">
-                          <div class="text-center">
-                            <svg class="w-8 h-8 mx-auto mb-2 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                            </svg>
-                            <p class="text-yellow-700 font-medium">Map Unavailable</p>
-                            <p class="text-yellow-600 text-sm">Location coordinates not configured</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+            <div v-if="selectedRegionInfo" class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h3 class="font-semibold text-blue-800 mb-3 flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                {{ selectedRegionInfo.name || 'Branch' }} Information
+              </h3>
+              <div class="space-y-2">
+                <p class="text-sm text-blue-700">
+                  <strong class="text-blue-800">Address:</strong><br>
+                  {{ selectedRegionInfo.warehouse_address || 'Address information not available' }}
+                </p>
+                <p class="text-sm text-blue-700" v-if="selectedRegionInfo.latitude && selectedRegionInfo.longitude">
+                  <strong class="text-blue-800">Coordinates:</strong><br>
+                  {{ selectedRegionInfo.latitude }}, {{ selectedRegionInfo.longitude }}
+                </p>
+                <p class="text-sm text-blue-700" v-else>
+                  <strong class="text-blue-800">Coordinates:</strong><br>
+                  <span class="text-orange-600">Coordinates not available - please contact administrator</span>
+                </p>
+                <div class="pt-2">
+                  <p class="text-xs text-blue-600">
+                    <strong>Note:</strong> This is your selected pick-up location. 
+                    Please bring your packages to this branch address.
+                  </p>
+                </div>
+              </div>
+              <div class="mt-4">
+                <LeafletMap
+                  v-if="selectedRegionInfo.latitude && selectedRegionInfo.longitude"
+                  :latitude="selectedRegionInfo.latitude"
+                  :longitude="selectedRegionInfo.longitude"
+                  :region-name="selectedRegionInfo.name"
+                  :zoom="15"
+                  height="200px"
+                />
+                <div v-else class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 h-48 flex items-center justify-center">
+                  <div class="text-center">
+                    <svg class="w-8 h-8 mx-auto mb-2 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <p class="text-yellow-700 font-medium">Map Unavailable</p>
+                    <p class="text-yellow-600 text-sm">Location coordinates not configured</p>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
                 <!-- Navigation -->
                 <div class="flex justify-end pt-6">
@@ -2183,68 +2186,67 @@ watch(() => form.payment_type, (val) => {
                   <!-- Right Column - Drop-off Region & Map -->
                   <div class="lg:col-span-1 space-y-6">
                     <!-- Drop-off Region -->
-                    <div>
-                      <InputLabel value="Select Drop-off Region *" />
-                      <SelectInput
-                        v-model="form.drop_off_region_id"
-                        class="mt-1 block w-full"
-                        :class="{ 'border-red-500': form.errors.drop_off_region_id }"
-                        :options="filteredDropoffRegions"
-                        placeholder=""
-                      />
-                      <InputError :message="form.errors.drop_off_region_id" />
-                    </div>
-
-                    <!-- Drop-off Region Information Display -->
-                    <div v-if="selectedDropoffRegionInfo" class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <h3 class="font-semibold text-blue-800 mb-3 flex items-center">
-                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        </svg>
-                        {{ selectedDropoffRegionInfo.name || 'Branch' }} Information
-                      </h3>
-                      <div class="space-y-2">
-                        <p class="text-sm text-blue-700">
-                          <strong class="text-blue-800">Address:</strong><br>
-                          {{ selectedDropoffRegionInfo.warehouse_address || 'Address information not available' }}
-                        </p>
-                        <p class="text-sm text-blue-700" v-if="selectedDropoffRegionInfo.latitude && selectedDropoffRegionInfo.longitude">
-                          <strong class="text-blue-800">Coordinates:</strong><br>
-                          {{ selectedDropoffRegionInfo.latitude }}, {{ selectedDropoffRegionInfo.longitude }}
-                        </p>
-                        <p class="text-sm text-blue-700" v-else>
-                          <strong class="text-blue-800">Coordinates:</strong><br>
-                          <span class="text-orange-600">Coordinates not available - please contact administrator</span>
-                        </p>
-                        <div class="pt-2">
-                          <p class="text-xs text-blue-600">
-                            <strong>Note:</strong> This is the selected drop-off location for your packages.
-                          </p>
-                        </div>
-                      </div>
-                      <div class="mt-4">
-                        <LeafletMap
-                          v-if="selectedDropoffRegionInfo.latitude && selectedDropoffRegionInfo.longitude"
-                          :latitude="selectedDropoffRegionInfo.latitude"
-                          :longitude="selectedDropoffRegionInfo.longitude"
-                          :region-name="selectedDropoffRegionInfo.name"
-                          :zoom="15"
-                          height="200px"
-                        />
-                        <div v-else class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 h-48 flex items-center justify-center">
-                          <div class="text-center">
-                            <svg class="w-8 h-8 mx-auto mb-2 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                            </svg>
-                            <p class="text-yellow-700 font-medium">Map Unavailable</p>
-                            <p class="text-yellow-600 text-sm">Location coordinates not configured</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                   <div>
+              <InputLabel value="Select Drop-off Region *" />
+              <SelectInput
+                v-model="form.drop_off_region_id"
+                class="mt-1 block w-full"
+                :class="{ 'border-red-500': form.errors.drop_off_region_id }"
+                :options="filteredDropoffRegions"
+                placeholder=""
+              />
+              <InputError :message="form.errors.drop_off_region_id" />
+            </div>
+                  <!-- Drop-off Region Information Display -->
+            <div v-if="selectedDropoffRegionInfo" class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h3 class="font-semibold text-blue-800 mb-3 flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                {{ selectedDropoffRegionInfo.name || 'Branch' }} Information
+              </h3>
+              <div class="space-y-2">
+                <p class="text-sm text-blue-700">
+                  <strong class="text-blue-800">Address:</strong><br>
+                  {{ selectedDropoffRegionInfo.warehouse_address || 'Address information not available' }}
+                </p>
+                <p class="text-sm text-blue-700" v-if="selectedDropoffRegionInfo.latitude && selectedDropoffRegionInfo.longitude">
+                  <strong class="text-blue-800">Coordinates:</strong><br>
+                  {{ selectedDropoffRegionInfo.latitude }}, {{ selectedDropoffRegionInfo.longitude }}
+                </p>
+                <p class="text-sm text-blue-700" v-else>
+                  <strong class="text-blue-800">Coordinates:</strong><br>
+                  <span class="text-orange-600">Coordinates not available - please contact administrator</span>
+                </p>
+                <div class="pt-2">
+                  <p class="text-xs text-blue-600">
+                    <strong>Note:</strong> This is the selected drop-off location for your packages.
+                  </p>
+                </div>
+              </div>
+              <div class="mt-4">
+                <LeafletMap
+                  v-if="selectedDropoffRegionInfo.latitude && selectedDropoffRegionInfo.longitude"
+                  :latitude="selectedDropoffRegionInfo.latitude"
+                  :longitude="selectedDropoffRegionInfo.longitude"
+                  :region-name="selectedDropoffRegionInfo.name"
+                  :zoom="15"
+                  height="200px"
+                />
+                <div v-else class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 h-48 flex items-center justify-center">
+                  <div class="text-center">
+                    <svg class="w-8 h-8 mx-auto mb-2 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <p class="text-yellow-700 font-medium">Map Unavailable</p>
+                    <p class="text-yellow-600 text-sm">Location coordinates not configured</p>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
                 <!-- Navigation -->
                 <div class="flex justify-between pt-6">

@@ -11,20 +11,20 @@ import trusticon from '@/assets/trusticon.png';
 import peopleicon from '@/assets/peopleicon.png';
 import FounderImage from '@/assets/nesty.jpg';
 
-
 </script>
 
 <template>
   <GuestLayout>
   <div
+    v-motion-fade-visible :duration="600"
       @click="toggleTruckPop"
-class="relative w-full bg-cover bg-[position:70%_30%] bg-no-repeat text-white py-32 px-6 md:px-12 lg:px-20 cursor-pointer"      :style="`background-image: url(${services1Image})`"
+      class="relative w-full bg-cover bg-[position:70%_30%] bg-no-repeat text-white py-32 px-6 md:px-12 lg:px-20 cursor-pointer"
+      :style="`background-image: url(${services1Image})`"
     >
       <div class="absolute inset-0 bg-black/50"></div>
       <div class="absolute inset-0 from-black/90 to-transparent"></div>
       <div class="relative z-10  max-w-[90%] xl:max-w-[1280px] mx-auto">
-      
-   <motion preset="slideVisibleLeft" :duration="900">
+      <motion preset="slideVisibleLeft" :duration="900">
         <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold tracking-tight drop-shadow-lg">
           We <span class="text-green-500">simplify </span> your logistics.
         </h1>
@@ -45,7 +45,7 @@ class="relative w-full bg-cover bg-[position:70%_30%] bg-no-repeat text-white py
     <h3 class="text-4xl font-extrabold text-green-700 mb-4 drop-shadow-md">
       | About Infinitrix
     </h3>
-    <p class="text-xl font-semibold text-green-700 mb-6">
+    <p class="text-xl text-gray-700 mb-6">
       Speed, reliability, and innovation—Infinitrix leads modern logistics with purpose.
     </p>
     <p class="text-gray-700 text-base leading-relaxed mb-4">
@@ -57,22 +57,22 @@ class="relative w-full bg-cover bg-[position:70%_30%] bg-no-repeat text-white py
   </div>
 
   <!-- Image -->
-  <div>
+  <div v-motion-fade-visible :duration="600">
     <img :src="truck2Image" alt="Infinitrix Overview Image" class="w-full rounded shadow-md object-cover" />
   </div>
 </div>
 
 <!-- Our Story  -->
-<div class="mt-24 max-w-7xl mx-auto px-6 md:px-12 lg:px-20 grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
+<div class="mt-24 mb-24 max-w-7xl mx-auto px-6 md:px-12 lg:px-20 grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
   <!-- Image -->
-  <div>
+  <div v-motion-fade-visible :duration="600">
     <img :src="sack1Image" alt="sack1 Image" class="w-full rounded shadow-md object-cover" />
   </div>
 
   <!-- Text Content -->
   <div>
-    <h3 class="text-4xl font-extrabold text-gray-900 mb-4">
-      Our Story
+    <h3 class="text-4xl font-extrabold text-green-700 mb-4 drop-shadow-md">
+      | Our Story
     </h3>
     <p class="text-xl text-gray-700 mb-6">
       Infinitrix Express Cargo began with a simple vision: to create a reliable and efficient solution for moving goods.
@@ -86,109 +86,137 @@ class="relative w-full bg-cover bg-[position:70%_30%] bg-no-repeat text-white py
   </div>
 </div>
 
-
-    <!-- Mission and Values -->
-<div class="mt-16 grid grid-cols-1 md:grid-cols-2 gap-8">
-  <!-- Mission -->
-  <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-gray-900">🚀 Our Mission</h3>
-    <p class="mt-4 text-gray-600 max-w-md">
-      To revolutionize nationwide logistics with fast, transparent, and secure delivery services—while keeping things efficient, human, and just a little bit fun.
-    </p>
-  </div>
-
-  <!-- Values -->
-  <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-gray-900">💡 Our Values</h3>
-    <ul class="mt-4 list-disc list-inside text-gray-600 space-y-1 text-left max-w-md">
-      <li>Customer-Centered Innovation</li>
-      <li>Transparency & Trust</li>
-      <li>Operational Excellence</li>
-      <li>Team Culture with Personality</li>
-    </ul>
-  </div>
+<div class="relative flex flex-col items-center justify-center text-center pt-1 pb-[15rem] sm:pb-[20rem] md:pb-[20rem] lg:pb-[30rem] overflow-hidden"> 
+  <p class="max-w-3xl text-gray-700 text-base sm:text-lg md:text-xl mb-5 px-4 md:px-6"> 
+    "Infinitrix Express Cargo is committed to delivering reliable land freight services that ensure every package reaches its destination safely and on time. We aim to simplify logistics through digital solutions, strengthen customer trust through transparency and care, and continuously improve our operations to support the growing needs of our clients." 
+  </p> 
+  <h1 class="font-black text-[5rem] sm:text-[6rem] md:text-[9rem] lg:text-[11rem] xl:text-[12rem] leading-none bg-gradient-to-t from-green-900 to-green-300 bg-clip-text text-transparent select-none z-0"> 
+    OUR MISSION 
+  </h1> 
+  <img :src="missionIcon" alt="Our Mission Icon" class="absolute bottom-10 sm:bottom-16 md:bottom-20 h-[15rem] sm:h-[20rem] md:h-[25rem] lg:h-[30rem] z-10 pointer-events-none mb-0 sm:mb-10 md:mb-20 lg:mb-10" /> 
+</div> 
+<div class="relative flex flex-col items-center justify-center text-center pt-1 pb-[15rem] sm:pb-[20rem] md:pb-[20rem] lg:pb-[30rem] overflow-hidden"> 
+  <p class="max-w-3xl text-gray-700 text-base sm:text-lg md:text-xl mb-5 px-4 md:px-6"> "To become a trusted logistics partner in the Philippines by providing fast, secure, and convenient cargo delivery services that connect communities and businesses through innovation and dedication." </p> 
+  <h1 class="font-black text-[6rem] sm:text-[6rem] md:text-[9rem] lg:text-[11rem] xl:text-[12rem] leading-none bg-gradient-to-t from-green-900 to-green-300 bg-clip-text text-transparent select-none z-0"> OUR VISION </h1> 
+  <img :src="visionIcon" alt="Our Vision Icon" class="absolute bottom-10 sm:bottom-16 md:bottom-20 h-[15rem] sm:h-[20rem] md:h-[25rem] lg:h-[30rem] z-10 pointer-events-none mb-0 sm:mb-10 md:mb-20 lg:mb-10" /> 
 </div>
 
+<!-- Section Title -->
+<h2
+  class="text-3xl sm:text-4xl md:text-5xl font-bold text-green-700 uppercase tracking-wide mb-6 md:mb-10 drop-shadow-md text-center"
+  v-motion-slide-visible-right
+  :duration="600"
+>
+  Our Core Values
+</h2>
 
+<!-- Cards Container -->
+<div class="flex flex-wrap justify-center items-center gap-6 sm:gap-8 md:gap-10 bg-gray-100 py-10">
 
-
-
-
-<h3 class="text-3xl pt-20 text-center font-bold text-gray-900">Our Core Values</h3>
-<div class="mt-16 grid grid-cols-1 md:grid-cols-2 gap-8">
-
-  <!-- Customer-Centered Innovation -->
-  <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-gray-900">Customer-Centered Innovation</h3>
-    <p class="mt-4 text-gray-600 max-w-md">
-      We relentlessly innovate, always with our customers' evolving needs at the forefront, to deliver solutions that simplify and enhance their logistics experience.
-    </p>
-  </div>
-
-  <!-- Values -->
-  <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-gray-900">Transparency & Trust</h3>
-    <p class="mt-4 text-gray-600 max-w-md">
-      Open communication and unwavering integrity are the cornerstones of our relationships, fostering complete trust with every interaction.
-    </p>
-  </div>
-
-  <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-gray-900">Operational Excellence</h3>
-    <p class="mt-4 text-gray-600 max-w-md">
-      We commit to the highest standards in every operation, ensuring efficiency, accuracy, and continuous improvement across our entire network.
-    </p>
-  </div>
-
-  <!-- Values -->
-  <div class="bg-gray-50 p-6 rounded-lg shadow-md hover:shadow-lg transition text-center flex flex-col items-center">
-    <h3 class="text-2xl font-semibold text-gray-900">Team Culture with Personality</h3>
-    <p class="mt-4 text-gray-600 max-w-md">
-      We foster a vibrant and supportive team environment where diverse perspectives are celebrated, encouraging creativity and collaboration.
-    </p>
-  </div>
-</div>
-
-    <!-- Team Section -->
-  <div class="mt-20 text-center">
-    <h3 class="text-3xl font-bold text-gray-900">Meet the Leadership Team</h3>
-    <p class="mt-4 text-lg text-gray-600 max-w-xl mx-auto">
-      Our team blends industry experience with creative thinking, ensuring your deliveries run on time—and with a touch of personality.
-    </p>
-
-    <!-- CEO - Carlos Teng -->
-    <div class="mt-16 text-center max-w-2xl mx-auto">
-      <div class="relative inline-block">
-        <div class="mx-auto h-48 w-48 rounded-full shadow-xl bg-gray-100 flex items-center justify-center border-4 border-green-500">
-          <svg class="h-20 w-20 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-          </svg>
-        </div>
-        <div class="absolute -top-2 -right-2 bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-full">
-          CEO
-        </div>
-      </div>
-      <h4 class="mt-6 text-2xl font-bold text-gray-900">Carlos Teng</h4>
-      <p class="text-lg text-green-600 font-semibold">Chief Executive Officer</p>
-      <p class="text-sm text-gray-500 mt-2 max-w-md mx-auto">
-        Leading the strategic vision and overall direction of Infinitrix Logistics
-      </p>
+  <!-- Card 1 -->
+  <div
+    v-motion
+    :initial="{ rotateY: 0 }"
+    :hovered="{ rotateY: 180 }"
+    :transition="{ duration: 5.0, ease: 'easeInOut' }"
+    class="relative w-72 sm:w-80 h-[25rem] sm:h-[28rem] md:h-[30rem] [transform-style:preserve-3d] cursor-pointer"
+  >
+    <!-- Front -->
+    <div class="absolute inset-0 flex flex-col items-center justify-center bg-white rounded-xl shadow-lg [backface-visibility:hidden] p-4">
+      <img :src="customerfocus" alt="Customer Focus Icon" class="h-34 sm:h-42 md:h-50 object-contain" />
+      <h2 class="absolute bottom-16 text-lg sm:text-xl md:text-2xl font-semibold text-green-700 drop-shadow-md">Customer-Centered</h2>
+      <h2 class="absolute bottom-8 text-lg sm:text-xl md:text-2xl font-semibold text-green-700 drop-shadow-md">Innovation</h2>
     </div>
 
-    <!-- Operations Manager - Nesty Teng -->
-    <div class="mt-12 text-center max-w-2xl mx-auto">
-      <img 
-        :src="FounderImage" 
-        alt="Operations Manager" 
-        class="mx-auto h-40 w-40 rounded-full shadow-lg object-cover border-4 border-blue-500" 
-      />
-      <h4 class="mt-4 text-xl font-bold text-gray-900">Nesty Teng</h4>
-      <p class="text-md font-semibold text-blue-600">Operations Manager</p>
-     
+    <!-- Back -->
+    <div class="absolute inset-0 flex items-center justify-center bg-green-600 rounded-xl text-white [backface-visibility:hidden] [transform:rotateY(180deg)] p-4">
+      <p class="text-center text-sm sm:text-base md:text-lg">We relentlessly innovate, always with our customers' evolving needs at the forefront, to deliver solutions that simplify and enhance their logistics experience.</p>
     </div>
   </div>
 
-</GuestLayout>
+  <!-- Card 2 -->
+  <div
+    v-motion
+    :initial="{ rotateY: 0 }"
+    :hovered="{ rotateY: 180 }"
+    :transition="{ duration: 5.0, ease: 'easeInOut' }"
+    class="relative w-72 sm:w-80 h-[25rem] sm:h-[28rem] md:h-[30rem] [transform-style:preserve-3d] cursor-pointer"
+  >
+    <div class="absolute inset-0 flex flex-col items-center justify-center bg-white rounded-xl shadow-lg [backface-visibility:hidden] p-4">
+      <img :src="operationfocus" alt="Operational Excellence Icon" class="h-34 sm:h-42 md:h-50 object-contain" />
+      <h2 class="absolute bottom-12 text-lg sm:text-xl md:text-2xl font-semibold text-green-700 drop-shadow-md">Operational Excellence</h2>
+    </div>
+
+    <div class="absolute inset-0 flex items-center justify-center bg-green-600 rounded-xl text-white [backface-visibility:hidden] [transform:rotateY(180deg)] p-4">
+      <p class="text-center text-sm sm:text-base md:text-lg">We commit to the highest standards in every operation, ensuring effectiveness and continuous improvement across our entire network.</p>
+    </div>
+  </div>
+
+  <!-- Card 3 -->
+  <div
+    v-motion
+    :initial="{ rotateY: 0 }"
+    :hovered="{ rotateY: 180 }"
+    :transition="{ duration: 5.0, ease: 'easeInOut' }"
+    class="relative w-72 sm:w-80 h-[25rem] sm:h-[28rem] md:h-[30rem] [transform-style:preserve-3d] cursor-pointer"
+  >
+    <div class="absolute inset-0 flex flex-col items-center justify-center bg-white rounded-xl shadow-lg [backface-visibility:hidden] p-4">
+      <img :src="trusticon" alt="Transparency and Trust Icon" class="h-34 sm:h-42 md:h-50 object-contain" />
+      <h2 class="absolute bottom-12 text-lg sm:text-xl md:text-2xl font-semibold text-green-700 drop-shadow-md">Transparency & Trust</h2>
+    </div>
+
+    <div class="absolute inset-0 flex items-center justify-center bg-green-600 rounded-xl text-white [backface-visibility:hidden] [transform:rotateY(180deg)] p-4">
+      <p class="text-center text-sm sm:text-base md:text-lg">Open communication and integrity build strong, lasting relationships founded on trust.</p>
+    </div>
+  </div>
+
+  <!-- Card 4 -->
+  <div
+    v-motion
+    :initial="{ rotateY: 0 }"
+    :hovered="{ rotateY: 180 }"
+    :transition="{ duration: 5.0, ease: 'easeInOut' }"
+    class="relative w-72 sm:w-80 h-[25rem] sm:h-[28rem] md:h-[30rem] [transform-style:preserve-3d] cursor-pointer"
+  >
+    <div class="absolute inset-0 flex flex-col items-center justify-center bg-white rounded-xl shadow-lg [backface-visibility:hidden] p-4">
+      <img :src="peopleicon" alt="Team Culture Icon" class="h-34 sm:h-42 md:h-50 object-contain" />
+      <h2 class="absolute bottom-16 text-lg sm:text-xl md:text-2xl font-semibold text-green-700 drop-shadow-md">Team Culture with</h2>
+      <h2 class="absolute bottom-8 text-lg sm:text-xl md:text-2xl font-semibold text-green-700 drop-shadow-md">Personality</h2>
+    </div>
+
+    <div class="absolute inset-0 flex items-center justify-center bg-green-600 rounded-xl text-white [backface-visibility:hidden] [transform:rotateY(180deg)] p-4">
+      <p class="text-center text-sm sm:text-base md:text-lg">We create a positive, inclusive team environment where collaboration and creativity thrive.</p>
+    </div>
+  </div>
+</div>
+
+             <!-- Team Section -->
+        <div class="mt-20 text-center">
+          <h3 class="text-3xl font-bold text-green-700">Meet the Leadership Team</h3>
+          <p class="mt-4 text-lg text-gray-600 max-w-xl mx-auto">
+            Our team blends industry experience with creative thinking, ensuring your deliveries run on time—and with a touch of personality.
+          </p>
+
+          <div class="flex justify-center items-center mt-10 mx-auto gap-20 flex-wrap">
+            <!-- Team Member 1 -->
+            <div class="text-center">
+              <div class="mx-auto h-32 w-32 rounded-full shadow-md bg-gray-100 flex items-center justify-center border-4 border-green-500">
+                <svg class="h-16 w-16 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                </svg>
+              </div>
+              <h4 class="mt-4 text-lg font-semibold text-gray-900">Carlos Teng</h4>
+              <p class="text-sm text-gray-600">Chief Executive Officer</p>
+            </div>
+
+            <!-- Team Member 2 -->
+            <div class="text-center">
+              <img :src="FounderImage" alt="Operation Manager" class="mx-auto h-32 w-32 rounded-full shadow-md object-cover border-4 border-blue-500" />
+              <h4 class="mt-4 text-lg font-semibold text-gray-900">Nesty Teng</h4>
+              <p class="text-sm text-gray-600">Operation Manager</p>
+            </div> 
+          </div>
+        </div>
+      
+  </GuestLayout>
 </template>
-
-
