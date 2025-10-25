@@ -226,6 +226,144 @@ Route::get('/debug-package-update', function(Request $request) {
     ]);
 });
 
+// Add this to your routes/web.php
+Route::get('/test-package-direct/{packageId}', function($packageId) {
+    $driver = auth()->user();
+    
+    if (!$driver) {
+        return "Please log in first";
+    }
+
+    $package = \App\Models\Package::find($packageId);
+    
+    if (!$package) {
+        return "Package {$packageId} not found";
+    }
+
+    echo "<h1>Testing Package Update</h1>";
+    echo "<p>Package: {$package->item_code} (ID: {$package->id})</p>";
+    echo "<p>Current Status: {$package->status}</p>";
+    echo "<p>Driver: {$driver->name} (Region: {$driver->current_region_id})</p>";
+
+    try {
+        // Test updating to damaged_in_transit
+        echo "<h3>Updating to 'damaged_in_transit'...</h3>";
+        
+        $package->reportIncident(
+            'damaged_in_transit',
+            $driver,
+            'Test from direct route'
+        );
+        
+        $package->refresh();
+        
+        echo "<p style='color: green;'><strong>SUCCESS!</strong></p>";
+        echo "<p>New Status: {$package->status}</p>";
+        echo "<p>Incident Reported At: {$package->incident_reported_at}</p>";
+        echo "<p>Incident Reported By: {$package->incident_reported_by}</p>";
+        
+    } catch (\Exception $e) {
+        echo "<p style='color: red;'><strong>ERROR:</strong> {$e->getMessage()}</p>";
+        echo "<pre>Error details: " . $e->getTraceAsString() . "</pre>";
+    }
+
+    echo "<hr>";
+    echo "<a href='/debug-package-update'>Back to Debug</a>";
+});
+
+Route::get('/simple-test-form', function() {
+    return '
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Simple Package Test</title>
+        <style>
+            body { font-family: Arial; margin: 40px; }
+            .box { border: 1px solid #ccc; padding: 20px; margin: 10px 0; }
+            .success { background: #d4ffd4; }
+            .error { background: #ffd4d4; }
+        </style>
+    </head>
+    <body>
+        <h1>Simple Package Update Test</h1>
+        
+        <div class="box">
+            <h3>Test 1: Quick Update (No Form)</h3>
+            <p>Package ID: 183</p>
+            <a href="/test-package-direct/183" style="padding: 10px; background: blue; color: white; text-decoration: none;">
+                🚀 Update Package 183 to Damaged
+            </a>
+        </div>
+
+        <div class="box">
+            <h3>Test 2: Simple Form</h3>
+            <form action="/driver/packages/update-destination-status" method="POST">
+                <input type="hidden" name="_token" value="' . csrf_token() . '">
+                
+                <label>Package ID:</label><br>
+                <input type="number" name="package_updates[0][package_id]" value="183" required><br><br>
+                
+                <label>Status:</label><br>
+                <select name="package_updates[0][status]" required>
+                    <option value="damaged_in_transit" selected>Damaged in Transit</option>
+                    <option value="lost_in_transit">Lost in Transit</option>
+                    <option value="delivered">Delivered</option>
+                </select><br><br>
+                
+                <label>Remarks:</label><br>
+                <textarea name="package_updates[0][remarks]">Test from simple form</textarea><br><br>
+                
+                <button type="submit" style="padding: 10px 20px; background: green; color: white;">
+                    Submit Form
+                </button>
+            </form>
+        </div>
+
+        <div class="box">
+            <h3>Current Status</h3>
+            <a href="/debug-package-update">Check Package Status</a>
+        </div>
+    </body>
+    </html>
+    ';
+});
+
+// Temporary CSRF bypass for testing
+Route::post('/test-package-no-csrf', function(Request $request) {
+    \Log::info("TEST without CSRF", $request->all());
+    
+    $driver = auth()->user();
+    $packageId = $request->input('package_updates.0.package_id');
+    $status = $request->input('package_updates.0.status');
+    
+    $package = \App\Models\Package::find($packageId);
+    
+    if (!$package) {
+        return response()->json(['error' => 'Package not found'], 404);
+    }
+    
+    try {
+        if (in_array($status, ['damaged_in_transit', 'lost_in_transit'])) {
+            $package->reportIncident($status, $driver, 'Test without CSRF');
+        } else {
+            $package->updateStatus($status, $driver, 'Test without CSRF');
+        }
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Package updated via no-CSRF route',
+            'package_id' => $package->id,
+            'new_status' => $package->refresh()->status
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ], 500);
+    }
+})->withoutMiddleware(['verifyCsrfToken']);
+
 // Temporary route without CSRF protection for testing
 Route::post('/test-package-update-direct', function(Request $request) {
     \Log::info("🔄 DIRECT TEST: Package update attempt", $request->all());
