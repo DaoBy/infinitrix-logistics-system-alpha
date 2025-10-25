@@ -226,6 +226,73 @@ Route::get('/debug-package-update', function(Request $request) {
     ]);
 });
 
+// Temporary route without CSRF protection for testing
+Route::post('/test-package-update-direct', function(Request $request) {
+    \Log::info("🔄 DIRECT TEST: Package update attempt", $request->all());
+    
+    $driver = auth()->user();
+    $packageId = $request->package_id;
+    $status = $request->status;
+    
+    $package = \App\Models\Package::find($packageId);
+    
+    if (!$package) {
+        return response()->json(['error' => 'Package not found'], 404);
+    }
+    
+    try {
+        \Log::info("🔄 DIRECT TEST: Updating package", [
+            'package_id' => $packageId,
+            'old_status' => $package->status,
+            'new_status' => $status,
+            'driver_id' => $driver->id
+        ]);
+        
+        if (in_array($status, ['damaged_in_transit', 'lost_in_transit'])) {
+            $package->reportIncident(
+                $status,
+                $driver,
+                'Test from direct route'
+            );
+        } else {
+            $package->updateStatus(
+                $status, 
+                $driver, 
+                'Test from direct route'
+            );
+        }
+        
+        $package->refresh();
+        
+        \Log::info("✅ DIRECT TEST: Update successful", [
+            'package_id' => $packageId,
+            'new_status' => $package->status
+        ]);
+        
+        return response()->json([
+            'success' => true,
+            'package' => [
+                'id' => $package->id,
+                'old_status' => $package->getOriginal('status'),
+                'new_status' => $package->status,
+                'incident_reported_at' => $package->incident_reported_at,
+            ]
+        ]);
+        
+    } catch (\Exception $e) {
+        \Log::error('❌ DIRECT TEST: Update failed', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ], 500);
+    }
+})->withoutMiddleware(['web']); // Temporarily disable middleware for testing
+
+
 // Test route to simulate package update
 Route::get('/test-package-update/{packageId}', function($packageId) {
     $driver = auth()->user();
