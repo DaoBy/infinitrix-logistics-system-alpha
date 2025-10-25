@@ -118,6 +118,242 @@ Route::get('/debug-new-assignment', function() {
         ]
     ]);
 });
+
+
+// Add this to your routes/web.php file
+Route::get('/debug-package-update', function(Request $request) {
+    $driver = auth()->user();
+    
+    if (!$driver) {
+        return response()->json(['error' => 'No authenticated user'], 401);
+    }
+
+    // Recreate the validation logic here
+    $isValidDriverPackage = function($package, $driver) {
+        if (!$package) return false;
+        
+        $isDriverPackage = \App\Models\Package::where('id', $package->id)
+            ->whereHas('deliveryRequest.deliveryOrder', function($query) use ($driver) {
+                $query->where('driver_id', $driver->id)
+                      ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
+            })
+            ->exists();
+            
+        if (!$isDriverPackage) return false;
+        
+        $isAtDestination = $package->deliveryRequest && 
+                          $package->deliveryRequest->drop_off_region_id == $driver->current_region_id;
+                          
+        if (!$isAtDestination) return false;
+        
+        return $package->status === 'in_transit';
+    };
+
+    // Get packages ready for status update
+    $readyPackages = \App\Models\Package::with([
+            'currentRegion',
+            'deliveryRequest.dropOffRegion',
+            'deliveryRequest.deliveryOrder'
+        ])
+        ->whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
+            $query->where('driver_id', $driver->id)
+                ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
+        })
+        ->where('status', 'in_transit')
+        ->whereHas('deliveryRequest', function($query) use ($driver) {
+            $query->where('drop_off_region_id', $driver->current_region_id);
+        })
+        ->get();
+
+    // Test validation on first package
+    $testResults = [];
+    if ($readyPackages->count() > 0) {
+        $testPackage = $readyPackages->first();
+        
+        $testResults['validation'] = [
+            'is_valid_driver_package' => $isValidDriverPackage($testPackage, $driver),
+            'conditions_breakdown' => [
+                'package_exists' => !is_null($testPackage),
+                'is_driver_package' => \App\Models\Package::where('id', $testPackage->id)
+                    ->whereHas('deliveryRequest.deliveryOrder', function($query) use ($driver) {
+                        $query->where('driver_id', $driver->id)
+                              ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
+                    })->exists(),
+                'is_at_destination' => $testPackage->deliveryRequest && 
+                    $testPackage->deliveryRequest->drop_off_region_id == $driver->current_region_id,
+                'status_in_transit' => $testPackage->status === 'in_transit',
+            ]
+        ];
+    }
+
+    return response()->json([
+        'debug_info' => [
+            'timestamp' => now()->toDateTimeString(),
+            'environment' => app()->environment(),
+            'driver' => [
+                'id' => $driver->id,
+                'name' => $driver->name,
+                'current_region_id' => $driver->current_region_id,
+                'current_region_name' => $driver->currentRegion->name ?? 'N/A',
+            ],
+        ],
+        
+        'packages_analysis' => [
+            'total_ready_for_update' => $readyPackages->count(),
+            'packages_list' => $readyPackages->map(function($pkg) use ($driver, $isValidDriverPackage) {
+                return [
+                    'id' => $pkg->id,
+                    'item_code' => $pkg->item_code,
+                    'status' => $pkg->status,
+                    'current_region' => $pkg->currentRegion->name ?? 'N/A',
+                    'destination_region' => $pkg->deliveryRequest->dropOffRegion->name ?? 'N/A',
+                    'regions_match' => $pkg->current_region_id == $pkg->deliveryRequest->drop_off_region_id,
+                    'is_valid_for_update' => $isValidDriverPackage($pkg, $driver),
+                    'delivery_order_status' => $pkg->deliveryRequest->deliveryOrder->status ?? 'N/A',
+                ];
+            }),
+        ],
+
+        'validation_test' => $testResults,
+
+        'common_issues_checklist' => [
+            'packages_available_for_update' => $readyPackages->count() > 0,
+            'all_packages_valid' => $readyPackages->count() > 0 ? 
+                $readyPackages->every(function($pkg) use ($isValidDriverPackage, $driver) {
+                    return $isValidDriverPackage($pkg, $driver);
+                }) : false,
+        ],
+    ]);
+});
+
+// Test route to simulate package update
+Route::get('/test-package-update/{packageId}', function($packageId) {
+    $driver = auth()->user();
+    
+    if (!$driver) {
+        return response()->json(['error' => 'No authenticated user'], 401);
+    }
+
+    $package = \App\Models\Package::with(['deliveryRequest.deliveryOrder'])->find($packageId);
+    
+    if (!$package) {
+        return response()->json(['error' => 'Package not found'], 404);
+    }
+
+    // Test the validation method
+    $isValid = app(\App\Http\Controllers\DriverController::class)->isValidDriverPackage($package, $driver);
+    
+    // Test direct model method
+    $testResults = [];
+    
+    try {
+        // Test incident reporting
+        $package->reportIncident(
+            'damaged_in_transit',
+            $driver,
+            'Test incident from debug route'
+        );
+        
+        $package->refresh();
+        
+        $testResults['incident_report'] = [
+            'success' => true,
+            'new_status' => $package->status,
+            'incident_reported_at' => $package->incident_reported_at,
+            'incident_reported_by' => $package->incident_reported_by,
+        ];
+    } catch (\Exception $e) {
+        $testResults['incident_report'] = [
+            'success' => false,
+            'error' => $e->getMessage(),
+        ];
+    }
+
+    return response()->json([
+        'package_info' => [
+            'id' => $package->id,
+            'item_code' => $package->item_code,
+            'original_status' => $package->getOriginal('status'),
+            'current_status' => $package->status,
+            'current_region_id' => $package->current_region_id,
+            'driver_region_id' => $driver->current_region_id,
+        ],
+        'validation_check' => [
+            'is_valid_driver_package' => $isValid,
+            'conditions' => [
+                'has_delivery_request' => !is_null($package->deliveryRequest),
+                'has_delivery_order' => !is_null($package->deliveryRequest->deliveryOrder ?? null),
+                'driver_matches' => $package->deliveryRequest->deliveryOrder->driver_id ?? null === $driver->id,
+                'regions_match' => $package->deliveryRequest->drop_off_region_id == $driver->current_region_id,
+                'status_in_transit' => $package->status === 'in_transit',
+            ]
+        ],
+        'test_results' => $testResults,
+    ]);
+});
+
+// Route to check form data submission
+Route::get('/debug-form-submission', function(Request $request) {
+    return view('debug-form');
+});
+
+// Simple HTML form for testing
+Route::post('/test-package-update-form', function(Request $request) {
+    $validated = $request->validate([
+        'package_updates' => 'required|array',
+        'package_updates.*.package_id' => 'required|exists:packages,id',
+        'package_updates.*.status' => 'required|in:delivered,damaged_in_transit,lost_in_transit',
+        'package_updates.*.remarks' => 'nullable|string|max:500',
+    ]);
+
+    $driver = auth()->user();
+    
+    $results = [];
+    
+    foreach ($validated['package_updates'] as $update) {
+        $package = \App\Models\Package::find($update['package_id']);
+        
+        try {
+            if (in_array($update['status'], ['damaged_in_transit', 'lost_in_transit'])) {
+                $package->reportIncident(
+                    $update['status'],
+                    $driver,
+                    $update['remarks'] ?? 'Test from form'
+                );
+            } else {
+                $package->updateStatus(
+                    $update['status'], 
+                    $driver, 
+                    $update['remarks'] ?? 'Test from form'
+                );
+            }
+            
+            $package->refresh();
+            
+            $results[] = [
+                'package_id' => $package->id,
+                'success' => true,
+                'new_status' => $package->status,
+                'message' => 'Update successful'
+            ];
+        } catch (\Exception $e) {
+            $results[] = [
+                'package_id' => $package->id,
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    return response()->json([
+        'form_data_received' => $validated,
+        'update_results' => $results
+    ]);
+});
+
+
+
+
 // Add to web.php
 Route::get('/debug-all-assignments', function() {
     $assignments = \App\Models\DriverTruckAssignment::with(['driver', 'truck'])
