@@ -188,12 +188,7 @@
   </div>
 </div>
 
-          <!-- Delivery Assignment -->
-          <div v-if="order && order.driver" class="mb-6">
-            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Delivery Assignment</h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400"><span class="font-semibold">Driver:</span> <span class="text-gray-900 dark:text-gray-100">{{ order.driver?.name || 'N/A' }}</span></p>
-            <p class="text-sm text-gray-500 dark:text-gray-400"><span class="font-semibold">Truck:</span> <span class="text-gray-900 dark:text-gray-100">{{ order.truck?.license_plate || 'N/A' }}</span></p>
-          </div>
+         
 
           <!-- Footer Message -->
           <div class="text-center py-4 border-t border-gray-200 dark:border-gray-700 print:border-t-0">
@@ -202,10 +197,7 @@
           
               </div>
               <div v-if="order?.truck">
-                <span class="font-semibold text-gray-700 dark:text-gray-200">Truck Plate:</span>
-                <span class="text-gray-900 dark:text-gray-100">
-                  {{ order.truck.license_plate || 'N/A' }}
-                </span>
+             
               </div>
             </div>
             <p class="text-gray-600 dark:text-gray-300">Thank you for choosing Infinitrix Express!</p>

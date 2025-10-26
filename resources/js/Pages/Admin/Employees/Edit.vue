@@ -77,17 +77,7 @@
                   </div>
 
                   <div>
-                    <InputLabel for="role" value="Role *" />
-                    <SelectInput
-                      id="role"
-                      v-model="form.role"
-                      :options="roleOptions"
-                      option-value="value"
-                      option-label="label"
-                      class="mt-1 block w-full"
-                      required
-                    />
-                    <InputError class="mt-2" :message="form.errors.role" />
+            
                   </div>
                 </div>
               </div>

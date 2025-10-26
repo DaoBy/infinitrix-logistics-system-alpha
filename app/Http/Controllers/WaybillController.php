@@ -132,14 +132,67 @@ class WaybillController extends Controller
             ->with('success', 'Waybill generated successfully!');
     }
 
-    public function preview(Waybill $waybill)
-    {
-        if (!Storage::exists($waybill->file_path)) {
-            $this->generatePdf($waybill);
-        }
 
-        return response()->file(Storage::path($waybill->file_path));
+public function previewByDelivery(DeliveryRequest $deliveryRequest)
+{
+    $user = auth()->user();
+    
+    // Check ownership
+    if ($user->hasRole('customer') && $deliveryRequest->sender_id !== $user->customer->id) {
+        abort(403, 'Unauthorized');
     }
+    
+    // Only allow for completed deliveries
+    if ($deliveryRequest->status !== 'completed') {
+        abort(403, 'Waybill not available for this delivery status');
+    }
+    
+    // Find the waybill for this delivery request
+    $waybill = Waybill::where('delivery_request_id', $deliveryRequest->id)->first();
+    
+    if (!$waybill) {
+        abort(404, 'Waybill not found for this delivery');
+    }
+    
+    // Use your existing preview logic
+    if (!Storage::exists($waybill->file_path)) {
+        $this->generatePdf($waybill);
+    }
+
+    return response()->file(Storage::path($waybill->file_path));
+}
+
+   public function preview(Waybill $waybill)
+{
+    $user = auth()->user();
+    
+    // Allow admin/staff
+    if ($user->hasRole('admin') || $user->hasRole('staff')) {
+        // Admin/staff can preview any waybill - no additional checks needed
+    } 
+    // Allow customer if they own the delivery request
+    else if ($user->hasRole('customer')) {
+        // Check if the customer owns this delivery request
+        if (!$waybill->deliveryRequest || $waybill->deliveryRequest->sender_id !== $user->customer->id) {
+            abort(403, 'Unauthorized');
+        }
+        
+        // Only allow preview for completed deliveries
+        if ($waybill->deliveryRequest->status !== 'completed') {
+            abort(403, 'Waybill not available for this delivery status');
+        }
+    } 
+    else {
+        abort(403, 'Unauthorized');
+    }
+
+    // Your existing PDF generation logic
+    if (!Storage::exists($waybill->file_path)) {
+        $this->generatePdf($waybill);
+    }
+
+    return response()->file(Storage::path($waybill->file_path));
+}
 
     public function show(Waybill $waybill)
 {
@@ -298,6 +351,9 @@ class WaybillController extends Controller
             ->with('success', 'Waybills generated successfully!');
     }
 
+
+
+    
    protected function generatePdf(Waybill $waybill, $final = false)
 {
     $waybill->load([

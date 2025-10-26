@@ -137,9 +137,7 @@
                   <SecondaryButton @click="viewRequest(row.id)">
                     View
                   </SecondaryButton>
-                  <PrimaryButton @click="editRequest(row.id)">
-                    Edit
-                  </PrimaryButton>
+               
                   <PrimaryButton @click="openApproveModal(row)">
                     Approve
                   </PrimaryButton>

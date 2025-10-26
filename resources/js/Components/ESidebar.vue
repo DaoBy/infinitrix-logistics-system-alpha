@@ -14,7 +14,7 @@
     >
       <ApplicationLogo :class="isSidebarOpen ? 'w-12 h-11' : 'w-12 h-11'" />
       <div v-if="isSidebarOpen" class="flex items-center space-x-2">
-        <h1 class="text-lg font-bold">{{ role }}</h1>
+        <h1 class="text-lg font-bold">{{ capitalizedRole }}</h1>
         <p class="text-lg font-bold text-gray-400"></p>
       </div>
     </div>
@@ -25,8 +25,8 @@
       <p v-if="isSidebarOpen" class="text-sm text-gray-100">{{ authUser.email }}</p>
       <NavLink
         :href="route('profile.edit')"
-        class="flex items-center p-3 rounded hover:bg-indigo-500 hover:text-white mt-3 w-full"
-        :class="{ 'bg-gray-800 text-blue-400': route().current('profile.edit') }"
+        class="flex items-center p-3 rounded hover:bg-green-600 hover:text-white mt-3 w-full"
+        :class="{ 'bg-green-600 text-white': route().current('profile.edit') }"
       >
         <v-icon :size="isSidebarOpen ? '24px' : '20px'">mdi-account</v-icon>
         <span v-if="isSidebarOpen" class="ml-4">My Profile</span>
@@ -35,18 +35,30 @@
 
     <!-- Navigation Links (Role-Specific & Stacked) -->
     <nav class="flex-1 p-4 space-y-4 flex flex-col overflow-y-auto">
-      <NavLink
-        v-for="link in filteredLinks"
-        :key="link.name"
-        :href="link.href"
-        :active="route().current(link.route)"
-        class="flex items-center p-3 rounded hover:bg-indigo-500 hover:text-white w-full"
-        :class="{ 'bg-gray-800 text-blue-400': route().current(link.route) }"
-      >
+     <NavLink
+  v-for="link in filteredLinks"
+  :key="link.name"
+  :href="link.href"
+  :active="false"
+  class="flex items-center p-3 rounded hover:bg-green-600 hover:text-white w-full"
+  :class="{ 'bg-green-600 text-white': route().current(link.route) }"
+>
         <v-icon>{{ link.icon }}</v-icon>
         <span v-if="isSidebarOpen" class="ml-4">{{ link.name }}</span>
       </NavLink>
     </nav>
+
+    <!-- Dark Mode Toggle -->
+    <div class="p-4 border-t border-gray-700">
+      <button 
+        @click="toggleDarkMode"
+        class="flex items-center justify-center p-3 rounded hover:bg-green-600 hover:text-white w-full transition-colors duration-200"
+        :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'"
+      >
+        <v-icon>{{ darkMode ? 'mdi-weather-night' : 'mdi-weather-sunny' }}</v-icon>
+        <span v-if="isSidebarOpen" class="ml-4">{{ darkMode ? 'Light Mode' : 'Dark Mode' }}</span>
+      </button>
+    </div>
 
     <!-- Logout Button -->
     <div class="p-4 border-t border-gray-700">
@@ -71,7 +83,7 @@
         <div class="flex items-center space-x-2">
           <ApplicationLogo class="w-12 h-11" />
           <div class="flex items-center space-x-2">
-            <h1 class="text-lg font-bold">{{ role }}</h1>
+            <h1 class="text-lg font-bold">{{ capitalizedRole }}</h1>
           </div>
         </div>
         <button 
@@ -88,8 +100,8 @@
         <p class="text-sm text-gray-100">{{ authUser.email }}</p>
         <NavLink
           :href="route('profile.edit')"
-          class="flex items-center p-3 rounded hover:bg-indigo-500 hover:text-white mt-3 w-full"
-          :class="{ 'bg-gray-800 text-blue-400': route().current('profile.edit') }"
+          class="flex items-center p-3 rounded hover:bg-green-600 hover:text-white mt-3 w-full"
+          :class="{ 'bg-green-600 text-white': route().current('profile.edit') }"
           @click="closeMobileSidebar"
         >
           <v-icon size="24px">mdi-account</v-icon>
@@ -104,14 +116,26 @@
           :key="link.name"
           :href="link.href"
           :active="route().current(link.route)"
-          class="flex items-center p-3 rounded hover:bg-indigo-500 hover:text-white w-full"
-          :class="{ 'bg-gray-800 text-blue-400': route().current(link.route) }"
+          class="flex items-center p-3 rounded hover:bg-green-600 hover:text-white w-full"
+          :class="{ 'bg-green-600 text-white': route().current(link.route) }"
           @click="closeMobileSidebar"
         >
           <v-icon>{{ link.icon }}</v-icon>
           <span class="ml-4">{{ link.name }}</span>
         </NavLink>
       </nav>
+
+      <!-- Dark Mode Toggle -->
+      <div class="p-4 border-t border-gray-700">
+        <button 
+          @click="toggleDarkMode"
+          class="flex items-center justify-center p-3 rounded hover:bg-green-600 hover:text-white w-full transition-colors duration-200"
+          :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'"
+        >
+          <v-icon>{{ darkMode ? 'mdi-weather-night' : 'mdi-weather-sunny' }}</v-icon>
+          <span class="ml-4">{{ darkMode ? 'Light Mode' : 'Dark Mode' }}</span>
+        </button>
+      </div>
 
       <!-- Logout Button -->
       <div class="p-4 border-t border-gray-700">
@@ -126,7 +150,7 @@
     <button
       v-if="!isMobileOpen"
       @click="openMobileSidebar"
-      class="fixed top-4 right-4 z-40 p-3 bg-gray-900 text-white rounded-lg shadow-lg hover:bg-gray-800 transition-colors duration-200"
+      class="fixed top-4 right-4 z-40 p-3 bg-gray-900 text-white rounded-lg shadow-lg hover:bg-green-600 transition-colors duration-200"
     >
       <v-icon>mdi-menu</v-icon>
     </button>
@@ -134,7 +158,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { usePage, router } from '@inertiajs/vue3';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import NavLink from '@/Components/NavLink.vue';
@@ -149,6 +173,23 @@ const emit = defineEmits(['sidebar-toggle']);
 const isSidebarOpen = ref(true);
 const isMobileOpen = ref(false);
 const isMobile = ref(false);
+
+// Dark mode state
+const darkMode = ref(false);
+
+const toggleDarkMode = () => {
+  darkMode.value = !darkMode.value;
+  localStorage.setItem('darkMode', darkMode.value);
+  applyDarkMode();
+};
+
+const applyDarkMode = () => {
+  if (darkMode.value) {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
+};
 
 // Check if mobile
 const checkMobile = () => {
@@ -182,6 +223,16 @@ onMounted(() => {
   isSidebarOpen.value = savedState === null || savedState === 'true';
   emit('sidebar-toggle', isSidebarOpen.value);
 
+  // Load dark mode preference
+  const savedDarkMode = localStorage.getItem('darkMode');
+  if (savedDarkMode !== null) {
+    darkMode.value = savedDarkMode === 'true';
+  } else {
+    // Check system preference
+    darkMode.value = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  applyDarkMode();
+
   checkMobile();
   window.addEventListener('resize', handleResize);
 });
@@ -196,64 +247,52 @@ const authUser = props.auth?.user;
 // User Role
 const role = authUser?.role ?? 'guest';
 
+// Capitalized Role for Display
+const capitalizedRole = computed(() => {
+  return role.charAt(0).toUpperCase() + role.slice(1);
+});
+
 // Navigation Links by Role
 const navLinks = {
   admin: [
+    // Core Workflow (in your specified order)
+    { name: 'Pending Requests', href: '/deliveries/pending', route: 'deliveries.pending', icon: 'mdi-clock-alert' },
+    { name: 'Payments', href: '/staff/payments', route: 'staff.payments.dashboard', icon: 'mdi-cash-multiple' },
+    { name: 'Refunds', href: '/refunds', route: 'refunds.index', icon: 'mdi-cash-refund' },
+    { name: 'Manifest', href: '/admin/manifests', route: 'manifests.index', icon: 'mdi-file-tree' },
+    { name: 'Waybills', href: '/waybills', route: 'waybills.index', icon: 'mdi-file-document' },
+    { name: 'Driver-Truck Sets', href: '/driver-truck-assignments', route: 'driver-truck-assignments.index', icon: 'mdi-account-switch' },
+    
+    // Management Sections
     { name: 'Employees', href: '/admin/employees', route: 'admin.employees', icon: 'mdi-account-group' },
     { name: 'Customers', href: '/admin/customers', route: 'admin.customers', icon: 'mdi-account-box' },
     { name: 'Profile Requests', href: '/admin/customer-update-requests', route: 'admin.customer-update-requests.index', icon: 'mdi-account-edit' },
     { name: 'Regions', href: '/admin/regions', route: 'admin.regions.index', icon: 'mdi-map-marker-multiple' },
     { name: 'Trucks', href: '/admin/trucks', route: 'admin.trucks', icon: 'mdi-truck' },
-    { name: 'Pending Requests', href: '/deliveries/pending', route: 'deliveries.pending', icon: 'mdi-package' },
-    { name: 'Package', href: '/admin/packages', route: 'admin.packages.index', icon: 'mdi-cash' },
-    { name: 'Driver-Truck Sets', href: '/driver-truck-assignments', route: 'driver-truck-assignments.index', icon: 'mdi-account-switch' },
-    { name: 'Cargo Assignment', href: '/cargo-assignments', route: 'cargo-assignments.index', icon: 'mdi-package-variant' },
-    {
-      name: 'Release Package',
-      href: '/cargo-assignments/delivery-completion/ready-for-completion',
-      route: 'cargo-assignments.delivery-completion.ready-for-completion',
-      icon: 'mdi-package-up'
-    },
-    { name: 'Waybills', href: '/waybills', route: 'waybills.index', icon: 'mdi-cash' },
-    { name: 'Stickers', href: '/stickers', route: 'stickers.index', icon: 'mdi-label' },
-    { name: 'Truck Manifest', href: '/admin/manifests', route: 'manifests.index', icon: 'mdi-file-tree' },
-    { name: 'Payments', href: '/staff/payments', route: 'staff.payments.dashboard', icon: 'mdi-cash-multiple' },
-    { name: 'Settings', href: '/admin/price-matrix/edit', route: 'admin.price-matrix.edit', icon: 'mdi-cog' }, 
-
-    // ✅ NEW UTILITIES LINK
-    { name: 'Utilities', href: '/admin/utilities', route: 'admin.utilities.index', icon: 'mdi-tools' },
-
-    // ✅ NEW REPORTS LINK
+    { name: 'Package Management', href: '/admin/packages', route: 'admin.packages.index', icon: 'mdi-package' },
+    
+    // The rest
     { name: 'Reports', href: '/admin/reports', route: 'reports.dashboard', icon: 'mdi-chart-bar' },
-
-    { name: 'Region Durations', href: '/region-durations', route: 'region-durations.index', icon: 'mdi-clock-outline' },
-    { name: 'Refunds', href: '/refunds', route: 'refunds.index', icon: 'mdi-cash-refund' },
+    { name: 'Utilities', href: '/admin/utilities', route: 'admin.utilities.index', icon: 'mdi-tools' },
   ],
 
   staff: [
+    // Staff Dashboard
     { name: 'Dashboard', href: '/staff/dashboard', route: 'staff.dashboard', icon: 'mdi-home' },
-    { name: 'Trucks', href: '/admin/trucks', route: 'admin.trucks', icon: 'mdi-truck' },
-    { name: 'Profile Requests', href: '/admin/customer-update-requests', route: 'admin.customer-update-requests.index', icon: 'mdi-account-edit' },
-    { name: 'Pending Requests', href: '/deliveries/pending', route: 'deliveries.pending', icon: 'mdi-package' },
-    { name: 'Package', href: '/admin/packages', route: 'admin.packages.index', icon: 'mdi-cash' },
+
+    // Core Workflow (in your specified order)
+    { name: 'Pending Requests', href: '/deliveries/pending', route: 'deliveries.pending', icon: 'mdi-clock-alert' },
+    { name: 'Payments', href: '/staff/payments', route: 'staff.payments.index', icon: 'mdi-cash-multiple' },
+    { name: 'Waybills', href: '/waybills', route: 'waybills.index', icon: 'mdi-file-document' },
+    { name: 'Stickers', href: '/stickers', route: 'stickers.index', icon: 'mdi-label' },
+    { name: 'Manifest', href: '/admin/manifests', route: 'manifests.index', icon: 'mdi-file-tree' },
     { name: 'Driver-Truck Sets', href: '/driver-truck-assignments', route: 'driver-truck-assignments.index', icon: 'mdi-account-switch' },
     { name: 'Cargo Assignment', href: '/cargo-assignments', route: 'cargo-assignments.index', icon: 'mdi-package-variant' },
-    {
-      name: 'Release Package',
-      href: '/cargo-assignments/delivery-completion/ready-for-completion',
-      route: 'cargo-assignments.delivery-completion.ready-for-completion',
-      icon: 'mdi-package-up'
-    },
-    { name: 'Payments', href: '/staff/payments', route: 'staff.payments.index', icon: 'mdi-cash-multiple' },
-    { name: 'Payment Verification', href: '/staff/payments/verification', route: 'staff.payments.verification.index', icon: 'mdi-check-decagram' },
-    { name: 'Waybills', href: '/waybills', route: 'waybills.index', icon: 'mdi-cash' },
-    { name: 'Stickers', href: '/stickers', route: 'stickers.index', icon: 'mdi-label' },
-    { name: 'Truck Manifest', href: '/admin/manifests', route: 'manifests.index', icon: 'mdi-file-tree' },
-    { name: 'Package Verification', href: '/package-verification/pending', route: 'package-verification.pending', icon: 'mdi-checkbox-marked-circle-outline' },
-    { name: 'Refunds', href: '/refunds', route: 'refunds.index', icon: 'mdi-cash-refund' },
-
-    // ✅ NEW REPORTS LINK (shared route)
-    { name: 'Reports', href: '/admin/reports', route: 'reports.dashboard', icon: 'mdi-chart-bar' },
+    { name: 'Release Package', href: '/cargo-assignments/delivery-completion/ready-for-completion', route: 'cargo-assignments.delivery-completion.ready-for-completion', icon: 'mdi-package-up' },
+    
+    // The rest
+    { name: 'Package Management', href: '/admin/packages', route: 'admin.packages.index', icon: 'mdi-package' },
+    { name: 'Trucks', href: '/admin/trucks', route: 'admin.trucks', icon: 'mdi-truck' },
   ],
 
   driver: [
@@ -266,13 +305,11 @@ const navLinks = {
     { name: 'Collection Dashboard', href: '/collector/payments/dashboard', route: 'collector.payments.dashboard', icon: 'mdi-view-dashboard' },
     { name: 'Pending Collections', href: '/collector/payments/pending', route: 'collector.payments.pending', icon: 'mdi-clock-alert' },
     { name: 'My Collections', href: '/collector/payments', route: 'collector.payments.index', icon: 'mdi-cash' },
-    { name: 'Verified Payments', href: '/collector/payments?status=verified', route: 'collector.payments.index', icon: 'mdi-check-circle' },
-    { name: 'Rejected Payments', href: '/collector/payments?status=rejected', route: 'collector.payments.index', icon: 'mdi-close-circle' },
+  
   ],
 
   guest: [],
 };
-
 
 // Filter Links by User Role
 const filteredLinks = navLinks[role] || [];

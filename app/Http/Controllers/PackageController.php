@@ -13,75 +13,66 @@ use Illuminate\Validation\Rule;
 class PackageController extends Controller
 {
    public function index(Request $request)
-    {
-        $query = Package::with([
-            'deliveryRequest.sender', 
-            'deliveryRequest.receiver', 
-            'currentRegion', 
-            'transfers'
-        ])
-            ->whereHas('deliveryRequest', function($query) {
-                if (!auth()->user()->isAdmin()) {
-                    $query->where(function($q) {
-                        $q->where('sender_id', Auth::id())
-                          ->orWhere('receiver_id', Auth::id())
-                          ->orWhere('created_by', Auth::id());
-                    });
-                }
-            });
+{
+    $query = Package::with([
+        'deliveryRequest.sender', 
+        'deliveryRequest.receiver', 
+        'currentRegion', 
+        'transfers'
+    ]);
 
-        // Apply search filter
-        if ($request->has('search') && !empty($request->search)) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('item_code', 'like', "%{$search}%")
-                  ->orWhere('item_name', 'like', "%{$search}%")
-                  ->orWhereHas('waybill', function($waybillQuery) use ($search) {
-                      $waybillQuery->where('waybill_number', 'like', "%{$search}%");
-                  })
-                  ->orWhereHas('deliveryRequest', function($drQuery) use ($search) {
-                      $drQuery->where('reference_number', 'like', "%{$search}%");
-                  });
-            });
-        }
-
-        // Apply category filter
-        if ($request->has('category') && !empty($request->category)) {
-            $query->where('category', $request->category);
-        }
-
-        // Apply status filter
-        if ($request->has('status') && !empty($request->status)) {
-            $query->where('status', $request->status);
-        }
-
-        // Apply sorting
-        $sortField = $request->get('sort', 'item_code');
-        $sortDirection = $request->get('direction', 'asc');
-        
-        // Validate sort field to prevent SQL injection
-        $allowedSortFields = ['item_code', 'item_name', 'category', 'status'];
-        if (in_array($sortField, $allowedSortFields)) {
-            $query->orderBy($sortField, $sortDirection);
-        } else {
-            $query->orderBy('item_code', 'asc');
-        }
-
-        $packages = $query->latest()->paginate(7);
-
-        // Format packages for frontend - UPDATED to include delivery request data
-        $formattedPackages = $packages->through(function ($package) {
-            return $this->formatPackage($package);
+    // Apply search filter
+    if ($request->has('search') && !empty($request->search)) {
+        $search = $request->search;
+        $query->where(function($q) use ($search) {
+            $q->where('item_code', 'like', "%{$search}%")
+              ->orWhere('item_name', 'like', "%{$search}%")
+              ->orWhereHas('waybill', function($waybillQuery) use ($search) {
+                  $waybillQuery->where('waybill_number', 'like', "%{$search}%");
+              })
+              ->orWhereHas('deliveryRequest', function($drQuery) use ($search) {
+                  $drQuery->where('reference_number', 'like', "%{$search}%");
+              });
         });
-
-        return Inertia::render('Admin/Packages/Index', [
-            'packages' => $formattedPackages,
-            'filters' => $request->only(['search', 'category', 'status']),
-            'package_statuses' => Package::getStatuses(),
-            'status' => session('status'),
-            'success' => session('success'),
-        ]);
     }
+
+    // Apply category filter
+    if ($request->has('category') && !empty($request->category)) {
+        $query->where('category', $request->category);
+    }
+
+    // Apply status filter
+    if ($request->has('status') && !empty($request->status)) {
+        $query->where('status', $request->status);
+    }
+
+    // Apply sorting
+    $sortField = $request->get('sort', 'item_code');
+    $sortDirection = $request->get('direction', 'asc');
+    
+    // Validate sort field to prevent SQL injection
+    $allowedSortFields = ['item_code', 'item_name', 'category', 'status'];
+    if (in_array($sortField, $allowedSortFields)) {
+        $query->orderBy($sortField, $sortDirection);
+    } else {
+        $query->orderBy('item_code', 'asc');
+    }
+
+    $packages = $query->latest()->paginate(7);
+
+    // Format packages for frontend - UPDATED to include delivery request data
+    $formattedPackages = $packages->through(function ($package) {
+        return $this->formatPackage($package);
+    });
+
+    return Inertia::render('Admin/Packages/Index', [
+        'packages' => $formattedPackages,
+        'filters' => $request->only(['search', 'category', 'status']),
+        'package_statuses' => Package::getStatuses(),
+        'status' => session('status'),
+        'success' => session('success'),
+    ]);
+}
 
     public function show(Package $package)
     {
@@ -226,19 +217,10 @@ class PackageController extends Controller
     return $baseData;
 }
 
-    protected function authorizePackageAccess(Package $package)
-    {
-        if (auth()->user()->isAdmin()) {
-            return true;
-        }
-
-        $deliveryRequest = $package->deliveryRequest;
-
-        if (!$deliveryRequest || 
-            ($deliveryRequest->sender_id !== Auth::id() && 
-             $deliveryRequest->receiver_id !== Auth::id() && 
-             $deliveryRequest->created_by !== Auth::id())) {
-            abort(403, 'Unauthorized action.');
-        }
-    }
+ protected function authorizePackageAccess(Package $package)
+{
+    // Since only admin/staff can access these routes via middleware,
+    // no additional authorization needed in controller
+    return true;
+}
 }

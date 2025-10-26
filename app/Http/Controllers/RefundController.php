@@ -88,7 +88,7 @@ class RefundController extends Controller
         $validated = $request->validate([
             'delivery_request_id' => 'required|exists:delivery_requests,id',
             'refund_amount' => 'required|numeric|min:0.01',
-            'reason' => 'required|in:damaged,lost,delayed,incomplete,customer_request,wrong_delivery,other',
+'reason' => 'required|in:damaged,lost,other',
             'description' => 'required|string|min:10|max:1000',
             'refunded_packages' => 'nullable|array',
             'refunded_packages.*' => 'exists:packages,id',
@@ -250,56 +250,90 @@ class RefundController extends Controller
             ->with('success', $message);
     }
 
-    public function show(Refund $refund)
-    {
-        $refund->load([
-            'deliveryRequest.sender',
-            'deliveryRequest.packages',
-            'deliveryRequest.payment',
-            'processor'
-        ]);
+  public function show(Refund $refund)
+{
+    $refund->load([
+        'deliveryRequest.sender',
+        'deliveryRequest.receiver',
+        'deliveryRequest.packages' => function ($query) {
+            $query->select('id', 'item_name', 'value', 'weight', 'status', 'delivery_request_id', 
+                         'photo_path', 'incident_evidence', 'incident_description', 'incident_reported_at');
+        },
+        'deliveryRequest.payment',
+        'processor'
+    ]);
 
-        return Inertia::render('Admin/Refunds/Show', [
-            'refund' => $refund,
-            'statusOptions' => Refund::STATUSES,
-            'reasonOptions' => Refund::REASONS,
-        ]);
+    // Transform the refund to include refunded packages with their details
+    $refund->refunded_packages_list = [];
+    if ($refund->refunded_packages && is_array($refund->refunded_packages)) {
+        $refund->refunded_packages_list = Package::whereIn('id', $refund->refunded_packages)
+            ->select('id', 'item_name', 'value', 'weight', 'status', 'delivery_request_id', 
+                    'photo_path', 'incident_evidence', 'incident_description', 'incident_reported_at')
+            ->get()
+            ->map(function ($package) {
+                // Convert photo_path and incident_evidence to full URLs
+                if ($package->photo_path) {
+                    $package->photo_url = is_array($package->photo_path) 
+                        ? array_map(fn($path) => \Storage::url($path), $package->photo_path)
+                        : [\Storage::url($package->photo_path)];
+                } else {
+                    $package->photo_url = [];
+                }
+
+                if ($package->incident_evidence) {
+                    $package->incident_evidence_urls = is_array($package->incident_evidence)
+                        ? array_map(fn($path) => \Storage::url($path), $package->incident_evidence)
+                        : [\Storage::url($package->incident_evidence)];
+                } else {
+                    $package->incident_evidence_urls = [];
+                }
+
+                return $package;
+            });
     }
+
+    return Inertia::render('Admin/Refunds/Show', [
+        'refund' => $refund,
+        'statusOptions' => Refund::STATUSES,
+        'reasonOptions' => Refund::REASONS,
+    ]);
+}
 
     public function edit(Refund $refund)
-    {
-        if (!in_array($refund->status, ['pending', 'pending_adjustment'])) {
-            return redirect()->route('refunds.show', $refund)
-                ->with('error', 'Only pending refunds/adjustments can be edited');
-        }
-
-        // FIXED: Load packages with their values
-        $refund->load([
-            'deliveryRequest.sender',
-            'deliveryRequest.packages' => function ($query) {
-                $query->select('id', 'item_name', 'value', 'weight', 'status', 'delivery_request_id', 
-                             'photo_path', 'incident_evidence', 'incident_description', 'incident_reported_at');
-            },
-            'deliveryRequest.payment'
-        ]);
-
-        // Debug logging
-        \Log::info('Edit Refund Data', [
-            'refund_id' => $refund->id,
-            'original_amount' => $refund->original_amount,
-            'delivery_request_packages_count' => $refund->deliveryRequest->packages->count(),
-            'package_values_sum' => $refund->deliveryRequest->packages->sum('value'),
-            'refunded_packages' => $refund->refunded_packages
-        ]);
-
-        $maxRefundable = $this->calculateMaxRefundableAmount($refund->deliveryRequest, $refund->refunded_packages ?? []);
-
-        return Inertia::render('Admin/Refunds/Edit', [
-            'refund' => $refund,
-            'maxRefundable' => $maxRefundable,
-            'reasonOptions' => Refund::REASONS,
-        ]);
+{
+    if (!in_array($refund->status, ['pending', 'pending_adjustment'])) {
+        return redirect()->route('refunds.show', $refund)
+            ->with('error', 'Only pending refunds/adjustments can be edited');
     }
+
+    // FIXED: Load packages with their values AND receiver
+    $refund->load([
+        'deliveryRequest.sender',
+        'deliveryRequest.receiver', // Add this line
+        'deliveryRequest.packages' => function ($query) {
+            $query->select('id', 'item_name', 'value', 'weight', 'status', 'delivery_request_id', 
+                         'photo_path', 'incident_evidence', 'incident_description', 'incident_reported_at');
+        },
+        'deliveryRequest.payment'
+    ]);
+
+    // Debug logging
+    \Log::info('Edit Refund Data', [
+        'refund_id' => $refund->id,
+        'original_amount' => $refund->original_amount,
+        'delivery_request_packages_count' => $refund->deliveryRequest->packages->count(),
+        'package_values_sum' => $refund->deliveryRequest->packages->sum('value'),
+        'refunded_packages' => $refund->refunded_packages
+    ]);
+
+    $maxRefundable = $this->calculateMaxRefundableAmount($refund->deliveryRequest, $refund->refunded_packages ?? []);
+
+    return Inertia::render('Admin/Refunds/Edit', [
+        'refund' => $refund,
+        'maxRefundable' => $maxRefundable,
+        'reasonOptions' => Refund::REASONS,
+    ]);
+}
 
     public function update(Request $request, Refund $refund)
     {

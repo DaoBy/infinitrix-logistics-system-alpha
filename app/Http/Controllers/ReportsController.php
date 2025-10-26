@@ -13,21 +13,31 @@ use App\Models\Refund;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Carbon\Carbon;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\ReportsExport;
 
 class ReportsController extends Controller
 {
     /**
      * DASHBOARD - Main Reports Page
      */
-       public function dashboard(Request $request)
+    public function dashboard(Request $request)
     {
         $dateFilter = $request->input('date_filter', 'this_month');
+        $search = $request->input('search', '');
+        $chartType = $request->input('chart_type', '');
+        
         $dateRange = $this->getDateRange($dateFilter);
         
         return Inertia::render('Admin/Reports/Dashboard', [
             'quickStats' => $this->getQuickStats($dateRange),
             'charts' => $this->getChartData($dateRange),
-            'filters' => ['date_filter' => $dateFilter]
+            'filters' => [
+                'date_filter' => $dateFilter,
+                'search' => $search,
+                'chart_type' => $chartType
+            ]
         ]);
     }
 
@@ -48,6 +58,54 @@ class ReportsController extends Controller
             'manifests' => $manifests,
             'waybills' => $waybills
         ]);
+    }
+
+
+    /**
+     * EXPORT REPORTS
+     */
+    public function export(Request $request)
+    {
+        $request->validate([
+            'format' => 'required|in:pdf,excel,csv',
+            'reportType' => 'required|string',
+            'dateRange' => 'required|string',
+            'includeCharts' => 'boolean',
+            'includeRawData' => 'boolean',
+            'includeSummary' => 'boolean',
+        ]);
+
+        $dateFilter = $request->input('dateRange', 'this_month');
+        $dateRange = $this->getDateRange($dateFilter);
+        
+        $exportData = [
+            'quickStats' => $this->getQuickStats($dateRange),
+            'charts' => $this->getChartData($dateRange),
+            'filters' => [
+                'date_filter' => $dateFilter,
+                'report_type' => $request->reportType,
+            ],
+            'exportOptions' => $request->only(['includeCharts', 'includeRawData', 'includeSummary']),
+            'generated_at' => now()->format('Y-m-d H:i:s'),
+        ];
+
+        $filename = 'reports-' . $request->reportType . '-' . $dateFilter . '-' . now()->format('Y-m-d');
+
+        switch ($request->format) {
+            case 'pdf':
+                $pdf = PDF::loadView('exports.reports-pdf', $exportData)
+                    ->setPaper('a4', 'landscape');
+                return $pdf->download($filename . '.pdf');
+
+            case 'excel':
+                return Excel::download(new ReportsExport($exportData), $filename . '.xlsx');
+
+            case 'csv':
+                return Excel::download(new ReportsExport($exportData), $filename . '.csv');
+
+            default:
+                return back()->with('error', 'Invalid export format');
+        }
     }
 
     /**
@@ -105,7 +163,7 @@ class ReportsController extends Controller
     /**
      * CHART DATA - For Dashboard Charts/Displays
      */
-      private function getChartData($dateRange)
+    private function getChartData($dateRange)
     {
         return [
             'package_types' => $this->getPackageTypesChart($dateRange),
@@ -116,13 +174,12 @@ class ReportsController extends Controller
         ];
     }
 
-
-     /**
+    /**
      * REFUND ANALYTICS CHART DATA
      */
     private function getRefundAnalyticsChart($dateRange)
     {
-        $data = Refund::where('status', 'processed') // ONLY PROCESSED REFUNDS
+        $data = Refund::where('status', 'processed')
             ->whereBetween('created_at', [$dateRange['start'], $dateRange['end']])
             ->selectRaw('reason, COUNT(*) as count, SUM(refund_amount) as total_amount')
             ->groupBy('reason')
@@ -141,11 +198,10 @@ class ReportsController extends Controller
         ];
     }
 
-
     /**
      * PACKAGE TYPES CHART DATA
      */
-     private function getPackageTypesChart($dateRange)
+    private function getPackageTypesChart($dateRange)
     {
         $data = Package::whereHas('deliveryRequest', function($query) use ($dateRange) {
                 $query->whereBetween('created_at', [$dateRange['start'], $dateRange['end']]);
@@ -217,7 +273,7 @@ class ReportsController extends Controller
     /**
      * REVENUE TREND CHART DATA
      */
-     private function getRevenueTrendChart($dateRange)
+    private function getRevenueTrendChart($dateRange)
     {
         // Get daily payments
         $payments = Payment::where('status', 'verified')
@@ -267,7 +323,7 @@ class ReportsController extends Controller
     /**
      * DATE RANGE HELPER
      */
-     private function getDateRange($filter)
+    private function getDateRange($filter)
     {
         $today = Carbon::today();
         
@@ -302,22 +358,5 @@ class ReportsController extends Controller
                     'end' => $today->copy()->endOfMonth()
                 ];
         }
-    }
-
-    /**
-     * PDF EXPORT (Optional - for future use)
-     */
-    public function exportPdf(Request $request)
-    {
-        $dateFilter = $request->input('date_filter', 'this_month');
-        $dateRange = $this->getDateRange($dateFilter);
-        
-        // For now, just return JSON response
-        // You can implement PDF generation later
-        return response()->json([
-            'message' => 'PDF export would be implemented here',
-            'date_range' => $dateRange,
-            'quick_stats' => $this->getQuickStats($dateRange)
-        ]);
     }
 }

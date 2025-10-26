@@ -49,6 +49,7 @@ class DeliveryRequestController extends Controller
             ->through(fn($delivery) => [
                 'id' => $delivery->id,
                 'reference_number' => $delivery->reference_number,
+                    'waybill_id' => $delivery->waybill?->id, // ✅ ADD THIS LINE
                 'receiver' => [
                     'name' => $delivery->receiver->name ?? 
                              ($delivery->receiver->company_name ?? 'N/A'),
@@ -106,6 +107,35 @@ class DeliveryRequestController extends Controller
         ]);
     }
 
+    public function previewByDelivery(DeliveryRequest $deliveryRequest)
+{
+    $user = auth()->user();
+    
+    // Check ownership
+    if ($user->hasRole('customer') && $deliveryRequest->sender_id !== $user->customer->id) {
+        abort(403, 'Unauthorized');
+    }
+    
+    // Only allow for completed deliveries
+    if ($deliveryRequest->status !== 'completed') {
+        abort(403, 'Waybill not available for this delivery status');
+    }
+    
+    // Find the waybill for this delivery request
+    $waybill = Waybill::where('delivery_request_id', $deliveryRequest->id)->first();
+    
+    if (!$waybill) {
+        abort(404, 'Waybill not found for this delivery');
+    }
+    
+    // Use your existing preview logic
+    if (!Storage::exists($waybill->file_path)) {
+        $this->generatePdf($waybill);
+    }
+
+    return response()->file(Storage::path($waybill->file_path));
+}
+
     public function show(DeliveryRequest $deliveryRequest)
     {
         // Simple loading of relationships
@@ -117,6 +147,7 @@ class DeliveryRequestController extends Controller
             'dropOffRegion',
             'payment',
             'deliveryOrder', // Make sure this is included!
+                'waybill' // ✅ ADD THIS
         ]);
 
         return Inertia::render('Customer/DeliveryRequests/Show', [

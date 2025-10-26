@@ -37,7 +37,7 @@ use App\Http\Controllers\CustomerProfileController;
 use App\Http\Controllers\CustomerUpdateRequestController;
 use App\Http\Controllers\PackageTrackingController;
 use App\Http\Controllers\CustomerPaymentController;
-use App\Models\ReportsController;
+use App\Http\Controllers\ReportsController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -49,649 +49,47 @@ use App\Http\Controllers\PaymentController;
 // =============================================================================
 // PUBLIC ROUTES
 // =============================================================================
-// Add to routes/web.php
-Route::get('/test-contact-email', function () {
+
+// Temporary test route - REMOVE THIS IN PRODUCTION
+Route::get('/test-delivery-email', function () {
     try {
-        $testData = [
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-            'subject' => 'Test Contact Form',
-            'message' => 'This is a test message from the contact form'
-        ];
+        // Get any delivery order that exists
+        $order = \App\Models\DeliveryOrder::with([
+            'deliveryRequest.sender', 
+            'deliveryRequest.receiver',
+            'deliveryRequest.dropOffRegion'
+        ])->first();
 
-        Mail::to('infinitrixexpress@gmail.com')
-            ->send(new \App\Mail\ContactFormSubmitted($testData));
-
-        return 'Test contact email sent to infinitrixexpress@gmail.com! Check your logs and email.';
-        
-    } catch (\Exception $e) {
-        return 'Email failed: ' . $e->getMessage();
-    }
-});
-
-Route::get('/debug-new-assignment', function() {
-    // Get the latest assignment
-    $assignment = \App\Models\DriverTruckAssignment::with(['driver', 'truck'])
-        ->latest()
-        ->first();
-    
-    if (!$assignment) {
-        return response()->json(['error' => 'No assignments found']);
-    }
-    
-    // Check manifests by assignment ID
-    $manifestsByAssignment = \App\Models\Manifest::where('driver_truck_assignment_id', $assignment->id)->get();
-    
-    // Check manifests by driver/truck combo
-    $manifestsByDriverTruck = \App\Models\Manifest::where('driver_id', $assignment->driver_id)
-        ->where('truck_id', $assignment->truck_id)
-        ->get();
-    
-    // Check finalized manifests
-    $finalizedByAssignment = \App\Models\Manifest::where('driver_truck_assignment_id', $assignment->id)
-        ->where('status', 'finalized')
-        ->exists();
-        
-    $finalizedByDriverTruck = \App\Models\Manifest::where('driver_id', $assignment->driver_id)
-        ->where('truck_id', $assignment->truck_id)
-        ->where('status', 'finalized')
-        ->exists();
-    
-    return response()->json([
-        'assignment' => [
-            'id' => $assignment->id,
-            'driver_name' => $assignment->driver->name ?? 'N/A',
-            'truck_plate' => $assignment->truck->license_plate ?? 'N/A',
-            'current_status' => $assignment->current_status,
-            'is_active' => $assignment->is_active,
-            'created_at' => $assignment->created_at,
-        ],
-        'manifests_found' => [
-            'by_assignment_id' => $manifestsByAssignment->count(),
-            'by_driver_truck' => $manifestsByDriverTruck->count(),
-            'finalized_by_assignment' => $finalizedByAssignment,
-            'finalized_by_driver_truck' => $finalizedByDriverTruck,
-        ],
-        'manifests_details' => [
-            'by_assignment' => $manifestsByAssignment,
-            'by_driver_truck' => $manifestsByDriverTruck,
-        ]
-    ]);
-});
-
-
-// Add this to your routes/web.php file
-Route::get('/debug-package-update', function(Request $request) {
-    $driver = auth()->user();
-    
-    if (!$driver) {
-        return response()->json(['error' => 'No authenticated user'], 401);
-    }
-
-    // Recreate the validation logic here
-    $isValidDriverPackage = function($package, $driver) {
-        if (!$package) return false;
-        
-        $isDriverPackage = \App\Models\Package::where('id', $package->id)
-            ->whereHas('deliveryRequest.deliveryOrder', function($query) use ($driver) {
-                $query->where('driver_id', $driver->id)
-                      ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
-            })
-            ->exists();
-            
-        if (!$isDriverPackage) return false;
-        
-        $isAtDestination = $package->deliveryRequest && 
-                          $package->deliveryRequest->drop_off_region_id == $driver->current_region_id;
-                          
-        if (!$isAtDestination) return false;
-        
-        return $package->status === 'in_transit';
-    };
-
-    // Get packages ready for status update
-    $readyPackages = \App\Models\Package::with([
-            'currentRegion',
-            'deliveryRequest.dropOffRegion',
-            'deliveryRequest.deliveryOrder'
-        ])
-        ->whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
-            $query->where('driver_id', $driver->id)
-                ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
-        })
-        ->where('status', 'in_transit')
-        ->whereHas('deliveryRequest', function($query) use ($driver) {
-            $query->where('drop_off_region_id', $driver->current_region_id);
-        })
-        ->get();
-
-    // Test validation on first package
-    $testResults = [];
-    if ($readyPackages->count() > 0) {
-        $testPackage = $readyPackages->first();
-        
-        $testResults['validation'] = [
-            'is_valid_driver_package' => $isValidDriverPackage($testPackage, $driver),
-            'conditions_breakdown' => [
-                'package_exists' => !is_null($testPackage),
-                'is_driver_package' => \App\Models\Package::where('id', $testPackage->id)
-                    ->whereHas('deliveryRequest.deliveryOrder', function($query) use ($driver) {
-                        $query->where('driver_id', $driver->id)
-                              ->whereIn('status', ['assigned', 'dispatched', 'in_transit']);
-                    })->exists(),
-                'is_at_destination' => $testPackage->deliveryRequest && 
-                    $testPackage->deliveryRequest->drop_off_region_id == $driver->current_region_id,
-                'status_in_transit' => $testPackage->status === 'in_transit',
-            ]
-        ];
-    }
-
-    return response()->json([
-        'debug_info' => [
-            'timestamp' => now()->toDateTimeString(),
-            'environment' => app()->environment(),
-            'driver' => [
-                'id' => $driver->id,
-                'name' => $driver->name,
-                'current_region_id' => $driver->current_region_id,
-                'current_region_name' => $driver->currentRegion->name ?? 'N/A',
-            ],
-        ],
-        
-        'packages_analysis' => [
-            'total_ready_for_update' => $readyPackages->count(),
-            'packages_list' => $readyPackages->map(function($pkg) use ($driver, $isValidDriverPackage) {
-                return [
-                    'id' => $pkg->id,
-                    'item_code' => $pkg->item_code,
-                    'status' => $pkg->status,
-                    'current_region' => $pkg->currentRegion->name ?? 'N/A',
-                    'destination_region' => $pkg->deliveryRequest->dropOffRegion->name ?? 'N/A',
-                    'regions_match' => $pkg->current_region_id == $pkg->deliveryRequest->drop_off_region_id,
-                    'is_valid_for_update' => $isValidDriverPackage($pkg, $driver),
-                    'delivery_order_status' => $pkg->deliveryRequest->deliveryOrder->status ?? 'N/A',
-                ];
-            }),
-        ],
-
-        'validation_test' => $testResults,
-
-        'common_issues_checklist' => [
-            'packages_available_for_update' => $readyPackages->count() > 0,
-            'all_packages_valid' => $readyPackages->count() > 0 ? 
-                $readyPackages->every(function($pkg) use ($isValidDriverPackage, $driver) {
-                    return $isValidDriverPackage($pkg, $driver);
-                }) : false,
-        ],
-    ]);
-});
-
-// Add this to your routes/web.php
-Route::get('/test-package-direct/{packageId}', function($packageId) {
-    $driver = auth()->user();
-    
-    if (!$driver) {
-        return "Please log in first";
-    }
-
-    $package = \App\Models\Package::find($packageId);
-    
-    if (!$package) {
-        return "Package {$packageId} not found";
-    }
-
-    echo "<h1>Testing Package Update</h1>";
-    echo "<p>Package: {$package->item_code} (ID: {$package->id})</p>";
-    echo "<p>Current Status: {$package->status}</p>";
-    echo "<p>Driver: {$driver->name} (Region: {$driver->current_region_id})</p>";
-
-    try {
-        // Test updating to damaged_in_transit
-        echo "<h3>Updating to 'damaged_in_transit'...</h3>";
-        
-        $package->reportIncident(
-            'damaged_in_transit',
-            $driver,
-            'Test from direct route'
-        );
-        
-        $package->refresh();
-        
-        echo "<p style='color: green;'><strong>SUCCESS!</strong></p>";
-        echo "<p>New Status: {$package->status}</p>";
-        echo "<p>Incident Reported At: {$package->incident_reported_at}</p>";
-        echo "<p>Incident Reported By: {$package->incident_reported_by}</p>";
-        
-    } catch (\Exception $e) {
-        echo "<p style='color: red;'><strong>ERROR:</strong> {$e->getMessage()}</p>";
-        echo "<pre>Error details: " . $e->getTraceAsString() . "</pre>";
-    }
-
-    echo "<hr>";
-    echo "<a href='/debug-package-update'>Back to Debug</a>";
-});
-
-Route::get('/simple-test-form', function() {
-    return '
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Simple Package Test</title>
-        <style>
-            body { font-family: Arial; margin: 40px; }
-            .box { border: 1px solid #ccc; padding: 20px; margin: 10px 0; }
-            .success { background: #d4ffd4; }
-            .error { background: #ffd4d4; }
-        </style>
-    </head>
-    <body>
-        <h1>Simple Package Update Test</h1>
-        
-        <div class="box">
-            <h3>Test 1: Quick Update (No Form)</h3>
-            <p>Package ID: 183</p>
-            <a href="/test-package-direct/183" style="padding: 10px; background: blue; color: white; text-decoration: none;">
-                🚀 Update Package 183 to Damaged
-            </a>
-        </div>
-
-        <div class="box">
-            <h3>Test 2: Simple Form</h3>
-            <form action="/driver/packages/update-destination-status" method="POST">
-                <input type="hidden" name="_token" value="' . csrf_token() . '">
-                
-                <label>Package ID:</label><br>
-                <input type="number" name="package_updates[0][package_id]" value="183" required><br><br>
-                
-                <label>Status:</label><br>
-                <select name="package_updates[0][status]" required>
-                    <option value="damaged_in_transit" selected>Damaged in Transit</option>
-                    <option value="lost_in_transit">Lost in Transit</option>
-                    <option value="delivered">Delivered</option>
-                </select><br><br>
-                
-                <label>Remarks:</label><br>
-                <textarea name="package_updates[0][remarks]">Test from simple form</textarea><br><br>
-                
-                <button type="submit" style="padding: 10px 20px; background: green; color: white;">
-                    Submit Form
-                </button>
-            </form>
-        </div>
-
-        <div class="box">
-            <h3>Current Status</h3>
-            <a href="/debug-package-update">Check Package Status</a>
-        </div>
-    </body>
-    </html>
-    ';
-});
-
-// Temporary CSRF bypass for testing
-Route::post('/test-package-no-csrf', function(Request $request) {
-    \Log::info("TEST without CSRF", $request->all());
-    
-    $driver = auth()->user();
-    $packageId = $request->input('package_updates.0.package_id');
-    $status = $request->input('package_updates.0.status');
-    
-    $package = \App\Models\Package::find($packageId);
-    
-    if (!$package) {
-        return response()->json(['error' => 'Package not found'], 404);
-    }
-    
-    try {
-        if (in_array($status, ['damaged_in_transit', 'lost_in_transit'])) {
-            $package->reportIncident($status, $driver, 'Test without CSRF');
-        } else {
-            $package->updateStatus($status, $driver, 'Test without CSRF');
+        if (!$order) {
+            return "No delivery orders found. Create one first.";
         }
+
+        // Test both statuses
+        $testStatus = 'delivered'; // Change to 'needs_review' to test the other
         
-        return response()->json([
-            'success' => true,
-            'message' => 'Package updated via no-CSRF route',
-            'package_id' => $package->id,
-            'new_status' => $package->refresh()->status
-        ]);
-        
+        \Illuminate\Support\Facades\Mail::to('meon2213@gmail.com')
+            ->send(new \App\Mail\DeliveryStatusUpdate($order, $testStatus, 'sender'));
+
+        \Illuminate\Support\Facades\Mail::to('pinhookmeiosis@gmail.com')
+            ->send(new \App\Mail\DeliveryStatusUpdate($order, $testStatus, 'receiver'));
+
+        return "Test emails sent successfully! Check your email inbox.";
+
     } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'error' => $e->getMessage()
-        ], 500);
-    }
-})->withoutMiddleware(['verifyCsrfToken']);
-
-// Temporary route without CSRF protection for testing
-Route::post('/test-package-update-direct', function(Request $request) {
-    \Log::info("🔄 DIRECT TEST: Package update attempt", $request->all());
-    
-    $driver = auth()->user();
-    $packageId = $request->package_id;
-    $status = $request->status;
-    
-    $package = \App\Models\Package::find($packageId);
-    
-    if (!$package) {
-        return response()->json(['error' => 'Package not found'], 404);
-    }
-    
-    try {
-        \Log::info("🔄 DIRECT TEST: Updating package", [
-            'package_id' => $packageId,
-            'old_status' => $package->status,
-            'new_status' => $status,
-            'driver_id' => $driver->id
-        ]);
-        
-        if (in_array($status, ['damaged_in_transit', 'lost_in_transit'])) {
-            $package->reportIncident(
-                $status,
-                $driver,
-                'Test from direct route'
-            );
-        } else {
-            $package->updateStatus(
-                $status, 
-                $driver, 
-                'Test from direct route'
-            );
-        }
-        
-        $package->refresh();
-        
-        \Log::info("✅ DIRECT TEST: Update successful", [
-            'package_id' => $packageId,
-            'new_status' => $package->status
-        ]);
-        
-        return response()->json([
-            'success' => true,
-            'package' => [
-                'id' => $package->id,
-                'old_status' => $package->getOriginal('status'),
-                'new_status' => $package->status,
-                'incident_reported_at' => $package->incident_reported_at,
-            ]
-        ]);
-        
-    } catch (\Exception $e) {
-        \Log::error('❌ DIRECT TEST: Update failed', [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
-        
-        return response()->json([
-            'success' => false,
-            'error' => $e->getMessage()
-        ], 500);
-    }
-})->withoutMiddleware(['web']); // Temporarily disable middleware for testing
-
-
-// Test route to simulate package update
-Route::get('/test-package-update/{packageId}', function($packageId) {
-    $driver = auth()->user();
-    
-    if (!$driver) {
-        return response()->json(['error' => 'No authenticated user'], 401);
-    }
-
-    $package = \App\Models\Package::with(['deliveryRequest.deliveryOrder'])->find($packageId);
-    
-    if (!$package) {
-        return response()->json(['error' => 'Package not found'], 404);
-    }
-
-    // Test the validation method
-    $isValid = app(\App\Http\Controllers\DriverController::class)->isValidDriverPackage($package, $driver);
-    
-    // Test direct model method
-    $testResults = [];
-    
-    try {
-        // Test incident reporting
-        $package->reportIncident(
-            'damaged_in_transit',
-            $driver,
-            'Test incident from debug route'
-        );
-        
-        $package->refresh();
-        
-        $testResults['incident_report'] = [
-            'success' => true,
-            'new_status' => $package->status,
-            'incident_reported_at' => $package->incident_reported_at,
-            'incident_reported_by' => $package->incident_reported_by,
-        ];
-    } catch (\Exception $e) {
-        $testResults['incident_report'] = [
-            'success' => false,
-            'error' => $e->getMessage(),
-        ];
-    }
-
-    return response()->json([
-        'package_info' => [
-            'id' => $package->id,
-            'item_code' => $package->item_code,
-            'original_status' => $package->getOriginal('status'),
-            'current_status' => $package->status,
-            'current_region_id' => $package->current_region_id,
-            'driver_region_id' => $driver->current_region_id,
-        ],
-        'validation_check' => [
-            'is_valid_driver_package' => $isValid,
-            'conditions' => [
-                'has_delivery_request' => !is_null($package->deliveryRequest),
-                'has_delivery_order' => !is_null($package->deliveryRequest->deliveryOrder ?? null),
-                'driver_matches' => $package->deliveryRequest->deliveryOrder->driver_id ?? null === $driver->id,
-                'regions_match' => $package->deliveryRequest->drop_off_region_id == $driver->current_region_id,
-                'status_in_transit' => $package->status === 'in_transit',
-            ]
-        ],
-        'test_results' => $testResults,
-    ]);
-});
-
-// Route to check form data submission
-Route::get('/debug-form-submission', function(Request $request) {
-    return view('debug-form');
-});
-
-// Simple HTML form for testing
-Route::post('/test-package-update-form', function(Request $request) {
-    $validated = $request->validate([
-        'package_updates' => 'required|array',
-        'package_updates.*.package_id' => 'required|exists:packages,id',
-        'package_updates.*.status' => 'required|in:delivered,damaged_in_transit,lost_in_transit',
-        'package_updates.*.remarks' => 'nullable|string|max:500',
-    ]);
-
-    $driver = auth()->user();
-    
-    $results = [];
-    
-    foreach ($validated['package_updates'] as $update) {
-        $package = \App\Models\Package::find($update['package_id']);
-        
-        try {
-            if (in_array($update['status'], ['damaged_in_transit', 'lost_in_transit'])) {
-                $package->reportIncident(
-                    $update['status'],
-                    $driver,
-                    $update['remarks'] ?? 'Test from form'
-                );
-            } else {
-                $package->updateStatus(
-                    $update['status'], 
-                    $driver, 
-                    $update['remarks'] ?? 'Test from form'
-                );
-            }
-            
-            $package->refresh();
-            
-            $results[] = [
-                'package_id' => $package->id,
-                'success' => true,
-                'new_status' => $package->status,
-                'message' => 'Update successful'
-            ];
-        } catch (\Exception $e) {
-            $results[] = [
-                'package_id' => $package->id,
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
-        }
-    }
-
-    return response()->json([
-        'form_data_received' => $validated,
-        'update_results' => $results
-    ]);
-});
-
-
-
-
-// Add to web.php
-Route::get('/debug-all-assignments', function() {
-    $assignments = \App\Models\DriverTruckAssignment::with(['driver', 'truck'])
-        ->latest()
-        ->get()
-        ->map(function($assignment) {
-            return [
-                'id' => $assignment->id,
-                'driver_name' => $assignment->driver->name ?? 'N/A',
-                'truck_plate' => $assignment->truck->license_plate ?? 'N/A',
-                'current_status' => $assignment->current_status,
-                'is_active' => $assignment->is_active,
-                'created_at' => $assignment->created_at,
-                'has_finalized_manifest' => app(\App\Http\Controllers\DriverTruckAssignmentController::class)->hasFinalizedManifest($assignment)
-            ];
-        });
-    
-    return response()->json($assignments);
-});
-
-Route::get('/debug-manifests/{assignmentId}', function($assignmentId) {
-    $assignment = \App\Models\DriverTruckAssignment::find($assignmentId);
-    
-    if (!$assignment) {
-        return response()->json(['error' => 'Assignment not found']);
-    }
-
-    $manifestsByAssignment = \App\Models\Manifest::where('driver_truck_assignment_id', $assignment->id)
-        ->get();
-
-    $manifestsByDriverTruck = \App\Models\Manifest::where('driver_id', $assignment->driver_id)
-        ->where('truck_id', $assignment->truck_id)
-        ->get();
-
-    return response()->json([
-        'assignment' => [
-            'id' => $assignment->id,
-            'driver_id' => $assignment->driver_id,
-            'truck_id' => $assignment->truck_id,
-            'created_at' => $assignment->created_at,
-        ],
-        'manifests_by_assignment_id' => $manifestsByAssignment,
-        'manifests_by_driver_truck' => $manifestsByDriverTruck,
-        'has_any_manifests' => $manifestsByAssignment->count() > 0 || $manifestsByDriverTruck->count() > 0
-    ]);
-});
-
-
-Route::get('/debug/skip-cooldown-direct', function() {
-    $driver = auth()->user();
-    $assignment = $driver->currentTruckAssignment;
-    
-    if (!$assignment) {
-        return response()->json(['error' => 'No assignment found']);
-    }
-    
-    \Log::info("🧪 DIRECT TEST: Skip cooldown", [
-        'assignment_id' => $assignment->id,
-        'current_status' => $assignment->current_status
-    ]);
-    
-    try {
-        $result = $assignment->skipCooldown();
-        
-        return response()->json([
-            'success' => $result,
-            'assignment' => [
-                'id' => $assignment->id,
-                'status' => $assignment->current_status,
-                'available_for_backhaul' => $assignment->available_for_backhaul
-            ]
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
+        return "Error: " . $e->getMessage();
     }
 });
 
-Route::get('/debug/assignment-state', function() {
-    $driver = auth()->user();
-    $assignment = $driver->currentTruckAssignment;
 
-    if (!$assignment) {
-        return response()->json(['error' => 'No active assignment']);
-    }
 
-    return response()->json([
-        'assignment' => [
-            'id' => $assignment->id,
-            'current_status' => $assignment->current_status,
-            'is_final_cooldown' => $assignment->is_final_cooldown,
-            'cooldown_ends_at' => $assignment->cooldown_ends_at,
-            'available_for_backhaul' => $assignment->available_for_backhaul,
-            'all_packages_delivered' => $assignment->allPackagesDelivered(),
-            'driver_region_id' => $driver->current_region_id,
-            'home_region_id' => $assignment->region_id,
-        ],
-        'can_skip_cooldown' => (
-            $assignment->current_status === \App\Models\DriverTruckAssignment::STATUS_COOLDOWN &&
-            !$assignment->is_final_cooldown
-        )
-    ]);
-});
-// In routes/web.php
-Route::get('/debug/package-relationships', function() {
-    $driver = auth()->user();
+Route::middleware(['auth'])->group(function () {
+    // Waybill preview - accessible by both customers and staff
+    Route::get('/waybills/{waybill}/preview', [WaybillController::class, 'preview'])->name('waybills.preview');
     
-    $packages = \App\Models\Package::with([
-        'deliveryRequest.deliveryOrder',
-        'deliveryRequest.dropOffRegion',
-        'currentRegion'
-    ])
-    ->whereHas('deliveryRequest.deliveryOrder', function ($query) use ($driver) {
-        $query->where('driver_id', $driver->id);
-    })
-    ->where('status', 'in_transit')
-    ->get();
-    
-    return response()->json([
-        'packages_count' => $packages->count(),
-        'packages' => $packages->map(function($pkg) {
-            return [
-                'id' => $pkg->id,
-                'has_delivery_request' => !is_null($pkg->deliveryRequest),
-                'has_delivery_order' => $pkg->deliveryRequest && !is_null($pkg->deliveryRequest->deliveryOrder),
-                'current_region_id' => $pkg->current_region_id,
-                'driver_region_id' => auth()->user()->current_region_id
-            ];
-        })
-    ]);
+    // ✅ ADD THIS: Preview by delivery request ID
+    Route::get('/waybills/delivery/{deliveryRequest}/preview', [WaybillController::class, 'previewByDelivery'])->name('waybills.preview.by_delivery');
 });
+
 
 
 // Home & Static Pages
@@ -730,6 +128,7 @@ Route::prefix('api')->group(function () {
         ], 404);
     });
 });
+
 // =============================================================================
 // AUTHENTICATED ROUTES (PROFILE)
 // =============================================================================
@@ -775,12 +174,11 @@ Route::middleware(['auth', 'role:customer', 'verified', \App\Http\Middleware\Ens
     });
 
     // Profile Update Requests
-Route::prefix('profile')->group(function () {
-    // Single profile management route - handles both direct editing and update requests
-    Route::get('/update', [CustomerProfileController::class, 'create'])->name('customer.profile.update');
-    Route::post('/update', [CustomerProfileController::class, 'store'])->name('customer.profile.update.store');
-});
-
+    Route::prefix('profile')->group(function () {
+        // Single profile management route - handles both direct editing and update requests
+        Route::get('/update', [CustomerProfileController::class, 'create'])->name('customer.profile.update');
+        Route::post('/update', [CustomerProfileController::class, 'store'])->name('customer.profile.update.store');
+    });
 
     // Notifications
     Route::prefix('notifications')->name('notifications.')->group(function () {
@@ -802,10 +200,22 @@ Route::prefix('profile')->group(function () {
 
 Route::middleware(['auth', 'role:admin,staff'])->group(function () {
     
-    // Reports
-    Route::get('/admin/reports', [App\Http\Controllers\ReportsController::class, 'dashboard'])->name('reports.dashboard');
-    Route::get('/admin/reports/documents', [App\Http\Controllers\ReportsController::class, 'documents'])->name('reports.documents');
-    Route::get('/admin/reports/export', [App\Http\Controllers\ReportsController::class, 'exportPdf'])->name('reports.export');
+    // Reports Routes
+    Route::middleware(['verified'])->prefix('admin/reports')->name('reports.')->group(function () {
+        
+        // Main Dashboard - Handles filtering via query parameters
+        Route::get('/', [ReportsController::class, 'dashboard'])->name('dashboard');
+        
+        // Documents Page - Manifests & Waybills
+        Route::get('/documents', [ReportsController::class, 'documents'])->name('documents');
+        
+        // Export Functionality - Handles PDF, Excel, CSV exports
+        Route::post('/export', [ReportsController::class, 'export'])->name('export');
+        
+        // Legacy PDF Export (if needed)
+        Route::get('/export-pdf', [ReportsController::class, 'exportPdf'])->name('export.pdf');
+        
+    });
 
     // Refunds
     Route::get('/refunds', [RefundController::class, 'index'])->name('refunds.index');
@@ -832,68 +242,55 @@ Route::middleware(['auth', 'role:admin,staff'])->group(function () {
         Route::post('/bulk-reject', [RequestApprovalController::class, 'bulkReject'])->name('deliveries.bulk-reject');
     });
 
-   // Driver-Truck Assignments
-Route::prefix('driver-truck-assignments')->name('driver-truck-assignments.')->group(function () {
-    Route::get('/', [DriverTruckAssignmentController::class, 'index'])->name('index');
-    Route::post('/store', [DriverTruckAssignmentController::class, 'store'])->name('store');
-    Route::get('/available-resources', [DriverTruckAssignmentController::class, 'getAvailableResources'])->name('available-resources');
-    Route::get('/all-resources', [DriverTruckAssignmentController::class, 'getAllResourcesForRegion'])->name('all-resources');
-    Route::get('/debug/database-state', [DriverTruckAssignmentController::class, 'checkDatabaseState'])->name('debug.database-state');
+    // Driver-Truck Assignments
+    Route::prefix('driver-truck-assignments')->name('driver-truck-assignments.')->group(function () {
+        Route::get('/', [DriverTruckAssignmentController::class, 'index'])->name('index');
+        Route::post('/store', [DriverTruckAssignmentController::class, 'store'])->name('store');
+        Route::get('/available-resources', [DriverTruckAssignmentController::class, 'getAvailableResources'])->name('available-resources');
+        Route::get('/all-resources', [DriverTruckAssignmentController::class, 'getAllResourcesForRegion'])->name('all-resources');
+        Route::get('/debug/database-state', [DriverTruckAssignmentController::class, 'checkDatabaseState'])->name('debug.database-state');
 
-    // ADD THIS ROUTE FOR MANIFEST STATUS CHECK
-    Route::get('/{assignment}/check-manifest-status', [DriverTruckAssignmentController::class, 'checkManifestStatus'])->name('check-manifest-status');
+        // ADD THIS ROUTE FOR MANIFEST STATUS CHECK
+        Route::get('/{assignment}/check-manifest-status', [DriverTruckAssignmentController::class, 'checkManifestStatus'])->name('check-manifest-status');
 
-    Route::prefix('{assignment}')->group(function () {
-        Route::post('/cancel', [DriverTruckAssignmentController::class, 'cancel'])->name('cancel');
-        Route::put('/update-status', [DriverTruckAssignmentController::class, 'updateDriverStatus'])->name('update-status');
-        Route::get('/status-timeline', [DriverTruckAssignmentController::class, 'getDriverStatusTimeline'])->name('status-timeline');
-        Route::get('/status-timeline/show', [DriverTruckAssignmentController::class, 'showStatusTimeline'])->name('status-timeline.show');
-        Route::post('/complete-cooldown', [DriverTruckAssignmentController::class, 'completeCooldown'])->name('complete-cooldown');
-        Route::post('/skip-cooldown', [DriverTruckAssignmentController::class, 'skipCooldown'])->name('skip-cooldown');
-        Route::post('/enable-backhaul', [DriverTruckAssignmentController::class, 'enableBackhaul'])->name('enable-backhaul');
-        Route::post('/disable-backhaul', [DriverTruckAssignmentController::class, 'disableBackhaul'])->name('disable-backhaul');
-        Route::post('/check-backhaul-eligibility', [DriverTruckAssignmentController::class, 'checkBackhaulEligibility'])->name('check-backhaul-eligibility');
-        Route::post('/verify-return', [DriverTruckAssignmentController::class, 'verifyDriverReturn'])->name('verify-return');
-        Route::post('/force-return', [DriverTruckAssignmentController::class, 'forceReturnToBase'])->name('force-return');
-        Route::post('/confirm-return', [DriverTruckAssignmentController::class, 'confirmReturnToBase'])->name('confirm-return');
-        Route::post('/force-complete', [DriverTruckAssignmentController::class, 'forceCompleteAssignment'])->name('force-complete');
+        Route::prefix('{assignment}')->group(function () {
+            Route::post('/cancel', [DriverTruckAssignmentController::class, 'cancel'])->name('cancel');
+            Route::put('/update-status', [DriverTruckAssignmentController::class, 'updateDriverStatus'])->name('update-status');
+            Route::get('/status-timeline', [DriverTruckAssignmentController::class, 'getDriverStatusTimeline'])->name('status-timeline');
+            Route::get('/status-timeline/show', [DriverTruckAssignmentController::class, 'showStatusTimeline'])->name('status-timeline.show');
+            Route::post('/complete-cooldown', [DriverTruckAssignmentController::class, 'completeCooldown'])->name('complete-cooldown');
+            Route::post('/skip-cooldown', [DriverTruckAssignmentController::class, 'skipCooldown'])->name('skip-cooldown');
+            Route::post('/enable-backhaul', [DriverTruckAssignmentController::class, 'enableBackhaul'])->name('enable-backhaul');
+            Route::post('/disable-backhaul', [DriverTruckAssignmentController::class, 'disableBackhaul'])->name('disable-backhaul');
+            Route::post('/check-backhaul-eligibility', [DriverTruckAssignmentController::class, 'checkBackhaulEligibility'])->name('check-backhaul-eligibility');
+            Route::post('/verify-return', [DriverTruckAssignmentController::class, 'verifyDriverReturn'])->name('verify-return');
+            Route::post('/force-return', [DriverTruckAssignmentController::class, 'forceReturnToBase'])->name('force-return');
+            Route::post('/confirm-return', [DriverTruckAssignmentController::class, 'confirmReturnToBase'])->name('confirm-return');
+            Route::post('/force-complete', [DriverTruckAssignmentController::class, 'forceCompleteAssignment'])->name('force-complete');
+        });
     });
 
+    // Cargo Assignments
+    Route::prefix('cargo-assignments')->name('cargo-assignments.')->group(function () {
+        Route::get('/', [CargoAssignmentController::class, 'index'])->name('index');
+        Route::get('/{deliveryOrder}', [CargoAssignmentController::class, 'show'])->name('show');
 
-        
+        Route::prefix('assign')->name('assign.')->group(function () {
+            Route::post('/batch', [CargoAssignmentController::class, 'batchAssign'])->name('batch');
+            Route::post('/{deliveryRequest}', [CargoAssignmentController::class, 'assign'])->name('single');
+        });
+
+        Route::get('/delivery-orders/{deliveryOrder}/manifest-status', [CargoAssignmentController::class, 'checkManifestStatus']);
+
+        Route::prefix('deliveries')->name('deliveries.')->group(function () {
+            Route::post('/{deliveryOrder}/cancel', [CargoAssignmentController::class, 'cancelDeliveryOrderAssignment'])->name('cancel');
+        });
+
+        Route::prefix('dispatch')->name('dispatch.')->group(function () {
+            Route::post('/{assignment}', [CargoAssignmentController::class, 'dispatch'])->name('driver-truck-set');
+            Route::get('/{assignment}/validate', [CargoAssignmentController::class, 'validateDispatch'])->name('validate');
+        });
     });
-
-// Cargo Assignments
-Route::prefix('cargo-assignments')->name('cargo-assignments.')->group(function () {
-    Route::get('/', [CargoAssignmentController::class, 'index'])->name('index');
-    Route::get('/{deliveryOrder}', [CargoAssignmentController::class, 'show'])->name('show');
-
-    Route::prefix('assign')->name('assign.')->group(function () {
-        // Route::get('/suggestions', [CargoAssignmentController::class, 'getSuggestedAssignments'])->name('suggestions'); // REMOVED
-        // Route::post('/validate', [CargoAssignmentController::class, 'validateAssignment'])->name('validate'); // REMOVED
-        Route::post('/batch', [CargoAssignmentController::class, 'batchAssign'])->name('batch');
-        Route::post('/{deliveryRequest}', [CargoAssignmentController::class, 'assign'])->name('single');
-    });
-
-
-    Route::get('/delivery-orders/{deliveryOrder}/manifest-status', [CargoAssignmentController::class, 'checkManifestStatus']);
-    // Route::prefix('backhaul')->name('backhaul.')->group(function () { // REMOVED ENTIRE GROUP
-        // Route::post('/{assignment}/enable', [CargoAssignmentController::class, 'enableBackhaul'])->name('enable'); // REMOVED
-        // Route::post('/{assignment}/quick-assign', [CargoAssignmentController::class, 'quickBackhaulAssign'])->name('quick-assign'); // REMOVED
-    // });
-
-    Route::prefix('deliveries')->name('deliveries.')->group(function () {
-        Route::post('/{deliveryOrder}/cancel', [CargoAssignmentController::class, 'cancelDeliveryOrderAssignment'])->name('cancel');
-    });
-
-    Route::prefix('dispatch')->name('dispatch.')->group(function () {
-        Route::post('/{assignment}', [CargoAssignmentController::class, 'dispatch'])->name('driver-truck-set');
-        Route::get('/{assignment}/validate', [CargoAssignmentController::class, 'validateDispatch'])->name('validate');
-    });
-
-    // Route::get('/backhaul/metrics', [CargoAssignmentController::class, 'getBackhaulMetrics'])->name('backhaul.metrics'); // REMOVED
-    // Route::get('/debug/assignments', [CargoAssignmentController::class, 'debugAssignments'])->name('debug.assignments'); // REMOVED
-});
 
     // Delivery Completion
     Route::prefix('cargo-assignments/delivery-completion')->name('delivery-completion.')->group(function() {
@@ -917,14 +314,13 @@ Route::prefix('cargo-assignments')->name('cargo-assignments.')->group(function (
         Route::post('/generate/{deliveryRequest}', [WaybillController::class, 'generate'])->name('generate');
         Route::get('/billing/{deliveryRequest}', [WaybillController::class, 'billing'])->name('billing');
         Route::post('/generate-from-manifest/{truck}', [WaybillController::class, 'generateFromManifest'])->name('generateFromManifest');
-        Route::get('/download/{waybill}', [WaybillController::class, 'download'])->name('download');
-        Route::get('/waybills/{waybill}/preview', [WaybillController::class, 'preview'])->name('preview');
         Route::get('/download-manifest/{manifest}', [WaybillController::class, 'downloadManifest'])->name('downloadManifest');
+        Route::get('/download/{waybill}', [WaybillController::class, 'download'])->name('download');
     });
 
     // Manifests
     Route::prefix('admin')->group(function () {
-Route::get('/manifests', [ManifestController::class, 'index'])->name('manifests.index');
+        Route::get('/manifests', [ManifestController::class, 'index'])->name('manifests.index');
         Route::get('/manifests/create/{truck}', [ManifestController::class, 'create'])->name('manifests.create');
         Route::post('/manifests/{truck}', [ManifestController::class, 'store'])->name('manifests.store');
         Route::get('/manifests/{manifest}', [ManifestController::class, 'show'])->name('manifests.show');
@@ -945,58 +341,28 @@ Route::get('/manifests', [ManifestController::class, 'index'])->name('manifests.
     });
 
     // Customer Update Requests
-Route::prefix('admin')->name('admin.')->group(function () {
-    // Customer update request management
-    Route::get('/customer-update-requests', [CustomerUpdateRequestController::class, 'index'])->name('customer-update-requests.index');
-    Route::get('/customer-update-requests/{customerUpdateRequest}', [CustomerUpdateRequestController::class, 'show'])->name('customer-update-requests.show');
-    Route::post('/customer-update-requests/{customerUpdateRequest}/approve', [CustomerUpdateRequestController::class, 'approve'])->name('customer-update-requests.approve');
-    Route::post('/customer-update-requests/{customerUpdateRequest}/reject', [CustomerUpdateRequestController::class, 'reject'])->name('customer-update-requests.reject');
-    
-    // Field locking management
-    Route::post('/customers/{customer}/unlock-fields', [CustomerUpdateRequestController::class, 'unlockFields'])->name('customers.unlock-fields');
-    Route::post('/customers/{customer}/lock-fields', [CustomerUpdateRequestController::class, 'lockFields'])->name('customers.lock-fields');
-    
-    // Audit logs
-    Route::get('/customer-audit-logs', [CustomerUpdateRequestController::class, 'auditLogs'])->name('customer-audit-logs.index');
-    Route::get('/customers/{customer}/audit-logs', [CustomerUpdateRequestController::class, 'customerAuditLogs'])->name('customers.audit-logs');
+    Route::prefix('admin')->name('admin.')->group(function () {
+        // Customer update request management
+        Route::get('/customer-update-requests', [CustomerUpdateRequestController::class, 'index'])->name('customer-update-requests.index');
+        Route::get('/customer-update-requests/{customerUpdateRequest}', [CustomerUpdateRequestController::class, 'show'])->name('customer-update-requests.show');
+        Route::post('/customer-update-requests/{customerUpdateRequest}/approve', [CustomerUpdateRequestController::class, 'approve'])->name('customer-update-requests.approve');
+        Route::post('/customer-update-requests/{customerUpdateRequest}/reject', [CustomerUpdateRequestController::class, 'reject'])->name('customer-update-requests.reject');
+        
+        // Field locking management
+        Route::post('/customers/{customer}/unlock-fields', [CustomerUpdateRequestController::class, 'unlockFields'])->name('customers.unlock-fields');
+        Route::post('/customers/{customer}/lock-fields', [CustomerUpdateRequestController::class, 'lockFields'])->name('customers.lock-fields');
+        
+        // Audit logs
+        Route::get('/customer-audit-logs', [CustomerUpdateRequestController::class, 'auditLogs'])->name('customer-audit-logs.index');
+        Route::get('/customers/{customer}/audit-logs', [CustomerUpdateRequestController::class, 'customerAuditLogs'])->name('customers.audit-logs');
+    });
 });
-});
+
 // =============================================================================
 // ADMIN-ONLY ROUTES
 // =============================================================================
 
-
-// routes/web.php
-Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function () {
-    Route::prefix('utilities')->group(function () {
-        // Inertia Page Routes
-        Route::get('/', [UtilitiesController::class, 'index'])->name('admin.utilities.index');
-        
-        // Form Submission Routes (redirect back)
-        Route::post('/price-matrix', [UtilitiesController::class, 'updatePriceMatrix'])->name('admin.utilities.price-matrix.update');
-        Route::post('/preferences', [UtilitiesController::class, 'updateUserPreferences'])->name('admin.utilities.preferences.update');
-        Route::post('/backup', [UtilitiesController::class, 'createBackup'])->name('admin.utilities.backup.create');
-        Route::post('/restore', [UtilitiesController::class, 'restoreBackup'])->name('admin.utilities.backup.restore');
-        Route::delete('/backup', [UtilitiesController::class, 'deleteBackup'])->name('admin.utilities.backup.delete');
-        Route::post('/archive', [UtilitiesController::class, 'archiveOldData'])->name('admin.utilities.archive.create');
-        
-        // ✅ ADDED: Download Backup Route
-        Route::get('/backup/download', [UtilitiesController::class, 'downloadBackup'])->name('admin.utilities.backup.download');
-        
-        // API Routes (return JSON)
-        Route::get('/archive/data', [UtilitiesController::class, 'getArchivedData'])->name('admin.utilities.archive.data');
-        Route::post('/archive/restore', [UtilitiesController::class, 'restoreArchivedData'])->name('admin.utilities.archive.restore');
-        
-        // ✅ ADDED: Archive Preview Route
-        Route::get('/archive/preview', [UtilitiesController::class, 'previewArchive'])->name('admin.utilities.archive.preview');
-        
-        // ✅ ADDED: Unified Archive Handler Route
-        Route::patch('/archive', [UtilitiesController::class, 'handleArchive'])->name('admin.utilities.archive.handle');
-    });
-});
-
-
-Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function () {
+Route::prefix('admin')->middleware(['auth', 'role:admin,staff'])->group(function () {
     // Dashboard
     Route::get('/', [AdminDashboardController::class, 'index'])->name('admin.dashboard');
 
@@ -1093,6 +459,33 @@ Route::prefix('admin')->middleware(['auth', 'role:admin'])->group(function () {
         Route::post('/transfers/{transfer}/arrived', [PackageController::class, 'markAsArrived'])->name('mark-arrived');
         Route::post('/bulk-status-update', [PackageController::class, 'bulkStatusUpdate'])->name('bulk-status-update');
         Route::post('/check-duplicate', [PackageController::class, 'checkDuplicate'])->name('check-duplicate');
+    });
+
+    // Utilities Routes
+    Route::prefix('utilities')->group(function () {
+        // Inertia Page Routes
+        Route::get('/', [UtilitiesController::class, 'index'])->name('admin.utilities.index');
+        
+        // Form Submission Routes (redirect back)
+        Route::post('/price-matrix', [UtilitiesController::class, 'updatePriceMatrix'])->name('admin.utilities.price-matrix.update');
+        Route::post('/preferences', [UtilitiesController::class, 'updateUserPreferences'])->name('admin.utilities.preferences.update');
+        Route::post('/backup', [UtilitiesController::class, 'createBackup'])->name('admin.utilities.backup.create');
+        Route::post('/restore', [UtilitiesController::class, 'restoreBackup'])->name('admin.utilities.backup.restore');
+        Route::delete('/backup', [UtilitiesController::class, 'deleteBackup'])->name('admin.utilities.backup.delete');
+        Route::post('/archive', [UtilitiesController::class, 'archiveOldData'])->name('admin.utilities.archive.create');
+        
+        // Download Backup Route
+        Route::get('/backup/download', [UtilitiesController::class, 'downloadBackup'])->name('admin.utilities.backup.download');
+        
+        // API Routes (return JSON)
+        Route::get('/archive/data', [UtilitiesController::class, 'getArchivedData'])->name('admin.utilities.archive.data');
+        Route::post('/archive/restore', [UtilitiesController::class, 'restoreArchivedData'])->name('admin.utilities.archive.restore');
+        
+        // Archive Preview Route
+        Route::get('/archive/preview', [UtilitiesController::class, 'previewArchive'])->name('admin.utilities.archive.preview');
+        
+        // Unified Archive Handler Route
+        Route::patch('/archive', [UtilitiesController::class, 'handleArchive'])->name('admin.utilities.archive.handle');
     });
 });
 
@@ -1216,28 +609,5 @@ Route::middleware(['auth', 'role:admin,staff'])->prefix('stickers')->name('stick
 // =============================================================================
 // DASHBOARD ROUTES
 // =============================================================================
-
-Route::middleware(['auth'])->group(function () {
-    Route::get('/dashboard', function (Request $request) {
-        $user = $request->user();
-        
-        if ($user->hasRole('admin')) {
-            return redirect()->route('admin.dashboard');
-        } elseif ($user->hasRole('staff')) {
-            return redirect()->route('staff.dashboard');
-        } elseif ($user->hasRole('driver')) {
-            return redirect()->route('driver.dashboard');
-        } elseif ($user->hasRole('customer')) {
-            return redirect()->route('customer.deliveries.index');
-        } elseif ($user->hasRole('collector')) {
-            return redirect()->route('collector.payments.dashboard');
-        }
-        
-        return Inertia::render('Dashboard');
-    })->name('dashboard');
-
-    // Staff Dashboard
-    Route::get('/staff/dashboard', [StaffDashboardController::class, 'index'])->name('staff.dashboard');
-});
 
 require __DIR__.'/auth.php';

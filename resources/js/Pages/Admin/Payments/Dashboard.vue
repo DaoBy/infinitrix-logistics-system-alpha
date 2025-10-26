@@ -14,13 +14,12 @@
     </template>
     <div class="py-6 px-2 md:px-6">
 
-   
-
-
       <div class="bg-white shadow-sm rounded-lg border border-gray-200 mb-6 max-w-screen-xl mx-auto">
         <div class="border-b border-gray-200">
           <nav class="-mb-px flex space-x-8 px-6">
+            <!-- Only show Verification Queue for admin users -->
             <button
+              v-if="$page.props.auth.user.role === 'admin'"
               @click="switchTab('verification')"
               :class="[
                 'py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center',
@@ -34,6 +33,7 @@
                 {{ stats.pending_verification || 0 }}
               </span>
             </button>
+            
             <button
               @click="switchTab('collection')"
               :class="[
@@ -96,7 +96,7 @@
           <!-- Advanced Filters -->
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
             <!-- Verification Tab Filters -->
-            <template v-if="activeTab === 'verification'">
+            <template v-if="activeTab === 'verification' && $page.props.auth.user.role === 'admin'">
               <SelectInput
                 v-model="filters.payment_method"
                 :options="paymentMethodOptions"
@@ -149,10 +149,10 @@
             <div class="text-sm text-gray-500">
               Showing {{ getCurrentDataCount() }} {{ getItemName() }}
               <span v-if="filters.search" class="ml-2">• "{{ filters.search }}"</span>
-              <span v-if="filters.payment_method && activeTab === 'verification'" class="ml-2">
+              <span v-if="filters.payment_method && activeTab === 'verification' && $page.props.auth.user.role === 'admin'" class="ml-2">
                 • {{ getPaymentMethodLabel(filters.payment_method) }}
               </span>
-              <span v-if="filters.payment_source && activeTab === 'verification'" class="ml-2">
+              <span v-if="filters.payment_source && activeTab === 'verification' && $page.props.auth.user.role === 'admin'" class="ml-2">
                 • {{ getPaymentSourceLabel(filters.payment_source) }}
               </span>
               <span v-if="filters.collection_type && activeTab === 'collection'" class="ml-2">
@@ -171,8 +171,8 @@
 
       <!-- Tab Content -->
       
-      <!-- Verification Queue -->
-      <div v-if="activeTab === 'verification'">
+      <!-- Verification Queue - Only show for admin -->
+      <div v-if="activeTab === 'verification' && $page.props.auth.user.role === 'admin'">
         <div class="bg-white shadow-sm rounded-lg overflow-hidden border border-gray-200 max-w-screen-xl mx-auto">
           <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
@@ -661,7 +661,7 @@
 <script setup>
 import EmployeeLayout from '@/Layouts/EmployeeLayout.vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
-import { ref, computed, reactive } from 'vue';
+import { ref, computed, reactive, onMounted } from 'vue';
 import {
   CheckCircleIcon,
   ArchiveBoxIcon,
@@ -678,9 +678,6 @@ import InputError from '@/Components/InputError.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { watch } from 'vue';
-
-
-
 
 const props = defineProps({
   activeTab: {
@@ -710,12 +707,25 @@ const props = defineProps({
   filters: {
     type: Object,
     default: () => ({})
+  },
+  auth: {
+    type: Object,
+    default: () => ({})
   }
 });
 
 const activeTab = ref(props.activeTab);
 const showModal = ref(false);
 const selectedPayment = ref(null);
+
+// Set default tab to 'collection' for non-admin users if they somehow access verification
+onMounted(() => {
+  if (props.auth.user.role !== 'admin' && activeTab.value === 'verification') {
+    activeTab.value = 'collection';
+    // Also update the URL to reflect the change
+    handleFilterChange();
+  }
+});
 
 // Initialize filters from props
 const filters = reactive({
@@ -753,7 +763,6 @@ const paymentStatusOptions = computed(() => [
   { value: '', label: 'All Statuses' },
   { value: 'unpaid', label: 'Unpaid' },
   { value: 'pending', label: 'Pending' }
-  // Removed 'paid' option
 ]);
 
 const historyStatusOptions = computed(() => [
@@ -835,6 +844,11 @@ function getItemName() {
 }
 
 function switchTab(tab) {
+  // Prevent non-admin users from switching to verification tab
+  if (tab === 'verification' && props.auth.user.role !== 'admin') {
+    return;
+  }
+  
   activeTab.value = tab;
   // Reset filters when switching tabs
   Object.keys(filters).forEach(key => {
