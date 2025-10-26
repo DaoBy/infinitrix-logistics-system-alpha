@@ -48,18 +48,6 @@
       </NavLink>
     </nav>
 
-    <!-- Dark Mode Toggle -->
-    <div class="p-4 border-t border-gray-700">
-      <button 
-        @click="toggleDarkMode"
-        class="flex items-center justify-center p-3 rounded hover:bg-green-600 hover:text-white w-full transition-colors duration-200"
-        :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'"
-      >
-        <v-icon>{{ darkMode ? 'mdi-weather-night' : 'mdi-weather-sunny' }}</v-icon>
-        <span v-if="isSidebarOpen" class="ml-4">{{ darkMode ? 'Light Mode' : 'Dark Mode' }}</span>
-      </button>
-    </div>
-
     <!-- Logout Button -->
     <div class="p-4 border-t border-gray-700">
       <DangerButton @click="logout" class="w-full">
@@ -125,18 +113,6 @@
         </NavLink>
       </nav>
 
-      <!-- Dark Mode Toggle -->
-      <div class="p-4 border-t border-gray-700">
-        <button 
-          @click="toggleDarkMode"
-          class="flex items-center justify-center p-3 rounded hover:bg-green-600 hover:text-white w-full transition-colors duration-200"
-          :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'"
-        >
-          <v-icon>{{ darkMode ? 'mdi-weather-night' : 'mdi-weather-sunny' }}</v-icon>
-          <span class="ml-4">{{ darkMode ? 'Light Mode' : 'Dark Mode' }}</span>
-        </button>
-      </div>
-
       <!-- Logout Button -->
       <div class="p-4 border-t border-gray-700">
         <DangerButton @click="logout" class="w-full">
@@ -174,23 +150,6 @@ const isSidebarOpen = ref(true);
 const isMobileOpen = ref(false);
 const isMobile = ref(false);
 
-// Dark mode state
-const darkMode = ref(false);
-
-const toggleDarkMode = () => {
-  darkMode.value = !darkMode.value;
-  localStorage.setItem('darkMode', darkMode.value);
-  applyDarkMode();
-};
-
-const applyDarkMode = () => {
-  if (darkMode.value) {
-    document.documentElement.classList.add('dark');
-  } else {
-    document.documentElement.classList.remove('dark');
-  }
-};
-
 // Check if mobile
 const checkMobile = () => {
   isMobile.value = window.innerWidth < 1024;
@@ -222,16 +181,6 @@ onMounted(() => {
   const savedState = localStorage.getItem('sidebarOpen');
   isSidebarOpen.value = savedState === null || savedState === 'true';
   emit('sidebar-toggle', isSidebarOpen.value);
-
-  // Load dark mode preference
-  const savedDarkMode = localStorage.getItem('darkMode');
-  if (savedDarkMode !== null) {
-    darkMode.value = savedDarkMode === 'true';
-  } else {
-    // Check system preference
-    darkMode.value = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  }
-  applyDarkMode();
 
   checkMobile();
   window.addEventListener('resize', handleResize);
