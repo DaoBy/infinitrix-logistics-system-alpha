@@ -226,9 +226,6 @@ const navLinks = {
   ],
 
   staff: [
-    // Staff Dashboard
-    { name: 'Dashboard', href: '/staff/dashboard', route: 'staff.dashboard', icon: 'mdi-home' },
-
     // Core Workflow (in your specified order)
     { name: 'Pending Requests', href: '/deliveries/pending', route: 'deliveries.pending', icon: 'mdi-clock-alert' },
     { name: 'Payments', href: '/staff/payments', route: 'staff.payments.index', icon: 'mdi-cash-multiple' },
