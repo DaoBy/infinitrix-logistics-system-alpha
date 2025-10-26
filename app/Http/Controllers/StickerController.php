@@ -13,6 +13,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\Auth;
 
 class StickerController extends Controller
 {
@@ -21,26 +22,21 @@ class StickerController extends Controller
      */
     public function index(Request $request)
     {
-        $perPage = $request->input('per_page', 15);
-        $search = $request->input('search', '');
-        $stickerStatus = $request->input('sticker_status', 'not_printed');
-        $regionId = $request->input('region_id', '');
-
-       $query = Package::with([
-        'deliveryRequest.receiver',
-        'deliveryRequest.dropOffRegion',
-        'deliveryRequest.waybill',
-        'currentRegion',
-        'printedBy'
-    ])
-    ->whereHas('deliveryRequest.waybill') // Only packages with waybills
-    ->whereHas('deliveryRequest', function ($q) {
-        // Only check if delivery request is approved (completed is optional)
-        $q->where('status', 'approved');
-    });
+        $query = Package::with([
+            'deliveryRequest.receiver',
+            'deliveryRequest.dropOffRegion',
+            'deliveryRequest.waybill',
+            'currentRegion',
+            'printedBy'
+        ])
+        ->whereHas('deliveryRequest.waybill')
+        ->whereHas('deliveryRequest', function ($q) {
+            $q->where('status', 'approved');
+        });
 
         // Apply search filter
-        if ($search) {
+        if ($request->has('search') && !empty($request->search)) {
+            $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('item_code', 'like', "%{$search}%")
                   ->orWhere('item_name', 'like', "%{$search}%")
@@ -58,26 +54,45 @@ class StickerController extends Controller
             });
         }
 
-        // Apply sticker status filter
-        if ($stickerStatus === 'not_printed') {
+        // Apply sticker status filter based on tab
+        $tab = $request->get('tab', 'not_printed');
+        if ($tab === 'not_printed') {
             $query->whereNull('sticker_printed_at');
-        } elseif ($stickerStatus === 'printed') {
+        } elseif ($tab === 'printed') {
             $query->whereNotNull('sticker_printed_at');
         }
 
         // Apply region filter
-        if ($regionId) {
-            $query->whereHas('deliveryRequest.dropOffRegion', function ($q) use ($regionId) {
-                $q->where('id', $regionId);
+        if ($request->has('region_id') && !empty($request->region_id)) {
+            $query->whereHas('deliveryRequest.dropOffRegion', function ($q) use ($request) {
+                $q->where('id', $request->region_id);
             });
         }
 
-        $packages = $query->orderBy('created_at', 'desc')
-            ->paginate($perPage)
+        // Apply sorting
+        $sortField = $request->get('sort', 'created_at');
+        $sortDirection = $request->get('direction', 'desc');
+        
+        // Validate sort field to prevent SQL injection
+        $allowedSortFields = ['item_code', 'item_name', 'created_at', 'sticker_printed_at'];
+        if (in_array($sortField, $allowedSortFields)) {
+            $query->orderBy($sortField, $sortDirection);
+        } else {
+            $query->orderBy('created_at', 'desc');
+        }
+
+        // Get pagination settings
+        $perPage = $request->get('per_page', 15);
+
+        // Get statistics for both tabs
+        $stats = $this->getStickerStats();
+
+        // Paginate results
+        $packages = $query->paginate($perPage)
             ->withQueryString();
 
         // Format packages for frontend
-        $formattedPackages = $packages->getCollection()->map(function ($package) {
+        $formattedPackages = $packages->through(function ($package) {
             return $this->formatPackageForSticker($package);
         });
 
@@ -86,14 +101,10 @@ class StickerController extends Controller
             ->get(['id', 'name', 'color_hex']);
 
         return Inertia::render('Admin/Stickers/Index', [
-            'packages' => $packages->setCollection($formattedPackages),
+            'packages' => $formattedPackages,
             'regions' => $regions,
-            'filters' => [
-                'search' => $search,
-                'sticker_status' => $stickerStatus,
-                'region_id' => $regionId,
-                'per_page' => $perPage,
-            ],
+            'stats' => $stats,
+            'filters' => $request->only(['search', 'region_id', 'per_page', 'tab']),
             'status' => session('status'),
             'success' => session('success'),
             'error' => session('error'),
@@ -101,78 +112,106 @@ class StickerController extends Controller
     }
 
     /**
+     * Get sticker statistics for both tabs
+     */
+    protected function getStickerStats()
+    {
+        $totalPackages = Package::whereHas('deliveryRequest.waybill')
+            ->whereHas('deliveryRequest', function ($q) {
+                $q->where('status', 'approved');
+            })
+            ->count();
+
+        $printedPackages = Package::whereHas('deliveryRequest.waybill')
+            ->whereHas('deliveryRequest', function ($q) {
+                $q->where('status', 'approved');
+            })
+            ->whereNotNull('sticker_printed_at')
+            ->count();
+
+        $notPrintedPackages = $totalPackages - $printedPackages;
+
+        return [
+            'not_printed_total' => $notPrintedPackages,
+            'printed_total' => $printedPackages,
+            'total_packages' => $totalPackages,
+            'print_rate' => $totalPackages > 0 ? round(($printedPackages / $totalPackages) * 100, 2) : 0,
+        ];
+    }
+
+    /**
      * Print sticker for a single package.
      */
    public function print(Package $package)
-{
-    // Only validate that package has a waybill and approved delivery request
-    if (!$package->deliveryRequest || !$package->deliveryRequest->waybill) {
-        return redirect()->back()
-            ->with('error', 'Cannot print sticker - package does not have a waybill');
+    {
+        // Only validate that package has a waybill and approved delivery request
+        if (!$package->deliveryRequest || !$package->deliveryRequest->waybill) {
+            return redirect()->back()
+                ->with('error', 'Cannot print sticker - package does not have a waybill');
+        }
+
+        // Check if delivery request is approved (allow both prepaid and postpaid)
+        if ($package->deliveryRequest->status !== 'approved') {
+            return redirect()->back()
+                ->with('error', 'Cannot print sticker - delivery request is not approved');
+        }
+
+        // Generate PDF
+        $pdf = $this->generateStickerPdf($package);
+
+        // Update sticker tracking
+        $package->update([
+            'sticker_printed_at' => now(),
+            'sticker_printed_by' => auth()->id(),
+        ]);
+
+        // Return PDF with proper headers
+        return response($pdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="sticker-'.$package->item_code.'.pdf"',
+        ]);
     }
-
-    // Check if delivery request is approved (allow both prepaid and postpaid)
-    if ($package->deliveryRequest->status !== 'approved') {
-        return redirect()->back()
-            ->with('error', 'Cannot print sticker - delivery request is not approved');
-    }
-
-    // Generate PDF
-    $pdf = $this->generateStickerPdf($package);
-
-    // Update sticker tracking
-    $package->update([
-        'sticker_printed_at' => now(),
-        'sticker_printed_by' => auth()->id(),
-    ]);
-
-    // Return PDF with proper headers
-    return response($pdf->output(), 200, [
-        'Content-Type' => 'application/pdf',
-        'Content-Disposition' => 'inline; filename="sticker-'.$package->item_code.'.pdf"',
-    ]);
-}
 
     /**
      * Bulk print stickers for multiple packages.
      */
-public function bulkPrint(Request $request)
-{
-    // Get package IDs from query parameters instead of POST data
-    $packageIds = $request->input('package_ids', []);
-    
-    if (empty($packageIds)) {
-        return redirect()->back()->with('error', 'No packages selected for printing');
+    public function bulkPrint(Request $request)
+    {
+        // Get package IDs from query parameters instead of POST data
+        $packageIds = $request->input('package_ids', []);
+        
+        if (empty($packageIds)) {
+            return redirect()->back()->with('error', 'No packages selected for printing');
+        }
+
+        $packages = Package::with([
+                'deliveryRequest.receiver',
+                'deliveryRequest.dropOffRegion',
+                'deliveryRequest.waybill',
+                'currentRegion'
+            ])
+            ->whereIn('id', $packageIds)
+            ->get();
+
+        if ($packages->isEmpty()) {
+            return redirect()->back()->with('error', 'No valid packages selected for printing');
+        }
+
+        // Generate combined PDF
+        $pdf = $this->generateBulkStickersPdf($packages);
+
+        // Update sticker tracking for all packages
+        Package::whereIn('id', $packageIds)->update([
+            'sticker_printed_at' => now(),
+            'sticker_printed_by' => auth()->id(),
+        ]);
+
+        // Return PDF with proper headers
+        return response($pdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="stickers-bulk-'.now()->format('Ymd-His').'.pdf"',
+        ]);
     }
-
-    $packages = Package::with([
-            'deliveryRequest.receiver',
-            'deliveryRequest.dropOffRegion',
-            'deliveryRequest.waybill',
-            'currentRegion'
-        ])
-        ->whereIn('id', $packageIds)
-        ->get();
-
-    if ($packages->isEmpty()) {
-        return redirect()->back()->with('error', 'No valid packages selected for printing');
-    }
-
-    // Generate combined PDF
-    $pdf = $this->generateBulkStickersPdf($packages);
-
-    // Update sticker tracking for all packages
-    Package::whereIn('id', $packageIds)->update([
-        'sticker_printed_at' => now(),
-        'sticker_printed_by' => auth()->id(),
-    ]);
-
-    // Return PDF with proper headers
-    return response($pdf->output(), 200, [
-        'Content-Type' => 'application/pdf',
-        'Content-Disposition' => 'inline; filename="stickers-bulk-'.now()->format('Ymd-His').'.pdf"',
-    ]);
-}
 
     /**
      * Print all stickers for a specific delivery request.
@@ -345,12 +384,13 @@ public function bulkPrint(Request $request)
      */
     public function statistics()
     {
-        $totalPackages = Package::whereHas('deliveryRequest.waybill')->count();
-        $printedPackages = Package::whereNotNull('sticker_printed_at')->count();
-        $notPrintedPackages = $totalPackages - $printedPackages;
+        $stats = $this->getStickerStats();
 
         $packagesByRegion = Package::with('deliveryRequest.dropOffRegion')
             ->whereHas('deliveryRequest.waybill')
+            ->whereHas('deliveryRequest', function ($q) {
+                $q->where('status', 'approved');
+            })
             ->select('regions.name as region_name', 'regions.color_hex', DB::raw('COUNT(packages.id) as package_count'))
             ->join('delivery_requests', 'packages.delivery_request_id', '=', 'delivery_requests.id')
             ->join('regions', 'delivery_requests.drop_off_region_id', '=', 'regions.id')
@@ -358,12 +398,8 @@ public function bulkPrint(Request $request)
             ->orderBy('package_count', 'desc')
             ->get();
 
-        return response()->json([
-            'total_packages' => $totalPackages,
-            'printed_packages' => $printedPackages,
-            'not_printed_packages' => $notPrintedPackages,
-            'print_rate' => $totalPackages > 0 ? round(($printedPackages / $totalPackages) * 100, 2) : 0,
-            'packages_by_region' => $packagesByRegion,
-        ]);
+        $stats['packages_by_region'] = $packagesByRegion;
+
+        return response()->json($stats);
     }
 }

@@ -27,48 +27,48 @@ class AuthenticatedSessionController extends Controller
     /**
      * Handle an incoming authentication request.
      */
-   public function store(LoginRequest $request): RedirectResponse
-{
-    $request->authenticate();
-    $user = Auth::user();
+    public function store(LoginRequest $request): RedirectResponse
+    {
+        $request->authenticate();
+        $user = Auth::user();
 
-    // First, check if user is active (for all roles)
-    if (!$user->is_active) {
-        Auth::logout();
-        return redirect()->route('login')
-            ->with('error', 'Your account is inactive. Please contact administrator.');
-    }
-
-    // For CUSTOMERS only, check verification and profile completion
-    if ($user->isCustomer()) {
-        // 1. Check if email is NOT verified
-        if (!$user->hasVerifiedEmail()) {
-            // Keep user logged in but redirect to verification
-            return redirect()->route('verification.notice')
-                ->with('error', __('You must verify your email address before accessing your account.'));
+        // First, check if user is active (for all roles)
+        if (!$user->is_active) {
+            Auth::logout();
+            return redirect()->route('login')
+                ->with('error', 'Your account is inactive. Please contact administrator.');
         }
 
-        // 2. If verified, check if profile is incomplete
-        if (!$user->customer || !$user->customer->is_profile_complete) {
-            return redirect()->route('profile.complete')
-                ->with('show_modal', true)
-                ->with('warning', 'Please complete your profile to access all features.');
+        // For CUSTOMERS only, check verification and profile completion
+        if ($user->role === 'customer') {
+            // 1. Check if email is NOT verified
+            if (!$user->hasVerifiedEmail()) {
+                // Keep user logged in but redirect to verification
+                return redirect()->route('verification.notice')
+                    ->with('error', __('You must verify your email address before accessing your account.'));
+            }
+
+            // 2. If verified, check if profile is incomplete
+            if (!$user->customer || !$user->customer->is_profile_complete) {
+                return redirect()->route('profile.complete')
+                    ->with('show_modal', true)
+                    ->with('warning', 'Please complete your profile to access all features.');
+            }
         }
+
+        // For employees (admin, staff, etc.) - no verification/profile checks needed
+        $request->session()->regenerate();
+
+        // Role-specific redirect logic
+        return match ($user->role) {
+            'customer'  => redirect()->intended(route('customer.home')), // Customer goes to home
+            'admin'     => redirect()->intended(route('reports.dashboard')), // Admin goes to reports
+            'staff'     => redirect()->intended(route('reports.dashboard')), // Staff goes to reports
+            'driver'    => redirect()->intended(route('driver.dashboard')),
+            'collector' => redirect()->intended(route('collector.payments.dashboard')),
+            default     => redirect()->route('login'),
+        };
     }
-
-    // For employees (admin, staff, etc.) - no verification/profile checks needed
-    $request->session()->regenerate();
-
-    // Role-specific redirect logic
-    return match ($user->role) {
-        'customer'  => redirect()->intended(route('customer.home')),
-        'admin'     => redirect()->intended(route('admin.dashboard')),
-        'staff'     => redirect()->intended(route('staff.dashboard')),
-        'driver'    => redirect()->intended(route('driver.dashboard')),
-        'collector' => redirect()->intended(route('collector.payments.dashboard')),
-        default     => redirect()->route('login'),
-    };
-}
 
     /**
      * Destroy an authenticated session (Logout).

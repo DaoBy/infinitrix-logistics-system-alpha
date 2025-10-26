@@ -669,6 +669,9 @@ class DriverController extends Controller
                     'new_status' => $update['status']
                 ]);
             }
+
+            // 🔥 NEW: Check if delivery order status changed and send notifications
+            $this->checkAndSendDeliveryNotifications($driver);
         });
 
         \Log::info("🎉 All package updates completed successfully");
@@ -707,72 +710,75 @@ class DriverController extends Controller
     }
 
     public function bulkUpdateStatus(Request $request)
-    {
-        $validated = $request->validate([
-            'package_ids' => 'required|array',
-            'package_ids.*' => 'exists:packages,id',
-            'status' => 'required|in:loaded,in_transit,delivered,returned',
-            'remarks' => 'nullable|string|max:255',
-            'region_id' => 'nullable|exists:regions,id'
-        ]);
+{
+    $validated = $request->validate([
+        'package_ids' => 'required|array',
+        'package_ids.*' => 'exists:packages,id',
+        'status' => 'required|in:loaded,in_transit,delivered,returned',
+        'remarks' => 'nullable|string|max:255',
+        'region_id' => 'nullable|exists:regions,id'
+    ]);
 
-        $driver = auth()->user();
-        $packages = $this->getValidPackages($validated['package_ids'], $driver);
+    $driver = auth()->user();
+    $packages = $this->getValidPackages($validated['package_ids'], $driver);
 
-        if ($packages->isEmpty()) {
-            return back()->with('error', 'No valid packages selected');
+    if ($packages->isEmpty()) {
+        return back()->with('error', 'No valid packages selected');
+    }
+
+    $result = DB::transaction(function () use ($packages, $validated, $driver) {
+        $updatedDeliveryOrderIds = [];
+        $autoDeliveredCount = 0;
+        $autoReturnedCount = 0;
+        $cooldownStarted = false;
+        
+        foreach ($packages as $package) {
+            $originalRegionId = $package->current_region_id;
+            $finalStatus = $validated['status'];
+            
+            if (isset($validated['region_id'])) {
+                if (RouteHelper::isDestinationRegion($package, $validated['region_id'])) {
+                    $finalStatus = 'delivered';
+                    $autoDeliveredCount++;
+                } elseif ($package->shouldMarkAsReturn($validated['region_id'])) {
+                    $finalStatus = 'returned';
+                    $autoReturnedCount++;
+                }
+            }
+            
+            $this->updatePackageStatus($package, array_merge($validated, ['status' => $finalStatus]));
+            
+            if (isset($validated['region_id']) && $validated['region_id'] != $originalRegionId) {
+                $this->handleRegionChange($package, $originalRegionId, $validated['region_id'], $driver, $validated['remarks'] ?? null);
+            }
+            
+            if ($finalStatus === 'delivered') {
+                $this->confirmDelivery($package, $validated['remarks']);
+                $updatedDeliveryOrderIds[] = $package->deliveryRequest->deliveryOrder->id;
+            }
         }
-
-        $result = DB::transaction(function () use ($packages, $validated, $driver) {
-            $updatedDeliveryOrderIds = [];
-            $autoDeliveredCount = 0;
-            $autoReturnedCount = 0;
-            $cooldownStarted = false;
-            
-            foreach ($packages as $package) {
-                $originalRegionId = $package->current_region_id;
-                $finalStatus = $validated['status'];
-                
-                if (isset($validated['region_id'])) {
-                    if (RouteHelper::isDestinationRegion($package, $validated['region_id'])) {
-                        $finalStatus = 'delivered';
-                        $autoDeliveredCount++;
-                    } elseif ($package->shouldMarkAsReturn($validated['region_id'])) {
-                        $finalStatus = 'returned';
-                        $autoReturnedCount++;
-                    }
-                }
-                
-                $this->updatePackageStatus($package, array_merge($validated, ['status' => $finalStatus]));
-                
-                if (isset($validated['region_id']) && $validated['region_id'] != $originalRegionId) {
-                    $this->handleRegionChange($package, $originalRegionId, $validated['region_id'], $driver, $validated['remarks'] ?? null);
-                }
-                
-                if ($finalStatus === 'delivered') {
-                    $this->confirmDelivery($package, $validated['remarks']);
-                    $updatedDeliveryOrderIds[] = $package->deliveryRequest->deliveryOrder->id;
-                }
+        
+        // 🔥 NEW: Check for status changes and send notifications
+        $this->checkAndSendDeliveryNotifications($driver);
+        
+        $assignment = $driver->currentTruckAssignment;
+        if ($assignment) {
+            if ($this->allPackagesFinal($driver)) {
+                $assignment->completeDeliveries();
+                $cooldownStarted = ($assignment->current_status === DriverTruckAssignment::STATUS_COOLDOWN);
             }
-            
-            $assignment = $driver->currentTruckAssignment;
-            if ($assignment) {
-                if ($this->allPackagesFinal($driver)) {
-                    $assignment->completeDeliveries();
-                    $cooldownStarted = ($assignment->current_status === DriverTruckAssignment::STATUS_COOLDOWN);
-                }
-            }
-            
-            $this->checkAndUpdateAllDeliveryOrders($driver);
-            
-            return [
-                'total' => $packages->count(),
-                'auto_delivered' => $autoDeliveredCount,
-                'auto_returned' => $autoReturnedCount,
-                'manual_updates' => $packages->count() - $autoDeliveredCount - $autoReturnedCount,
-                'cooldown_started' => $cooldownStarted
-            ];
-        });
+        }
+        
+        $this->checkAndUpdateAllDeliveryOrders($driver);
+        
+        return [
+            'total' => $packages->count(),
+            'auto_delivered' => $autoDeliveredCount,
+            'auto_returned' => $autoReturnedCount,
+            'manual_updates' => $packages->count() - $autoDeliveredCount - $autoReturnedCount,
+            'cooldown_started' => $cooldownStarted
+        ];
+    });
 
         $message = "Updated {$result['total']} packages";
         if ($result['auto_delivered'] > 0) {
@@ -927,6 +933,83 @@ class DriverController extends Controller
 
         return $undeliveredPackages === 0;
     }
+
+
+private function checkAndSendDeliveryNotifications(User $driver)
+{
+    try {
+        // Get all delivery orders that might have status changes
+        $orders = $driver->deliveryOrders()
+            ->whereIn('status', ['assigned', 'dispatched', 'in_transit', 'needs_review'])
+            ->with(['deliveryRequest.sender', 'deliveryRequest.receiver', 'deliveryRequest.packages'])
+            ->get();
+
+        foreach ($orders as $order) {
+            $oldStatus = $order->status;
+            
+            // Check if order status should be updated based on package statuses
+            $this->checkAndUpdateDeliveryOrder($order);
+            
+            // Refresh to get the updated status
+            $order->refresh();
+            $newStatus = $order->status;
+            
+            // Send notification if status changed to 'delivered' or 'needs_review'
+            if ($oldStatus !== $newStatus && in_array($newStatus, ['delivered', 'needs_review'])) {
+                $this->sendDeliveryNotification($order, $newStatus);
+                
+                \Log::info('📧 Delivery status notification sent', [
+                    'order_id' => $order->id,
+                    'old_status' => $oldStatus,
+                    'new_status' => $newStatus
+                ]);
+            }
+        }
+        
+    } catch (\Exception $e) {
+        \Log::error('❌ Failed to send delivery notifications: ' . $e->getMessage(), [
+            'driver_id' => $driver->id
+        ]);
+        // Don't throw - email failure shouldn't block driver operations
+    }
+}
+
+/**
+ * Send email notification for delivery status update
+ */
+private function sendDeliveryNotification(DeliveryOrder $order, string $status)
+{
+    try {
+        // Send to sender
+        if ($order->deliveryRequest->sender && $order->deliveryRequest->sender->email) {
+            Mail::to($order->deliveryRequest->sender->email)
+                ->send(new DeliveryStatusUpdate($order, $status, 'sender'));
+                
+            \Log::info('📧 Delivery status email sent to sender', [
+                'order_id' => $order->id,
+                'sender_email' => $order->deliveryRequest->sender->email,
+                'status' => $status
+            ]);
+        }
+        
+        // Send to receiver
+        if ($order->deliveryRequest->receiver && $order->deliveryRequest->receiver->email) {
+            Mail::to($order->deliveryRequest->receiver->email)
+                ->send(new DeliveryStatusUpdate($order, $status, 'receiver'));
+                
+            \Log::info('📧 Delivery status email sent to receiver', [
+                'order_id' => $order->id,
+                'receiver_email' => $order->deliveryRequest->receiver->email,
+                'status' => $status
+            ]);
+        }
+        
+    } catch (\Exception $e) {
+        \Log::error('❌ Failed to send delivery notification email: ' . $e->getMessage(), [
+            'order_id' => $order->id
+        ]);
+    }
+}
 
     private function getDriverDestinationRegions(User $driver): array
     {

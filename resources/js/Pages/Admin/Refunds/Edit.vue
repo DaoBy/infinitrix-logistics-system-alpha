@@ -26,11 +26,7 @@
     </template>
 
     <div class="px-4 md:px-6 py-4 max-w-7xl mx-auto">
-      <!-- DEBUG INFO - Remove in production -->
-      <div v-if="showDebug" class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-        <h3 class="text-sm font-medium text-yellow-800">Debug Information</h3>
-        <pre class="text-xs mt-2">{{ debugInfo }}</pre>
-      </div>
+   
 
       <!-- MAIN CONTENT GRID -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -179,25 +175,25 @@
                   </p>
                 </div>
 
-                <!-- Reason -->
-                <div class="mb-6">
-                  <label for="reason" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Reason *
-                  </label>
-                  <select
-                    v-model="form.reason"
-                    id="reason"
-                    class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                  >
-                    <option value="">Select a reason</option>
-                    <option v-for="(label, value) in reasonOptions" :key="value" :value="value">
-                      {{ label }}
-                    </option>
-                  </select>
-                  <p v-if="form.errors.reason" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                    {{ form.errors.reason }}
-                  </p>
-                </div>
+            <!-- Reason -->
+<div class="mb-6">
+  <label for="reason" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+    Reason *
+  </label>
+  <select
+    v-model="form.reason"
+    id="reason"
+    class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+  >
+    <option value="">Select a reason</option>
+    <option value="damaged">Package Damaged</option>
+    <option value="lost">Package Lost</option>
+    <option value="other">Other (specify in description)</option>
+  </select>
+  <p v-if="form.errors.reason" class="mt-1 text-sm text-red-600 dark:text-red-400">
+    {{ form.errors.reason }}
+  </p>
+</div>
 
                 <!-- Description -->
                 <div class="mb-6">
@@ -268,28 +264,7 @@
               </div>
             </div>
 
-            <!-- Action Buttons -->
-            <div class="flex justify-end space-x-3 mt-6">
-              <SecondaryButton
-                @click="$inertia.visit(route('refunds.show', { refund: refund.id }))"
-                class="inline-flex items-center"
-              >
-                Cancel
-              </SecondaryButton>
-              <PrimaryButton
-                type="submit"
-                :disabled="form.processing"
-                class="inline-flex items-center"
-              >
-                <span v-if="form.processing">
-                  <LoadingSpinner size="xs" class="mr-2" />
-                  Processing...
-                </span>
-                <span v-else>
-                  {{ form.action === 'process' ? (refund.type === 'adjustment' ? 'Apply Adjustment' : 'Process Refund') : 'Update Details' }}
-                </span>
-              </PrimaryButton>
-            </div>
+       
           </form>
         </div>
 
@@ -390,9 +365,9 @@
                     <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                       {{ pkg.item_name || 'Unnamed Package' }}
                     </h4>
-                    <span :class="packageStatusBadgeClass(pkg.status)" class="inline-flex px-2 text-xs font-semibold leading-5 rounded-full">
-                      {{ pkg.status }}
-                    </span>
+                  <span :class="packageStatusBadgeClass(pkg.status)" class="inline-flex px-2 text-xs font-semibold leading-5 rounded-full">
+  {{ formatPackageStatus(pkg.status) }}
+</span>
                   </div>
                   <div class="text-xs text-gray-600 dark:text-gray-400 space-y-1">
                     <div class="flex justify-between">
@@ -447,35 +422,39 @@
           </div>
 
           <!-- QUICK ACTIONS -->
-          <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
-            <div class="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
-              <h3 class="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                </svg>
-                Quick Actions
-              </h3>
-            </div>
-            <div class="p-4">
-              <div class="space-y-2">
-                <button
-                  type="button"
-                  @click="form.action = 'process'; submit()"
-                  :disabled="form.processing"
-                  class="w-full text-left px-3 py-2 text-sm bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 text-green-700 dark:text-green-300 rounded border border-green-200 dark:border-green-800 transition-colors"
-                >
-                  {{ refund.type === 'adjustment' ? 'Apply Full Adjustment' : 'Process Full Refund' }}
-                </button>
-                <button
-                  type="button"
-                  @click="$inertia.visit(route('refunds.show', { refund: refund.id }))"
-                  class="w-full text-left px-3 py-2 text-sm bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded border border-blue-200 dark:border-blue-800 transition-colors"
-                >
-                  View Details
-                </button>
-              </div>
-            </div>
-          </div>
+<div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
+  <div class="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
+    <h3 class="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+      <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+      </svg>
+      Quick Actions
+    </h3>
+  </div>
+  <div class="p-4">
+    <div class="space-y-2">
+      <SecondaryButton
+        @click="$inertia.visit(route('refunds.show', { refund: refund.id }))"
+        class="w-full justify-center"
+      >
+        Cancel
+      </SecondaryButton>
+      <PrimaryButton
+        @click="submit"
+        :disabled="form.processing"
+        class="w-full justify-center"
+      >
+        <span v-if="form.processing">
+          <LoadingSpinner size="xs" class="mr-2" />
+          Processing...
+        </span>
+        <span v-else>
+          {{ form.action === 'process' ? (refund.type === 'adjustment' ? 'Apply Adjustment' : 'Process Refund') : 'Update Details' }}
+        </span>
+      </PrimaryButton>
+    </div>
+  </div>
+</div>
         </div>
       </div>
     </div>
@@ -504,7 +483,6 @@ const form = useForm({
   action: 'process'
 })
 
-const showDebug = ref(true) // Set to false in production
 
 // Calculate breakdown for display
 const deliveryFee = computed(() => {
@@ -586,21 +564,7 @@ const incidentReportedAt = computed(() => {
   return pkg?.incident_reported_at
 })
 
-// Debug information
-const debugInfo = computed(() => {
-  return {
-    refund_id: props.refund.id,
-    original_amount: props.refund.original_amount,
-    maxRefundable_from_props: props.maxRefundable,
-    delivery_fee: deliveryFee.value,
-    affected_package_values: affectedPackageValues.value,
-    total_package_values: totalPackageValues.value,
-    calculated_total: deliveryFee.value + affectedPackageValues.value,
-    refunded_packages: props.refund.refunded_packages,
-    affected_packages_count: affectedPackages.value.length,
-    all_packages_count: allPackages.value.length
-  }
-})
+
 
 function calculateNewAmount() {
   // This will trigger the computed property update
@@ -636,11 +600,16 @@ function packageStatusBadgeClass(status) {
   return classes[status] || 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100'
 }
 
-// Debug logging
-onMounted(() => {
-  console.log('Refund Edit Debug:', debugInfo.value)
-  console.log('Affected Packages:', affectedPackages.value)
-  console.log('All Packages:', allPackages.value)
-})
+function formatPackageStatus(status) {
+  const statusMap = {
+    'damaged_in_transit': 'Damaged in Transit',
+    'lost_in_transit': 'Lost in Transit',
+    'delivered': 'Delivered',
+    'completed': 'Completed',
+    'in_transit': 'In Transit',
+    'pending': 'Pending'
+  }
+  return statusMap[status] || status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+}
 </script>
 [file content end]

@@ -288,8 +288,7 @@
           </div>
 
           <!-- AFFECTED PACKAGES -->
-          <div v-if="refund.refunded_packages_list && refund.refunded_packages_list.length > 0" class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
-            <div class="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
+<div v-if="affectedPackages.length > 0" class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">            <div class="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
               <h3 class="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 <svg class="w-5 h-5 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
@@ -299,65 +298,69 @@
             </div>
             <div class="p-4">
               <div class="space-y-3">
-                <div 
-                  v-for="pkg in refund.refunded_packages_list" 
-                  :key="pkg.id"
-                  class="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border border-gray-200 dark:border-gray-600"
-                >
-                  <div class="flex justify-between items-start mb-2">
-                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                      {{ pkg.item_name || 'Unnamed Package' }}
-                    </h4>
-                    <span :class="packageStatusBadgeClass(pkg.status)" class="inline-flex px-2 text-xs font-semibold leading-5 rounded-full">
-                      {{ pkg.status }}
-                    </span>
-                  </div>
-                  <div class="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                    <div class="flex justify-between">
-                      <span>Value:</span>
-                      <span class="font-medium">₱{{ pkg.value || '0.00' }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                      <span>Weight:</span>
-                      <span>{{ pkg.weight }} kg</span>
-                    </div>
-                    <div v-if="pkg.incident_description" class="text-red-600 dark:text-red-400 text-xs mt-1">
-                      {{ pkg.incident_description }}
-                    </div>
-                  </div>
-                </div>
+
+            <div 
+  v-for="pkg in affectedPackages" 
+  :key="pkg.id"
+  class="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border border-gray-200 dark:border-gray-600"
+>
+  <div class="flex justify-between items-start mb-2">
+    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+      {{ pkg.item_name || 'Unnamed Package' }}
+    </h4>
+    <span :class="packageStatusBadgeClass(pkg.status)" class="inline-flex px-2 text-xs font-semibold leading-5 rounded-full">
+      {{ formatPackageStatus(pkg.status) }}
+    </span>
+  </div>
+  <div class="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+    <div class="flex justify-between">
+      <span>Value:</span>
+      <span class="font-medium">₱{{ pkg.value || '0.00' }}</span>
+    </div>
+    <div class="flex justify-between">
+      <span>Weight:</span>
+      <span>{{ pkg.weight }} kg</span>
+    </div>
+    <div v-if="pkg.incident_description" class="text-red-600 dark:text-red-400 text-xs mt-1">
+      {{ pkg.incident_description }}
+    </div>
+  </div>
+</div>
               </div>
             </div>
           </div>
 
-          <!-- QUICK ACTIONS -->
-          <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
-            <div class="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
-              <h3 class="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                </svg>
-                Quick Actions
-              </h3>
-            </div>
-            <div class="p-4">
-              <div class="space-y-2">
-                <button
-                  v-if="refund.status === 'pending' || refund.status === 'pending_adjustment'"
-                  @click="$inertia.visit(route('refunds.edit', { refund: refund.id }))"
-                  class="w-full text-left px-3 py-2 text-sm bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 text-green-700 dark:text-green-300 rounded border border-green-200 dark:border-green-800 transition-colors"
-                >
-                  {{ refund.type === 'adjustment' ? 'Process Adjustment' : 'Process Refund' }}
-                </button>
-                <button
-                  @click="$inertia.visit(route('refunds.index'))"
-                  class="w-full text-left px-3 py-2 text-sm bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded border border-blue-200 dark:border-blue-800 transition-colors"
-                >
-                  Back to List
-                </button>
-              </div>
-            </div>
-          </div>
+         <!-- QUICK ACTIONS -->
+<div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
+  <div class="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
+    <h3 class="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+      <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+      </svg>
+      Quick Actions
+    </h3>
+  </div>
+  <div class="p-4">
+    <div class="space-y-2">
+      <SecondaryButton
+        @click="$inertia.visit(route('refunds.index'))"
+        class="w-full justify-center"
+      >
+        Back to List
+      </SecondaryButton>
+      <PrimaryButton
+        v-if="refund.status === 'pending' || refund.status === 'pending_adjustment'"
+        @click="$inertia.visit(route('refunds.edit', { refund: refund.id }))"
+        class="w-full justify-center"
+      >
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+        {{ refund.type === 'adjustment' ? 'Process Adjustment' : 'Process Refund' }}
+      </PrimaryButton>
+    </div>
+  </div>
+</div>
         </div>
       </div>
     </div>
@@ -382,51 +385,67 @@ const newAmountDue = computed(() => {
   return 0
 })
 
-// Extract real photos from packages
+// Get all packages from delivery request
+const allPackages = computed(() => {
+  if (!props.refund.delivery_request?.packages) return []
+  
+  return props.refund.delivery_request.packages.map(pkg => ({
+    ...pkg,
+    isAffected: props.refund.refunded_packages?.includes(pkg.id) || false
+  }))
+})
+
+// Get only affected packages (those in refunded_packages array)
+const affectedPackages = computed(() => {
+  return allPackages.value.filter(pkg => pkg.isAffected)
+})
+
+// Extract real photos from AFFECTED packages only - SAME AS EDIT.VUE
 const originalPhotos = computed(() => {
   const photos = []
-  if (props.refund.refunded_packages_list) {
-    props.refund.refunded_packages_list.forEach(pkg => {
-      if (pkg.photo_url && Array.isArray(pkg.photo_url)) {
-        photos.push(...pkg.photo_url)
-      }
-    })
-  }
-  return photos.slice(0, 4) // Limit to 4 photos
+  affectedPackages.value.forEach(pkg => {
+    if (pkg.photo_path && Array.isArray(pkg.photo_path)) {
+      // Convert storage paths to URLs - SAME AS EDIT.VUE
+      const photoUrls = pkg.photo_path.map(path => {
+        return path.startsWith('http') ? path : `/storage/${path}`
+      })
+      photos.push(...photoUrls)
+    }
+  })
+  return photos.slice(0, 4)
 })
 
 const incidentEvidence = computed(() => {
   const evidence = []
-  if (props.refund.refunded_packages_list) {
-    props.refund.refunded_packages_list.forEach(pkg => {
-      if (pkg.incident_evidence && Array.isArray(pkg.incident_evidence)) {
-        // Convert storage paths to URLs
-        const evidenceUrls = pkg.incident_evidence.map(path => {
-          return path.startsWith('http') ? path : `/storage/${path}`
-        })
-        evidence.push(...evidenceUrls)
-      }
-    })
-  }
-  return evidence.slice(0, 4) // Limit to 4 photos
+  affectedPackages.value.forEach(pkg => {
+    if (pkg.incident_evidence && Array.isArray(pkg.incident_evidence)) {
+      // Convert storage paths to URLs - SAME AS EDIT.VUE
+      const evidenceUrls = pkg.incident_evidence.map(path => {
+        return path.startsWith('http') ? path : `/storage/${path}`
+      })
+      evidence.push(...evidenceUrls)
+    }
+  })
+  return evidence.slice(0, 4)
 })
 
 const hasIncidentDetails = computed(() => {
-  return props.refund.refunded_packages_list?.some(pkg => 
+  return affectedPackages.value.some(pkg => 
     pkg.incident_description || pkg.incident_reported_at
   )
 })
 
 const incidentDescription = computed(() => {
-  const pkg = props.refund.refunded_packages_list?.find(pkg => pkg.incident_description)
+  const pkg = affectedPackages.value.find(pkg => pkg.incident_description)
   return pkg?.incident_description || 'No incident description provided'
 })
 
 const incidentReportedAt = computed(() => {
-  const pkg = props.refund.refunded_packages_list?.find(pkg => pkg.incident_reported_at)
+  const pkg = affectedPackages.value.find(pkg => pkg.incident_reported_at)
   return pkg?.incident_reported_at
 })
 
+// Rest of the functions remain the same...
 function formatDate(dateString) {
   if (!dateString) return 'N/A'
   const date = new Date(dateString)
@@ -468,8 +487,19 @@ function packageStatusBadgeClass(status) {
   return classes[status] || 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100'
 }
 
+function formatPackageStatus(status) {
+  const statusMap = {
+    'damaged_in_transit': 'Damaged in Transit',
+    'lost_in_transit': 'Lost in Transit',
+    'delivered': 'Delivered',
+    'completed': 'Completed',
+    'in_transit': 'In Transit',
+    'pending': 'Pending'
+  }
+  return statusMap[status] || status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+}
+
 function openImageModal(imageUrl) {
   window.open(imageUrl, '_blank')
 }
 </script>
-[file content end]

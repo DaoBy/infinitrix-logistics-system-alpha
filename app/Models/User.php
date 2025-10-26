@@ -150,6 +150,15 @@ class User extends Authenticatable
         return $this->isActive() && $this->canAcceptNewAssignment();
     }
 
+    public function hasRole($role)
+{
+    if (is_array($role)) {
+        return in_array($this->role, $role);
+    }
+    
+    return $this->role === $role;
+}
+
     public function employeeProfile()
     {
         // Make sure this is the correct relationship and foreign key
