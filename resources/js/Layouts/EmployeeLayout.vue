@@ -11,25 +11,8 @@ const googleMapsApiKey = page.props.googleMapsApiKey;
 // Sidebar width state (sync with ESidebar)
 const sidebarWidth = ref(256); // default open: 256px (w-64), closed: 80px (w-20)
 
-// Dark mode state
-const darkMode = ref(false);
-
 function updateSidebarWidth(isOpen) {
   sidebarWidth.value = isOpen ? 256 : 80;
-}
-
-function toggleDarkMode() {
-  darkMode.value = !darkMode.value;
-  localStorage.setItem('darkMode', darkMode.value);
-  applyDarkMode();
-}
-
-function applyDarkMode() {
-  if (darkMode.value) {
-    document.documentElement.classList.add('dark');
-  } else {
-    document.documentElement.classList.remove('dark');
-  }
 }
 
 // Listen for sidebar toggle event from ESidebar
@@ -41,16 +24,6 @@ function onSidebarToggle(isOpen) {
 onMounted(() => {
   const savedState = localStorage.getItem('sidebarOpen');
   updateSidebarWidth(savedState === null || savedState === 'true');
-
-  // Load dark mode preference
-  const savedDarkMode = localStorage.getItem('darkMode');
-  if (savedDarkMode !== null) {
-    darkMode.value = savedDarkMode === 'true';
-  } else {
-    // Check system preference
-    darkMode.value = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  }
-  applyDarkMode();
 
   // Inject Google Maps API script with the actual API key
   if (googleMapsApiKey && !document.getElementById('google-maps-api')) {
@@ -92,16 +65,6 @@ onMounted(() => {
         <ESidebar @sidebar-toggle="onSidebarToggle" />
       </div>
 
-      <!-- Dark Mode Toggle - Bottom Left -->
-      <button 
-        @click="toggleDarkMode"
-        class="fixed bottom-6 left-6 z-50 p-3 rounded-full bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 hover:scale-110"
-        :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'"
-      >
-        <span v-if="darkMode" class="text-xl">🌙</span>
-        <span v-else class="text-xl">☀️</span>
-      </button>
-
       <!-- Main Content Area -->
       <v-main
         class="flex flex-col"
@@ -114,31 +77,31 @@ onMounted(() => {
         }"
       >
         <!-- Header Slot -->
-        <header v-if="$slots.header" class="bg-white dark:bg-gray-800 shadow-sm shrink-0 border-b border-gray-200 dark:border-gray-700">
+        <header v-if="$slots.header" class="bg-white shadow-sm shrink-0 border-b border-gray-200">
           <div class="px-4 sm:px-6 lg:px-8 py-4">
             <slot name="header" />
           </div>
         </header>
 
         <!-- Scrollable Main Content -->
-        <div class="flex-1 overflow-y-auto overflow-x-hidden bg-gray-50 dark:bg-gray-900">
+        <div class="flex-1 overflow-y-auto overflow-x-hidden bg-gray-50">
           <div class="w-full p-4 sm:p-6">
             <slot />
           </div>
         </div>
 
         <!-- Fixed Footer -->
-        <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-3 px-4 sm:px-6 shrink-0">
+        <footer class="bg-white border-t border-gray-200 py-3 px-4 sm:px-6 shrink-0">
           <div class="w-full flex flex-col sm:flex-row justify-between items-center gap-2">
             <!-- Copyright -->
-            <p class="text-xs text-gray-500 dark:text-gray-400 text-center sm:text-left">
+            <p class="text-xs text-gray-500 text-center sm:text-left">
               © {{ new Date().getFullYear() }} LogiSys. All rights reserved.
             </p>
             
             <!-- Version/Status -->
-            <p class="text-xs text-gray-400 dark:text-gray-500 text-center sm:text-right">
+            <p class="text-xs text-gray-400 text-center sm:text-right">
               Employee Portal v1.0 • 
-              <span class="text-green-600 dark:text-green-400 font-medium">Online</span>
+              <span class="text-green-600 font-medium">Online</span>
             </p>
           </div>
         </footer>
