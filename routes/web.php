@@ -92,6 +92,7 @@ Route::middleware(['auth'])->group(function () {
 
 
 
+Route::get('/package-categories', [UtilitiesController::class, 'getPackageCategories'])->name('package-categories.public');
 // Home & Static Pages
 Route::get('/', fn() => Inertia::render('Customer/Home'))->name('customer.home');
 Route::get('/about-us', fn() => Inertia::render('Customer/AboutUs'))->name('about.us');
@@ -160,18 +161,23 @@ Route::middleware(['auth', 'role:customer', 'verified', \App\Http\Middleware\Ens
     Route::get('/deliveries/{delivery}/payments/resubmit/{payment}', [CustomerPaymentController::class, 'resubmit'])->name('customer.payments.resubmit');
     Route::post('/deliveries/{delivery}/payments/{payment}', [CustomerPaymentController::class, 'update'])->name('customer.payments.update');
 
-    // Delivery Requests
-    Route::prefix('delivery-requests')->group(function () {
-        Route::get('/', [DeliveryRequestController::class, 'index'])->name('customer.delivery-requests.index');
-        Route::get('/create', [RequestDeliveryController::class, 'create'])->name('customer.delivery-requests.create');
-        Route::post('/', [RequestDeliveryController::class, 'store'])->name('customer.delivery-requests.store');
-        Route::post('/calculate-price', [RequestDeliveryController::class, 'calculatePrice'])->name('customer.delivery-requests.calculate-price');
-        Route::get('/{deliveryRequest}', [DeliveryRequestController::class, 'show'])->name('customer.delivery-requests.show');
-        Route::get('/{deliveryRequest}/edit', [DeliveryRequestController::class, 'edit'])->name('customer.delivery-requests.edit');
-        Route::put('/{deliveryRequest}', [DeliveryRequestController::class, 'update'])->name('customer.delivery-requests.update');
-        Route::delete('/{deliveryRequest}', [DeliveryRequestController::class, 'destroy'])->name('customer.delivery-requests.destroy');
-        Route::post('/upload-photos', [RequestDeliveryController::class, 'uploadPhotos'])->name('customer.delivery-requests.upload-photos');
-    });
+ // Delivery Requests
+Route::prefix('delivery-requests')->group(function () {
+    Route::get('/', [DeliveryRequestController::class, 'index'])->name('customer.delivery-requests.index');
+    Route::get('/create', [RequestDeliveryController::class, 'create'])->name('customer.delivery-requests.create');
+    Route::post('/', [RequestDeliveryController::class, 'store'])->name('customer.delivery-requests.store');
+    Route::post('/calculate-price', [RequestDeliveryController::class, 'calculatePrice'])->name('customer.delivery-requests.calculate-price');
+    Route::get('/{deliveryRequest}', [DeliveryRequestController::class, 'show'])->name('customer.delivery-requests.show');
+    Route::get('/{deliveryRequest}/edit', [DeliveryRequestController::class, 'edit'])->name('customer.delivery-requests.edit');
+    Route::put('/{deliveryRequest}', [DeliveryRequestController::class, 'update'])->name('customer.delivery-requests.update');
+    Route::delete('/{deliveryRequest}', [DeliveryRequestController::class, 'destroy'])->name('customer.delivery-requests.destroy');
+    Route::post('/upload-photos', [RequestDeliveryController::class, 'uploadPhotos'])->name('customer.delivery-requests.upload-photos');
+    Route::get('/past-receivers/list', [RequestDeliveryController::class, 'getPastReceivers'])->name('customer.delivery-requests.past-receivers');
+    
+    // Add downpayment receipt upload route
+    Route::post('/upload-downpayment-receipt', [RequestDeliveryController::class, 'uploadDownpaymentReceipt'])->name('customer.delivery-requests.upload-downpayment-receipt');
+});
+
 
     // Profile Update Requests
     Route::prefix('profile')->group(function () {
@@ -229,18 +235,22 @@ Route::middleware(['auth', 'role:admin,staff'])->group(function () {
     Route::get('/refunds/calculate/max-refund', [RefundController::class, 'calculateMaxRefund'])->name('refunds.calculate-max-refund');
 
     // Deliveries Management
-    Route::prefix('deliveries')->group(function () {
-        Route::get('/', [RequestApprovalController::class, 'index'])->name('deliveries.index');
-        Route::get('/pending', [RequestApprovalController::class, 'pending'])->name('deliveries.pending');
-        Route::get('/rejected', [RequestApprovalController::class, 'rejected'])->name('deliveries.rejected');
-        Route::get('/{delivery}', [RequestApprovalController::class, 'show'])->name('deliveries.show');
-        Route::get('/{delivery}/edit', [RequestApprovalController::class, 'edit'])->name('deliveries.edit');
-        Route::put('/{delivery}', [RequestApprovalController::class, 'update'])->name('deliveries.update');
-        Route::post('/{delivery}/approve', [RequestApprovalController::class, 'approve'])->name('deliveries.approve');
-        Route::post('/{delivery}/reject', [RequestApprovalController::class, 'reject'])->name('deliveries.reject');
-        Route::post('/bulk-approve', [RequestApprovalController::class, 'bulkApprove'])->name('deliveries.bulk-approve');
-        Route::post('/bulk-reject', [RequestApprovalController::class, 'bulkReject'])->name('deliveries.bulk-reject');
-    });
+ Route::prefix('deliveries')->group(function () {
+    Route::get('/', [RequestApprovalController::class, 'index'])->name('deliveries.index');
+    Route::get('/pending', [RequestApprovalController::class, 'pending'])->name('deliveries.pending');
+    Route::get('/rejected', [RequestApprovalController::class, 'rejected'])->name('deliveries.rejected');
+    Route::get('/{delivery}', [RequestApprovalController::class, 'show'])->name('deliveries.show');
+    Route::get('/{delivery}/edit', [RequestApprovalController::class, 'edit'])->name('deliveries.edit');
+    Route::get('/{delivery}/approved-edit', [RequestApprovalController::class, 'editApproved'])->name('deliveries.approved.edit');
+    Route::put('/{delivery}', [RequestApprovalController::class, 'update'])->name('deliveries.update');
+    Route::put('/{delivery}/approved-update', [RequestApprovalController::class, 'updateApproved'])->name('deliveries.approved.update');
+    Route::post('/{delivery}/approve', [RequestApprovalController::class, 'approve'])->name('deliveries.approve');
+    Route::post('/{delivery}/reject', [RequestApprovalController::class, 'reject'])->name('deliveries.reject');
+    Route::post('/bulk-approve', [RequestApprovalController::class, 'bulkApprove'])->name('deliveries.bulk-approve');
+    Route::post('/bulk-reject', [RequestApprovalController::class, 'bulkReject'])->name('deliveries.bulk-reject');
+    Route::post('/calculate-price', [RequestApprovalController::class, 'calculatePrice'])->name('deliveries.calculate-price');
+    Route::post('/calculate-approved-price', [RequestApprovalController::class, 'calculateApprovedPrice'])->name('deliveries.calculate-approved-price');
+});
 
     // Driver-Truck Assignments
     Route::prefix('driver-truck-assignments')->name('driver-truck-assignments.')->group(function () {
@@ -462,31 +472,42 @@ Route::prefix('admin')->middleware(['auth', 'role:admin,staff'])->group(function
     });
 
     // Utilities Routes
-    Route::prefix('utilities')->group(function () {
-        // Inertia Page Routes
-        Route::get('/', [UtilitiesController::class, 'index'])->name('admin.utilities.index');
-        
-        // Form Submission Routes (redirect back)
-        Route::post('/price-matrix', [UtilitiesController::class, 'updatePriceMatrix'])->name('admin.utilities.price-matrix.update');
-        Route::post('/preferences', [UtilitiesController::class, 'updateUserPreferences'])->name('admin.utilities.preferences.update');
-        Route::post('/backup', [UtilitiesController::class, 'createBackup'])->name('admin.utilities.backup.create');
-        Route::post('/restore', [UtilitiesController::class, 'restoreBackup'])->name('admin.utilities.backup.restore');
-        Route::delete('/backup', [UtilitiesController::class, 'deleteBackup'])->name('admin.utilities.backup.delete');
-        Route::post('/archive', [UtilitiesController::class, 'archiveOldData'])->name('admin.utilities.archive.create');
-        
-        // Download Backup Route
-        Route::get('/backup/download', [UtilitiesController::class, 'downloadBackup'])->name('admin.utilities.backup.download');
-        
-        // API Routes (return JSON)
-        Route::get('/archive/data', [UtilitiesController::class, 'getArchivedData'])->name('admin.utilities.archive.data');
-        Route::post('/archive/restore', [UtilitiesController::class, 'restoreArchivedData'])->name('admin.utilities.archive.restore');
-        
-        // Archive Preview Route
-        Route::get('/archive/preview', [UtilitiesController::class, 'previewArchive'])->name('admin.utilities.archive.preview');
-        
-        // Unified Archive Handler Route
-        Route::patch('/archive', [UtilitiesController::class, 'handleArchive'])->name('admin.utilities.archive.handle');
-    });
+   Route::prefix('utilities')->group(function () {
+    // Inertia Page Routes
+    Route::get('/', [UtilitiesController::class, 'index'])->name('admin.utilities.index');
+    
+    // Form Submission Routes (redirect back)
+    Route::post('/price-matrix', [UtilitiesController::class, 'updatePriceMatrix'])->name('admin.utilities.price-matrix.update');
+    Route::post('/preferences', [UtilitiesController::class, 'updateUserPreferences'])->name('admin.utilities.preferences.update');
+    Route::post('/backup', [UtilitiesController::class, 'createBackup'])->name('admin.utilities.backup.create');
+    Route::post('/restore', [UtilitiesController::class, 'restoreBackup'])->name('admin.utilities.backup.restore');
+    Route::delete('/backup', [UtilitiesController::class, 'deleteBackup'])->name('admin.utilities.backup.delete');
+    Route::post('/archive', [UtilitiesController::class, 'archiveOldData'])->name('admin.utilities.archive.create');
+    
+    // Download Backup Route
+    Route::get('/backup/download', [UtilitiesController::class, 'downloadBackup'])->name('admin.utilities.backup.download');
+    
+    // API Routes (return JSON)
+    Route::get('/archive/data', [UtilitiesController::class, 'getArchivedData'])->name('admin.utilities.archive.data');
+    Route::post('/archive/restore', [UtilitiesController::class, 'restoreArchivedData'])->name('admin.utilities.archive.restore');
+    
+    // Archive Preview Route
+    Route::get('/archive/preview', [UtilitiesController::class, 'previewArchive'])->name('admin.utilities.archive.preview');
+    
+    // Unified Archive Handler Route
+    Route::patch('/archive', [UtilitiesController::class, 'handleArchive'])->name('admin.utilities.archive.handle');
+    
+    // ====================
+    // PACKAGE CATEGORIES API ROUTES
+    // ====================
+    
+    // Get all package categories (JSON) - Used by RequestDelivery.vue
+         Route::get('/package-categories', [UtilitiesController::class, 'getPackageCategories'])->name('admin.utilities.package-categories.index');
+    Route::post('/package-categories', [UtilitiesController::class, 'storePackageCategory'])->name('admin.utilities.package-categories.store');
+Route::put('/package-categories/{packageCategory}', [UtilitiesController::class, 'updatePackageCategory'])->name('admin.utilities.package-categories.update');
+    Route::post('/package-categories/{packageCategory}/delete', [UtilitiesController::class, 'deletePackageCategory'])->name('admin.utilities.package-categories.delete');
+    Route::post('/package-categories/reorder', [UtilitiesController::class, 'updatePackageCategoryOrder'])->name('admin.utilities.package-categories.reorder');
+});
 });
 
 // =============================================================================

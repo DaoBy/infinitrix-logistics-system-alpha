@@ -31,6 +31,7 @@ class DatabaseSeeder extends Seeder
             RegionTravelDurationSeeder::class,
                        // Region1ToRegion2ReadyOrdersSeeder::class,
             // DeliveryRequestSeeder::class,
+                        PackageCategorySeeder::class, // Add this line
         ]);
         
         $this->command->info('✅ Development database seeded successfully!');

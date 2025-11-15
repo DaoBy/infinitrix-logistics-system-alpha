@@ -38,6 +38,10 @@ class Package extends Model
         'incident_reported_by',
         'incident_resolved_at',
         'incident_resolved_by',
+          'actual_height',
+    'actual_width', 
+    'actual_length',
+    'actual_weight',
     ];
 
     protected $appends = ['photo_url'];
@@ -54,6 +58,11 @@ class Package extends Model
     'incident_reported_at' => 'datetime',
     'incident_resolved_at' => 'datetime',
     'photo_path' => 'array', // Add this line
+      'actual_height' => 'decimal:2',
+    'actual_width' => 'decimal:2',
+    'actual_length' => 'decimal:2',
+    'actual_weight' => 'decimal:2',
+
 ];
     
     public static function getStatuses(): array

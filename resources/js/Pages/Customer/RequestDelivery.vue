@@ -13,6 +13,78 @@ import { useForm, router, Link } from '@inertiajs/vue3';
 import axios from 'axios';
 import LeafletMap from '@/Components/LeafletMap.vue';
 
+
+const downpaymentOptions = [
+    { value: 'gcash', label: 'GCash' },
+    { value: 'bank', label: 'Bank Transfer' }
+];
+
+
+// Add these to your refs
+const pastReceivers = ref([]);
+const selectedReceiver = ref('');
+
+// Add this method to fetch past receivers
+const fetchPastReceivers = async () => {
+  try {
+    const response = await axios.get(route('customer.delivery-requests.past-receivers'));
+    pastReceivers.value = response.data;
+    console.log('📋 Loaded past receivers:', pastReceivers.value.length);
+  } catch (error) {
+    console.error('Failed to fetch past receivers:', error);
+    pastReceivers.value = [];
+  }
+};
+
+// Add this method to handle receiver selection
+const handleReceiverSelect = (receiverId) => {
+  if (!receiverId) {
+    // Clear form if "Select receiver" is chosen
+    form.receiver = {
+      customer_category: 'individual',
+      first_name: '',
+      middle_name: '',
+      last_name: '',
+      company_name: '',
+      email: '',
+      mobile: '',
+      phone: '',
+      building_number: '',
+      street: '',
+      barangay: '',
+      city: '',
+      province: '',
+      zip_code: '',
+      notes: ''
+    };
+    return;
+  }
+
+
+   const receiver = pastReceivers.value.find(r => r.id == receiverId);
+  if (receiver) {
+    form.receiver = {
+      customer_category: receiver.customer_category || 'individual',
+      first_name: receiver.first_name || '',
+      middle_name: receiver.middle_name || '',
+      last_name: receiver.last_name || '',
+      company_name: receiver.company_name || '',
+      email: receiver.email || '',
+      mobile: receiver.mobile || '',
+      phone: receiver.phone || '',
+      building_number: receiver.building_number || '',
+      street: receiver.street || '',
+      barangay: receiver.barangay || '',
+      city: receiver.city || '',
+      province: receiver.province || '',
+      zip_code: receiver.zip_code || '',
+      notes: ''
+    };
+    
+    console.log('✅ Prefilled receiver details:', receiver.display_name);
+  }
+};
+
 router.on('before', (event) => {
   console.log('🔄 Inertia BEFORE event:', event);
 });
@@ -69,64 +141,167 @@ const showPhotoRequirements = ref(true);
 const showPackageGuide = ref(true);
 const showSizeWarning = ref({});
 
-// Container Presets with corrected dimension display (Length × Height × Width)
-const containerPresets = [
-  {
-    label: 'Small Pouch (L 25cm × H 1cm × W 15cm)',
-    value: 'small_pouch',
-    dimensions: { length: 25, height: 1, width: 15 },
-    category: 'piece',
-    image: '/images/presets/small_pouch.png'
-  },
-  {
-    label: 'Medium Box (L 30cm × H 20cm × W 25cm)',
-    value: 'medium_box',
-    dimensions: { length: 30, height: 20, width: 25 },
-    category: 'carton',
-    image: '/images/presets/medium_box.png'
-  },
-  {
-    label: 'Large Box (L 50cm × H 35cm × W 40cm)',
-    value: 'large_box',
-    dimensions: { length: 50, height: 35, width: 40 },
-    category: 'carton',
-    image: '/images/presets/large_box.png'
-  },
-  {
-    label: 'Extra Large Box (L 70cm × H 50cm × W 50cm)',
-    value: 'xl_box',
-    dimensions: { length: 70, height: 50, width: 50 },
-    category: 'carton',
-    image: '/images/presets/xl_box.png'
-  },
-  {
-    label: 'Large Sack (L 60cm × H 40cm × W 40cm)',
-    value: 'large_sack',
-    dimensions: { length: 60, height: 40, width: 40 },
-    category: 'sack',
-    image: '/images/presets/large_sack.png'
-  },
-  {
-    label: 'Standard Roll (L 50cm × H 10cm × W 10cm)',
-    value: 'standard_roll',
-    dimensions: { length: 50, height: 10, width: 10 },
-    category: 'roll',
-    image: '/images/presets/standard_roll.png'
-  },
-  {
-    label: 'Bundle Roll (L 100cm × H 10cm × W 10cm)',
-    value: 'bundle_roll',
-    dimensions: { length: 100, height: 10, width: 10 },
-    category: 'B/R',
-    image: '/images/presets/bundle_roll.png'
-  },
-  {
-    label: 'Custom Size',
-    value: 'custom',
-    category: 'C/S',
-    image: '/images/presets/custom.png'
+// DYNAMIC PACKAGE CATEGORIES - REPLACED HARDCODED PRESETS
+const packageCategories = ref([]);
+
+// Computed property to format categories for frontend
+const formattedPackageCategories = computed(() => {
+  const categories = packageCategories.value.map(category => {
+    const hasDimensions = category.dimensions && 
+                         category.dimensions.length && 
+                         category.dimensions.height && 
+                         category.dimensions.width;
+    
+    const label = hasDimensions 
+      ? `${category.name} (L ${category.dimensions.length}cm × H ${category.dimensions.height}cm × W ${category.dimensions.width}cm)`
+      : category.name;
+
+    return {
+      label: label,
+      value: category.id, // Use category ID instead of code for uniqueness
+      dimensions: category.dimensions || null,
+      category: category.code, // Keep code for display/grouping if needed
+      image: category.image_url || '/images/presets/default.png',
+      is_custom: category.code === 'custom',
+      original_category: category // Keep the original category data
+    };
+  });
+
+  // Add "Custom Size" option if not already in database
+  if (!categories.find(cat => cat.is_custom)) {
+    categories.push({
+      label: 'Custom Size',
+      value: 'custom', // Keep 'custom' as value for custom size
+      dimensions: null,
+      category: 'C/S',
+      image: '/images/presets/custom.png',
+      is_custom: true
+    });
   }
-];
+
+  return categories;
+});
+
+
+
+const calculatePackageVolume = (pkg) => {
+  const length = parseFloat(pkg.length) / 100; // Convert cm to m
+  const height = parseFloat(pkg.height) / 100;
+  const width = parseFloat(pkg.width) / 100;
+  const quantity = parseInt(pkg.quantity) || 1;
+  
+  return (length * height * width) * quantity;
+};
+
+const calculateTotalVolume = () => {
+  return form.packages.reduce((total, pkg) => {
+    return total + calculatePackageVolume(pkg);
+  }, 0);
+};
+
+const calculateTotalWeight = () => {
+  return form.packages.reduce((total, pkg) => {
+    const weight = parseFloat(pkg.weight) || 0;
+    const quantity = parseInt(pkg.quantity) || 1;
+    return total + (weight * quantity);
+  }, 0);
+};
+
+const hasMultipleWeightRanges = () => {
+  if (form.packages.length <= 1) return false;
+  
+  const weights = form.packages.map(pkg => pkg.weight);
+  const uniqueWeights = [...new Set(weights)];
+  return uniqueWeights.length > 1;
+};
+
+// Method to fetch package categories from API
+const fetchPackageCategories = async () => {
+  try {
+    const response = await axios.get('/package-categories');
+    packageCategories.value = response.data.categories || [];
+    
+    console.log('📦 Loaded package categories:', packageCategories.value.length);
+  } catch (error) {
+    console.error('Failed to fetch package categories:', error);
+    packageCategories.value = getDefaultCategories();
+  }
+};
+
+const getDefaultCategories = () => {
+  return [
+    {
+      id: 1,
+      name: 'Small Pouch',
+      code: 'piece', // Changed from 'small_pouch' to 'piece'
+      description: 'Small documents and letters',
+      dimensions: { length: 25, height: 1, width: 15 },
+      image_url: '/images/presets/small_pouch.png',
+      is_active: true,
+      sort_order: 1
+    },
+    {
+      id: 2,
+      name: 'Medium Box',
+      code: 'carton', // Changed from 'medium_box' to 'carton'
+      description: 'Standard medium-sized boxes',
+      dimensions: { length: 30, height: 20, width: 25 },
+      image_url: '/images/presets/medium_box.png',
+      is_active: true,
+      sort_order: 2
+    },
+    {
+      id: 3,
+      name: 'Large Box',
+      code: 'carton', // Changed from 'large_box' to 'carton'
+      description: 'Large boxes for bigger items',
+      dimensions: { length: 50, height: 35, width: 40 },
+      image_url: '/images/presets/large_box.png',
+      is_active: true,
+      sort_order: 3
+    },
+    {
+      id: 4,
+      name: 'Extra Large Box',
+      code: 'carton', // Changed from 'xl_box' to 'carton'
+      description: 'Extra large boxes for bulky items',
+      dimensions: { length: 70, height: 50, width: 50 },
+      image_url: '/images/presets/xl_box.png',
+      is_active: true,
+      sort_order: 4
+    },
+    {
+      id: 5,
+      name: 'Large Sack',
+      code: 'sack', // Changed from 'large_sack' to 'sack'
+      description: 'Large sacks for loose items',
+      dimensions: { length: 60, height: 40, width: 40 },
+      image_url: '/images/presets/large_sack.png',
+      is_active: true,
+      sort_order: 5
+    },
+    {
+      id: 6,
+      name: 'Standard Roll',
+      code: 'roll', // Changed from 'standard_roll' to 'roll'
+      description: 'Standard rolls for cylindrical items',
+      dimensions: { length: 50, height: 10, width: 10 },
+      image_url: '/images/presets/standard_roll.png',
+      is_active: true,
+      sort_order: 6
+    },
+    {
+      id: 7,
+      name: 'Bundle Roll',
+      code: 'bundle', // Changed from 'bundle_roll' to 'bundle'
+      description: 'Bundle rolls for larger cylindrical items',
+      dimensions: { length: 100, height: 10, width: 10 },
+      image_url: '/images/presets/bundle_roll.png',
+      is_active: true,
+      sort_order: 7
+    }
+  ];
+};
 
 // Weight range options (charging upper limit)
 const weightRangeOptions = [
@@ -355,6 +530,10 @@ const form = useForm({
     payment_method: '',
     payment_terms: '',
     total_price: 0,
+       downpayment_method: '',
+    downpayment_reference: '',
+    downpayment_receipt: null,
+    downpayment_receipt_url: null,
     priceBreakdown: null,
     packages: [
       {
@@ -373,6 +552,61 @@ const form = useForm({
       },
     ],
 });
+
+const handleDownpaymentReceiptUpload = async (event) => {
+    const file = event.target.files[0];
+    if (file) {
+        // Validate file
+        if (!file.type.match('image.*')) {
+            form.setError('downpayment_receipt', 'Only image files are allowed');
+            event.target.value = '';
+            return;
+        }
+        
+        if (file.size > 5 * 1024 * 1024) {
+            form.setError('downpayment_receipt', 'File size must be less than 5MB');
+            event.target.value = '';
+            return;
+        }
+        
+        // Compress and process image
+        try {
+            const compressedFile = await compressImage(file, 1200, 0.7);
+            form.downpayment_receipt = compressedFile;
+            form.downpayment_receipt_url = URL.createObjectURL(compressedFile);
+            form.clearErrors('downpayment_receipt');
+            
+            console.log('📄 Downpayment receipt processed:', {
+                name: compressedFile.name,
+                size: formatFileSize(compressedFile.size),
+                type: compressedFile.type
+            });
+        } catch (error) {
+            console.error('❌ Failed to process downpayment receipt:', error);
+            form.setError('downpayment_receipt', 'Failed to process image. Please try another file.');
+            event.target.value = '';
+        }
+    } else {
+        form.downpayment_receipt = null;
+        form.downpayment_receipt_url = null;
+        form.clearErrors('downpayment_receipt');
+    }
+};
+
+const removeDownpaymentReceipt = () => {
+    if (form.downpayment_receipt_url) {
+        URL.revokeObjectURL(form.downpayment_receipt_url);
+    }
+    form.downpayment_receipt = null;
+    form.downpayment_receipt_url = null;
+    form.clearErrors('downpayment_receipt');
+    
+    // Clear the file input
+    const fileInput = document.querySelector('input[type="file"][accept="image/*"]');
+    if (fileInput) {
+        fileInput.value = '';
+    }
+};
 
 const paymentTypeOptions = computed(() => {
   const options = [
@@ -448,8 +682,6 @@ const calculatePrice = async () => {
     let totalPackages = 0;
     const packagesData = [];
 
-
-
     form.packages.forEach(pkg => {
       const quantity = parseInt(pkg.quantity) || 1;
       totalPackages += quantity;
@@ -485,8 +717,9 @@ const calculatePrice = async () => {
   }
 };
 
-const handlePresetChange = (presetValue, index) => {
-  if (presetValue === 'custom') {
+const handlePresetChange = (selectedValue, index) => {
+  // If it's custom size
+  if (selectedValue === 'custom') {
     form.packages[index] = {
       ...form.packages[index],
       length: '',
@@ -495,43 +728,40 @@ const handlePresetChange = (presetValue, index) => {
       category: 'C/S',
       preset: 'custom'
     };
-  } else {
-    const preset = containerPresets.find(p => p.value === presetValue);
-    if (preset) {
-      form.packages[index] = {
-        ...form.packages[index],
-        length: preset.dimensions.length,
-        height: preset.dimensions.height,
-        width: preset.dimensions.width,
-        category: preset.category,
-        preset: preset.value
-      };
-    }
+    return;
   }
+
+  // Find the category by ID (selectedValue is now the category ID)
+  const category = packageCategories.value.find(cat => cat.id == selectedValue);
+  
+  if (!category) return;
+
+  form.packages[index] = {
+    ...form.packages[index],
+    length: category.dimensions?.length || '',
+    height: category.dimensions?.height || '',
+    width: category.dimensions?.width || '',
+    category: category.code, // Use the code for category type
+    preset: category.id // Store the category ID as preset
+  };
 };
 
 const cyclePreset = (packageIndex, direction) => {
   const currentPreset = form.packages[packageIndex].preset;
   if (!currentPreset) return;
 
-  const currentIndex = containerPresets.findIndex(p => p.value === currentPreset);
+  const currentIndex = formattedPackageCategories.value.findIndex(p => p.value === currentPreset);
   if (currentIndex === -1) return;
 
   let newIndex = currentIndex + direction;
   
   if (newIndex < 0) {
-    newIndex = containerPresets.length - 1;
-  } else if (newIndex >= containerPresets.length) {
+    newIndex = formattedPackageCategories.value.length - 1;
+  } else if (newIndex >= formattedPackageCategories.value.length) {
     newIndex = 0;
   }
 
-  if (containerPresets[newIndex].value === 'custom' && newIndex !== 0 && newIndex !== containerPresets.length - 1) {
-    newIndex += direction;
-    if (newIndex < 0) newIndex = containerPresets.length - 1;
-    if (newIndex >= containerPresets.length) newIndex = 0;
-  }
-
-  handlePresetChange(containerPresets[newIndex].value, packageIndex);
+  handlePresetChange(formattedPackageCategories.value[newIndex].value, packageIndex);
 };
 
 const autoCapitalize = (text) => {
@@ -585,8 +815,6 @@ const handleTextInputWithCapitalize = (event, field, packageIndex = null) => {
     form[field] = value;
   }
 };
-
-
 
 // Update filteredDropoffRegions to exclude selected pick-up region
 const filteredDropoffRegions = computed(() => {
@@ -981,24 +1209,41 @@ const validateStep = () => {
     });
   }
   
-  if (currentStep.value === 4) {
-    if (!form.payment_type) {
-      form.setError('payment_type', 'Payment type is required.');
-      isValid = false;
+    if (currentStep.value === 4) {
+        // Downpayment validation (always required)
+        if (!form.downpayment_method) {
+            form.setError('downpayment_method', 'Processing fee payment method is required');
+            isValid = false;
+        }
+        
+        if (!form.downpayment_reference) {
+            form.setError('downpayment_reference', 'Reference number is required');
+            isValid = false;
+        }
+        
+        if (!form.downpayment_receipt) {
+            form.setError('downpayment_receipt', 'Payment receipt is required');
+            isValid = false;
+        }
+
+        // Existing payment validation
+        if (!form.payment_type) {
+            form.setError('payment_type', 'Payment type is required');
+            isValid = false;
+        }
+
+        if (form.payment_type === 'prepaid' && !form.payment_method) {
+            form.setError('payment_method', 'Payment method is required for prepaid');
+            isValid = false;
+        }
+
+        if (form.payment_type === 'postpaid' && !form.payment_terms) {
+            form.setError('payment_terms', 'Payment terms are required for postpaid');
+            isValid = false;
+        }
     }
 
-    if (form.payment_type === 'prepaid' && !form.payment_method) {
-      form.setError('payment_method', 'Payment method is required for prepaid.');
-      isValid = false;
-    }
-
-    if (form.payment_type === 'postpaid' && !form.payment_terms) {
-      form.setError('payment_terms', 'Payment terms are required for postpaid.');
-      isValid = false;
-    }
-  }
-
-  return isValid;
+    return isValid;
 };
 
 const compressImage = (file, maxWidth = 1200, quality = 0.7) => {
@@ -1306,137 +1551,204 @@ const uploadPhotosSequentially = async (files, packageIndex) => {
 };
 
 const submitRequest = async () => {
-  console.log('🔍 SUBMIT REQUEST STARTED - currentStep:', currentStep.value);
-  
-  if (!validateStep()) {
-    console.log('❌ Validation failed - form errors:', form.errors);
-    return;
-  }
-  
-  console.log('✅ Validation passed');
-  isLoading.value = true;
-
-  const formData = new window.FormData();
-
-  // Add CSRF token
-  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-  console.log('🔐 CSRF Token:', csrfToken ? 'Found' : 'NOT FOUND');
-
-  // Add form data
-  Object.entries(form.sender).forEach(([key, value]) => {
-    formData.append(`sender[${key}]`, value ?? '');
-  });
-
-  Object.entries(form.receiver).forEach(([key, value]) => {
-    formData.append(`receiver[${key}]`, value ?? '');
-  });
-
-  formData.append('pick_up_region_id', form.pick_up_region_id);
-  formData.append('drop_off_region_id', form.drop_off_region_id);
-
-  formData.append('payment_type', form.payment_type || 'prepaid');
-  formData.append('payment_method', form.payment_method || '');
-  formData.append('payment_terms', form.payment_terms || '');
-
-  if (form.priceBreakdown) {
-    formData.append('total_price', form.total_price);
-    formData.append('base_fee', form.priceBreakdown.base_fee);
-    formData.append('volume_fee', form.priceBreakdown.volume_fee);
-    formData.append('weight_fee', form.priceBreakdown.weight_fee);
-    formData.append('package_fee', form.priceBreakdown.package_fee);
-    formData.append('price_breakdown', JSON.stringify(form.priceBreakdown));
-  }
-
-  try {
-    const uploadedPhotoPaths = {};
-
-    // Sequential photo upload for each package
-    for (let originalIndex = 0; originalIndex < form.packages.length; originalIndex++) {
-      const originalPkg = form.packages[originalIndex];
-      
-      if (originalPkg.photos && originalPkg.photos.length > 0) {
-        console.log(`📸 Uploading ${originalPkg.photos.length} photos for package ${originalIndex}`);
-        
-        // Use sequential upload
-        uploadedPhotoPaths[originalIndex] = await uploadPhotosSequentially(originalPkg.photos, originalIndex);
-        
-        console.log(`✅ Successfully uploaded ${uploadedPhotoPaths[originalIndex].length} photos for package ${originalIndex}`);
-      } else {
-        uploadedPhotoPaths[originalIndex] = [];
-        console.log(`ℹ️ No photos to upload for package ${originalIndex}`);
-      }
-    }
-
-    // Expand packages and add to formData
-    const expandedPackages = [];
+    console.log('🔍 SUBMIT REQUEST STARTED - currentStep:', currentStep.value);
     
-    form.packages.forEach((originalPkg, originalIndex) => {
-      const quantity = parseInt(originalPkg.quantity) || 1;
-      const photoPaths = uploadedPhotoPaths[originalIndex] || [];
-      
-      for (let i = 0; i < quantity; i++) {
-        const packageCopy = {
-          item_name: originalPkg.item_name,
-          category: originalPkg.category,
-          description: originalPkg.description || '',
-          value: originalPkg.value || 0,
-          height: originalPkg.height,
-          width: originalPkg.width,
-          length: originalPkg.length,
-          weight: originalPkg.weight,
-          preset: originalPkg.preset || '',
-          photo_path: [...photoPaths]
-        };
-        
-        expandedPackages.push(packageCopy);
-      }
+    if (!validateStep()) {
+        console.log('❌ Validation failed - form errors:', form.errors);
+        return;
+    }
+    
+    console.log('✅ Validation passed');
+    isLoading.value = true;
+
+    const formData = new window.FormData();
+
+    // Add CSRF token
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    console.log('🔐 CSRF Token:', csrfToken ? 'Found' : 'NOT FOUND');
+
+    // Add form data
+    Object.entries(form.sender).forEach(([key, value]) => {
+        formData.append(`sender[${key}]`, value ?? '');
     });
 
-    expandedPackages.forEach((pkg, index) => {
-      formData.append(`packages[${index}][item_name]`, pkg.item_name);
-      formData.append(`packages[${index}][category]`, pkg.category);
-      formData.append(`packages[${index}][description]`, pkg.description || '');
-      formData.append(`packages[${index}][value]`, pkg.value || 0);
-      formData.append(`packages[${index}][height]`, pkg.height);
-      formData.append(`packages[${index}][width]`, pkg.width);
-      formData.append(`packages[${index}][length]`, pkg.length);
-      formData.append(`packages[${index}][weight]`, pkg.weight);
-      
-      if (pkg.photo_path && pkg.photo_path.length > 0) {
-        pkg.photo_path.forEach((photoPath, pathIndex) => {
-          formData.append(`packages[${index}][photo_path][${pathIndex}]`, photoPath);
+    Object.entries(form.receiver).forEach(([key, value]) => {
+        formData.append(`receiver[${key}]`, value ?? '');
+    });
+
+    formData.append('pick_up_region_id', form.pick_up_region_id);
+    formData.append('drop_off_region_id', form.drop_off_region_id);
+
+    formData.append('payment_type', form.payment_type || 'prepaid');
+    formData.append('payment_method', form.payment_method || '');
+    formData.append('payment_terms', form.payment_terms || '');
+
+    // Add downpayment data
+    formData.append('downpayment_method', form.downpayment_method);
+    formData.append('downpayment_reference', form.downpayment_reference);
+
+    if (form.priceBreakdown) {
+        formData.append('total_price', form.total_price);
+        formData.append('base_fee', form.priceBreakdown.base_fee);
+        formData.append('volume_fee', form.priceBreakdown.volume_fee);
+        formData.append('weight_fee', form.priceBreakdown.weight_fee);
+        formData.append('package_fee', form.priceBreakdown.package_fee);
+        formData.append('price_breakdown', JSON.stringify(form.priceBreakdown));
+    }
+
+    try {
+        // Upload downpayment receipt first
+        let downpaymentReceiptPath = null;
+        if (form.downpayment_receipt instanceof File) {
+            console.log('📄 Uploading downpayment receipt...');
+            
+            const receiptFormData = new FormData();
+            receiptFormData.append('receipt', form.downpayment_receipt);
+            
+            const receiptResponse = await axios.post(
+                route('customer.delivery-requests.upload-downpayment-receipt'), 
+                receiptFormData, 
+                {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    timeout: 30000
+                }
+            );
+            
+            if (receiptResponse.data.success) {
+                downpaymentReceiptPath = receiptResponse.data.file_path;
+                formData.append('downpayment_receipt', downpaymentReceiptPath);
+                console.log('✅ Downpayment receipt uploaded:', downpaymentReceiptPath);
+            } else {
+                throw new Error('Failed to upload downpayment receipt');
+            }
+        } else if (typeof form.downpayment_receipt === 'string') {
+            // If it's already a base64 string (from direct conversion)
+            formData.append('downpayment_receipt', form.downpayment_receipt);
+            console.log('✅ Using existing downpayment receipt data');
+        } else {
+            throw new Error('Downpayment receipt is required');
+        }
+
+        const uploadedPhotoPaths = {};
+
+        // Sequential photo upload for each package
+        for (let originalIndex = 0; originalIndex < form.packages.length; originalIndex++) {
+            const originalPkg = form.packages[originalIndex];
+            
+            if (originalPkg.photos && originalPkg.photos.length > 0) {
+                console.log(`📸 Uploading ${originalPkg.photos.length} photos for package ${originalIndex}`);
+                
+                // Use sequential upload
+                uploadedPhotoPaths[originalIndex] = await uploadPhotosSequentially(originalPkg.photos, originalIndex);
+                
+                console.log(`✅ Successfully uploaded ${uploadedPhotoPaths[originalIndex].length} photos for package ${originalIndex}`);
+            } else {
+                uploadedPhotoPaths[originalIndex] = [];
+                console.log(`ℹ️ No photos to upload for package ${originalIndex}`);
+            }
+        }
+
+        // Expand packages and add to formData
+        const expandedPackages = [];
+        
+        form.packages.forEach((originalPkg, originalIndex) => {
+            const quantity = parseInt(originalPkg.quantity) || 1;
+            const photoPaths = uploadedPhotoPaths[originalIndex] || [];
+            
+            for (let i = 0; i < quantity; i++) {
+                const packageCopy = {
+                    item_name: originalPkg.item_name,
+                    category: originalPkg.category,
+                    description: originalPkg.description || '',
+                    value: originalPkg.value || 0,
+                    height: originalPkg.height,
+                    width: originalPkg.width,
+                    length: originalPkg.length,
+                    weight: originalPkg.weight,
+                    preset: originalPkg.preset || '',
+                    photo_path: [...photoPaths]
+                };
+                
+                expandedPackages.push(packageCopy);
+            }
         });
-      }
-    });
 
-    console.log('🚀 Making final submission with CSRF token...');
-    
-    // Final submission
-    const response = await axios.post(route('customer.delivery-requests.store'), formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        'X-CSRF-TOKEN': csrfToken,
-        'X-Requested-With': 'XMLHttpRequest'
-      }
-    });
+        expandedPackages.forEach((pkg, index) => {
+            formData.append(`packages[${index}][item_name]`, pkg.item_name);
+            formData.append(`packages[${index}][category]`, pkg.category);
+            formData.append(`packages[${index}][description]`, pkg.description || '');
+            formData.append(`packages[${index}][value]`, pkg.value || 0);
+            formData.append(`packages[${index}][height]`, pkg.height);
+            formData.append(`packages[${index}][width]`, pkg.width);
+            formData.append(`packages[${index}][length]`, pkg.length);
+            formData.append(`packages[${index}][weight]`, pkg.weight);
+            formData.append(`packages[${index}][preset]`, pkg.preset || '');
+            
+            if (pkg.photo_path && pkg.photo_path.length > 0) {
+                pkg.photo_path.forEach((photoPath, pathIndex) => {
+                    formData.append(`packages[${index}][photo_path][${pathIndex}]`, photoPath);
+                });
+            }
+        });
 
-    console.log('✅ Success response:', response.data);
-    deliveryRequestId.value = response.data.delivery_request_id;
-    showSuccessScreen.value = true;
-    isLoading.value = false;
+        console.log('🚀 Making final submission with CSRF token...');
+        console.log('📦 Packages to submit:', expandedPackages.length);
+        console.log('💰 Downpayment method:', form.downpayment_method);
+        console.log('🔢 Downpayment reference:', form.downpayment_reference);
+        console.log('💳 Payment type:', form.payment_type);
+        console.log('💸 Payment method:', form.payment_method);
+        
+        // Final submission
+        const response = await axios.post(route('customer.delivery-requests.store'), formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+                'X-CSRF-TOKEN': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            timeout: 60000 // 60 second timeout for large uploads
+        });
 
-  } catch (error) {
-    console.error('❌ Error response:', error.response?.data || error.message);
-    isLoading.value = false;
-    
-    // Handle validation errors
-    if (error.response?.data?.errors) {
-      form.errors = error.response.data.errors;
-    } else {
-      // Show generic error for upload issues
-      form.setError('photos', 'Failed to upload photos. Please try again with smaller images or contact support.');
+        console.log('✅ Success response:', response.data);
+        deliveryRequestId.value = response.data.delivery_request_id;
+        showSuccessScreen.value = true;
+        isLoading.value = false;
+
+        // Clean up object URLs to prevent memory leaks
+        form.packages.forEach(pkg => {
+            if (pkg.photo_urls) {
+                pkg.photo_urls.forEach(url => {
+                    URL.revokeObjectURL(url);
+                });
+            }
+        });
+
+        if (form.downpayment_receipt_url) {
+            URL.revokeObjectURL(form.downpayment_receipt_url);
+        }
+
+    } catch (error) {
+        console.error('❌ Error response:', error.response?.data || error.message);
+        isLoading.value = false;
+        
+        // Handle validation errors
+        if (error.response?.data?.errors) {
+            form.errors = error.response.data.errors;
+            console.log('📋 Form errors:', form.errors);
+        } else if (error.code === 'NETWORK_ERROR' || error.code === 'ECONNABORTED') {
+            form.setError('submit', 'Network error. Please check your connection and try again.');
+        } else {
+            // Show generic error for upload issues
+            const errorMessage = error.response?.data?.message || error.message || 'Failed to submit request. Please try again.';
+            form.setError('submit', errorMessage);
+        }
+        
+        // Scroll to top to show errors
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }
 };
 
 const generateRequestId = () => {
@@ -1468,6 +1780,8 @@ const createSimilarDelivery = () => {
 onMounted(() => {
   fetchRegions();
   fetchPriceMatrix();
+  fetchPackageCategories();
+  fetchPastReceivers(); // Add this line
 });
 
 
@@ -1957,307 +2271,344 @@ watch(() => form.payment_type, (val) => {
                 </div>
               </div>
 
-              <!-- Step 2: Receiver Information -->
-              <div v-if="currentStep === 2" class="space-y-6">
-                <div class="flex items-center justify-between">
-                  <h2 class="text-xl font-semibold text-gray-900">Receiver Information</h2>
-                  <div class="text-sm text-gray-500">
-                    Enter receiver details
-                  </div>
-                </div>
+          <!-- Step 2: Receiver Information -->
+<div v-if="currentStep === 2" class="space-y-6">
+  <div class="flex items-center justify-between">
+    <h2 class="text-xl font-semibold text-gray-900">Receiver Information</h2>
+    <div class="text-sm text-gray-500">
+      Enter receiver details
+    </div>
+  </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  <!-- Left Column - Form Fields -->
-                  <div class="lg:col-span-2 space-y-6">
-                    <!-- Customer Category -->
-                    <div>
-                      <InputLabel value="Customer Category *" />
-                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                        <label
-                          v-for="option in customerCategoryOptions"
-                          :key="option.value"
-                          :class="[
-                            'border rounded-lg p-4 cursor-pointer transition-all duration-200',
-                            form.receiver.customer_category === option.value
-                              ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
-                              : 'border-gray-300 hover:border-gray-400'
-                          ]"
-                        >
-                          <div class="flex items-center">
-                            <input
-                              type="radio"
-                              v-model="form.receiver.customer_category"
-                              :value="option.value"
-                              class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
-                            />
-                            <span class="ml-3 text-sm font-medium text-gray-900">{{ option.label }}</span>
-                          </div>
-                        </label>
-                      </div>
-                      <InputError :message="form.errors['receiver.customer_category']" />
-                    </div>
+  <!-- Past Receivers Dropdown -->
+  <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+    <div class="flex items-center justify-between">
+      <h3 class="font-semibold text-blue-800 flex items-center text-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+        Quick Select from Past Receivers
+      </h3>
+      <button 
+        @click="fetchPastReceivers" 
+        type="button"
+        class="text-blue-600 hover:text-blue-700 text-sm font-medium"
+      >
+        Refresh
+      </button>
+    </div>
+    <div class="mt-2">
+      <select
+        v-model="selectedReceiver"
+        @change="handleReceiverSelect(selectedReceiver)"
+        class="block w-full rounded-md border border-blue-300 bg-white py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+      >
+        <option value="">Select a past receiver...</option>
+        <option 
+          v-for="receiver in pastReceivers" 
+          :key="receiver.id" 
+          :value="receiver.id"
+          class="text-sm"
+        >
+          {{ receiver.display_name }} - {{ receiver.email }} ({{ receiver.created_at }})
+        </option>
+      </select>
+      <p class="text-xs text-blue-600 mt-1">
+        Select a receiver from your past delivery requests to prefill their details
+      </p>
+    </div>
+  </div>
 
-                    <!-- Name Fields -->
-                <div>
-  <InputLabel value="First Name *" />
-  <TextInput
-    v-model="form.receiver.first_name"
-    type="text"
-    class="mt-1 block w-full"
-    :class="{ 'border-red-500': form.errors['receiver.first_name'] }"
-    placeholder="Enter first name"
-    @input="(e) => handleNameInputWithCapitalize(e, 'receiver.first_name')"
-  />
-  <InputError :message="form.errors['receiver.first_name']" />
-</div>
-
-<!-- Middle Name -->
-<div>
-  <InputLabel value="Middle Name" />
-  <TextInput
-    v-model="form.receiver.middle_name"
-    type="text"
-    class="mt-1 block w-full"
-    placeholder="Enter middle name"
-    @input="(e) => handleNameInputWithCapitalize(e, 'receiver.middle_name')"
-  />
-  <InputError :message="form.errors['receiver.middle_name']" />
-</div>
-
-<!-- Last Name -->
-<div>
-  <InputLabel value="Last Name *" />
-  <TextInput
-    v-model="form.receiver.last_name"
-    type="text"
-    class="mt-1 block w-full"
-    :class="{ 'border-red-500': form.errors['receiver.last_name'] }"
-    placeholder="Enter last name"
-    @input="(e) => handleNameInputWithCapitalize(e, 'receiver.last_name')"
-  />
-  <InputError :message="form.errors['receiver.last_name']" />
-</div>
-
-                    <!-- Company Name (Conditional) -->
-                    <div v-if="form.receiver.customer_category === 'company'" class="space-y-2">
-                      <InputLabel value="Company Name *" />
-                      <TextInput
-                        v-model="form.receiver.company_name"
-                        type="text"
-                        class="mt-1 block w-full"
-                        :class="{ 'border-red-500': form.errors['receiver.company_name'] }"
-                        placeholder="Enter company name"
-                        @input="(e) => handleTextInput(e, 'receiver.company_name')"
-                      />
-                      <InputError :message="form.errors['receiver.company_name']" />
-                    </div>
-
-                    <!-- Contact Information -->
-                    <div class="space-y-6">
-                      <!-- Email Address - Full Width -->
-                      <div>
-                        <InputLabel value="Email Address *" />
-                        <TextInput
-                          v-model="form.receiver.email"
-                          type="email"
-                          class="mt-1 block w-full"
-                          :class="{ 'border-red-500': form.errors['receiver.email'] }"
-                          placeholder="receiver.email@example.com"
-                        />
-                        <InputError :message="form.errors['receiver.email']" />
-                      </div>
-
-                      <!-- Mobile and Phone - Side by Side -->
-                      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                          <InputLabel value="Mobile Number *" />
-                          <TextInput
-                            v-model="form.receiver.mobile"
-                            type="tel"
-                            class="mt-1 block w-full"
-                            :class="{ 'border-red-500': form.errors['receiver.mobile'] }"
-                            placeholder="09123456789"
-                            @input="(e) => handleNumberInput(e, 'receiver.mobile')"
-                            maxlength="11"
-                          />
-                          <InputError :message="form.errors['receiver.mobile']" />
-                        </div>
-
-                        <div>
-                          <InputLabel value="Phone Number (Optional)" />
-                          <TextInput
-                            v-model="form.receiver.phone"
-                            type="tel"
-                            class="mt-1 block w-full"
-                            :class="{ 'border-red-500': form.errors['receiver.phone'] }"
-                            placeholder="Enter landline number"
-                            @input="(e) => handleNumberInput(e, 'receiver.phone')"
-                            maxlength="15"
-                          />
-                          <InputError :message="form.errors['receiver.phone']" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Address Information -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div>
-                        <InputLabel value="Building Number" />
-                        <TextInput
-                          v-model="form.receiver.building_number"
-                          type="text"
-                          class="mt-1 block w-full"
-                          placeholder="e.g., 123"
-                          @input="(e) => handleAddressInput(e, 'receiver.building_number')"
-                        />
-                        <InputError :message="form.errors['receiver.building_number']" />
-                      </div>
-
-                    <div>
-  <InputLabel value="Street *" />
-  <TextInput
-    v-model="form.receiver.street"
-    type="text"
-    class="mt-1 block w-full"
-    :class="{ 'border-red-500': form.errors['receiver.street'] }"
-    placeholder="e.g., Main Street"
-    @input="(e) => handleAddressInputWithCapitalize(e, 'receiver.street')"
-  />
-  <InputError :message="form.errors['receiver.street']" />
-</div>
-
-<!-- Barangay -->
-<div>
-  <InputLabel value="Barangay" />
-  <TextInput
-    v-model="form.receiver.barangay"
-    type="text"
-    class="mt-1 block w-full"
-    placeholder="Enter barangay"
-    @input="(e) => handleAddressInputWithCapitalize(e, 'receiver.barangay')"
-  />
-  <InputError :message="form.errors['receiver.barangay']" />
-</div>
-
-<!-- City -->
-<div>
-  <InputLabel value="City *" />
-  <TextInput
-    v-model="form.receiver.city"
-    type="text"
-    class="mt-1 block w-full"
-    :class="{ 'border-red-500': form.errors['receiver.city'] }"
-    placeholder="Enter city"
-    @input="(e) => handleAddressInputWithCapitalize(e, 'receiver.city')"
-  />
-  <InputError :message="form.errors['receiver.city']" />
-</div>
-
-<!-- Province -->
-<div>
-  <InputLabel value="Province *" />
-  <TextInput
-    v-model="form.receiver.province"
-    type="text"
-    class="mt-1 block w-full"
-    :class="{ 'border-red-500': form.errors['receiver.province'] }"
-    placeholder="Enter province"
-    @input="(e) => handleAddressInputWithCapitalize(e, 'receiver.province')"
-  />
-  <InputError :message="form.errors['receiver.province']" />
-</div>
-
-                      <div>
-                        <InputLabel value="ZIP Code *" />
-                        <TextInput
-                          v-model="form.receiver.zip_code"
-                          type="text"
-                          class="mt-1 block w-full"
-                          :class="{ 'border-red-500': form.errors['receiver.zip_code'] }"
-                          placeholder="e.g., 1000"
-                          maxlength="4"
-                          @input="(e) => handleNumberInput(e, 'receiver.zip_code')"
-                        />
-                        <InputError :message="form.errors['receiver.zip_code']" />
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Right Column - Drop-off Region & Map -->
-                  <div class="lg:col-span-1 space-y-6">
-                    <!-- Drop-off Region -->
-                   <div>
-              <InputLabel value="Select Drop-off Region *" />
-              <SelectInput
-                v-model="form.drop_off_region_id"
-                class="mt-1 block w-full"
-                :class="{ 'border-red-500': form.errors.drop_off_region_id }"
-                :options="filteredDropoffRegions"
-                placeholder=""
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <!-- Left Column - Form Fields -->
+    <div class="lg:col-span-2 space-y-6">
+      <!-- Customer Category -->
+      <div>
+        <InputLabel value="Customer Category *" />
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+          <label
+            v-for="option in customerCategoryOptions"
+            :key="option.value"
+            :class="[
+              'border rounded-lg p-4 cursor-pointer transition-all duration-200',
+              form.receiver.customer_category === option.value
+                ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
+                : 'border-gray-300 hover:border-gray-400'
+            ]"
+          >
+            <div class="flex items-center">
+              <input
+                type="radio"
+                v-model="form.receiver.customer_category"
+                :value="option.value"
+                class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
               />
-              <InputError :message="form.errors.drop_off_region_id" />
+              <span class="ml-3 text-sm font-medium text-gray-900">{{ option.label }}</span>
             </div>
-                  <!-- Drop-off Region Information Display -->
-            <div v-if="selectedDropoffRegionInfo" class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h3 class="font-semibold text-blue-800 mb-3 flex items-center">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                </svg>
-                {{ selectedDropoffRegionInfo.name || 'Branch' }} Information
-              </h3>
-              <div class="space-y-2">
-                <p class="text-sm text-blue-700">
-                  <strong class="text-blue-800">Address:</strong><br>
-                  {{ selectedDropoffRegionInfo.warehouse_address || 'Address information not available' }}
-                </p>
-                <p class="text-sm text-blue-700" v-if="selectedDropoffRegionInfo.latitude && selectedDropoffRegionInfo.longitude">
-                  <strong class="text-blue-800">Coordinates:</strong><br>
-                  {{ selectedDropoffRegionInfo.latitude }}, {{ selectedDropoffRegionInfo.longitude }}
-                </p>
-                <p class="text-sm text-blue-700" v-else>
-                  <strong class="text-blue-800">Coordinates:</strong><br>
-                  <span class="text-orange-600">Coordinates not available - please contact administrator</span>
-                </p>
-                <div class="pt-2">
-                  <p class="text-xs text-blue-600">
-                    <strong>Note:</strong> This is the selected drop-off location for your packages.
-                  </p>
-                </div>
-              </div>
-              <div class="mt-4">
-                <LeafletMap
-                  v-if="selectedDropoffRegionInfo.latitude && selectedDropoffRegionInfo.longitude"
-                  :latitude="selectedDropoffRegionInfo.latitude"
-                  :longitude="selectedDropoffRegionInfo.longitude"
-                  :region-name="selectedDropoffRegionInfo.name"
-                  :zoom="15"
-                  height="200px"
-                />
-                <div v-else class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 h-48 flex items-center justify-center">
-                  <div class="text-center">
-                    <svg class="w-8 h-8 mx-auto mb-2 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                    </svg>
-                    <p class="text-yellow-700 font-medium">Map Unavailable</p>
-                    <p class="text-yellow-600 text-sm">Location coordinates not configured</p>
-                  </div>
-                </div>
-              </div>
+          </label>
+        </div>
+        <InputError :message="form.errors['receiver.customer_category']" />
+      </div>
+
+      <!-- Name Fields -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div>
+          <InputLabel value="First Name *" />
+          <TextInput
+            v-model="form.receiver.first_name"
+            type="text"
+            class="mt-1 block w-full"
+            :class="{ 'border-red-500': form.errors['receiver.first_name'] }"
+            placeholder="Enter first name"
+            @input="(e) => handleNameInputWithCapitalize(e, 'receiver.first_name')"
+          />
+          <InputError :message="form.errors['receiver.first_name']" />
+        </div>
+        
+        <div>
+          <InputLabel value="Middle Name" />
+          <TextInput
+            v-model="form.receiver.middle_name"
+            type="text"
+            class="mt-1 block w-full"
+            placeholder="Enter middle name"
+            @input="(e) => handleNameInputWithCapitalize(e, 'receiver.middle_name')"
+          />
+          <InputError :message="form.errors['receiver.middle_name']" />
+        </div>
+        
+        <div>
+          <InputLabel value="Last Name *" />
+          <TextInput
+            v-model="form.receiver.last_name"
+            type="text"
+            class="mt-1 block w-full"
+            :class="{ 'border-red-500': form.errors['receiver.last_name'] }"
+            placeholder="Enter last name"
+            @input="(e) => handleNameInputWithCapitalize(e, 'receiver.last_name')"
+          />
+          <InputError :message="form.errors['receiver.last_name']" />
+        </div>
+      </div>
+
+      <!-- Company Name (Conditional) -->
+      <div v-if="form.receiver.customer_category === 'company'" class="space-y-2">
+        <InputLabel value="Company Name *" />
+        <TextInput
+          v-model="form.receiver.company_name"
+          type="text"
+          class="mt-1 block w-full"
+          :class="{ 'border-red-500': form.errors['receiver.company_name'] }"
+          placeholder="Enter company name"
+          @input="(e) => handleTextInput(e, 'receiver.company_name')"
+        />
+        <InputError :message="form.errors['receiver.company_name']" />
+      </div>
+
+      <!-- Contact Information -->
+      <div class="space-y-6">
+        <!-- Email Address - Full Width -->
+        <div>
+          <InputLabel value="Email Address *" />
+          <TextInput
+            v-model="form.receiver.email"
+            type="email"
+            class="mt-1 block w-full"
+            :class="{ 'border-red-500': form.errors['receiver.email'] }"
+            placeholder="receiver.email@example.com"
+          />
+          <InputError :message="form.errors['receiver.email']" />
+        </div>
+
+        <!-- Mobile and Phone - Side by Side -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <InputLabel value="Mobile Number *" />
+            <TextInput
+              v-model="form.receiver.mobile"
+              type="tel"
+              class="mt-1 block w-full"
+              :class="{ 'border-red-500': form.errors['receiver.mobile'] }"
+              placeholder="09123456789"
+              @input="(e) => handleNumberInput(e, 'receiver.mobile')"
+              maxlength="11"
+            />
+            <InputError :message="form.errors['receiver.mobile']" />
+          </div>
+
+          <div>
+            <InputLabel value="Phone Number (Optional)" />
+            <TextInput
+              v-model="form.receiver.phone"
+              type="tel"
+              class="mt-1 block w-full"
+              :class="{ 'border-red-500': form.errors['receiver.phone'] }"
+              placeholder="Enter landline number"
+              @input="(e) => handleNumberInput(e, 'receiver.phone')"
+              maxlength="15"
+            />
+            <InputError :message="form.errors['receiver.phone']" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Address Information -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div>
+          <InputLabel value="Building Number" />
+          <TextInput
+            v-model="form.receiver.building_number"
+            type="text"
+            class="mt-1 block w-full"
+            placeholder="e.g., 123"
+            @input="(e) => handleAddressInput(e, 'receiver.building_number')"
+          />
+          <InputError :message="form.errors['receiver.building_number']" />
+        </div>
+
+        <div>
+          <InputLabel value="Street *" />
+          <TextInput
+            v-model="form.receiver.street"
+            type="text"
+            class="mt-1 block w-full"
+            :class="{ 'border-red-500': form.errors['receiver.street'] }"
+            placeholder="e.g., Main Street"
+            @input="(e) => handleAddressInputWithCapitalize(e, 'receiver.street')"
+          />
+          <InputError :message="form.errors['receiver.street']" />
+        </div>
+
+        <div>
+          <InputLabel value="Barangay" />
+          <TextInput
+            v-model="form.receiver.barangay"
+            type="text"
+            class="mt-1 block w-full"
+            placeholder="Enter barangay"
+            @input="(e) => handleAddressInputWithCapitalize(e, 'receiver.barangay')"
+          />
+          <InputError :message="form.errors['receiver.barangay']" />
+        </div>
+
+        <div>
+          <InputLabel value="City *" />
+          <TextInput
+            v-model="form.receiver.city"
+            type="text"
+            class="mt-1 block w-full"
+            :class="{ 'border-red-500': form.errors['receiver.city'] }"
+            placeholder="Enter city"
+            @input="(e) => handleAddressInputWithCapitalize(e, 'receiver.city')"
+          />
+          <InputError :message="form.errors['receiver.city']" />
+        </div>
+
+        <div>
+          <InputLabel value="Province *" />
+          <TextInput
+            v-model="form.receiver.province"
+            type="text"
+            class="mt-1 block w-full"
+            :class="{ 'border-red-500': form.errors['receiver.province'] }"
+            placeholder="Enter province"
+            @input="(e) => handleAddressInputWithCapitalize(e, 'receiver.province')"
+          />
+          <InputError :message="form.errors['receiver.province']" />
+        </div>
+
+        <div>
+          <InputLabel value="ZIP Code *" />
+          <TextInput
+            v-model="form.receiver.zip_code"
+            type="text"
+            class="mt-1 block w-full"
+            :class="{ 'border-red-500': form.errors['receiver.zip_code'] }"
+            placeholder="e.g., 1000"
+            maxlength="4"
+            @input="(e) => handleNumberInput(e, 'receiver.zip_code')"
+          />
+          <InputError :message="form.errors['receiver.zip_code']" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column - Drop-off Region & Map -->
+    <div class="lg:col-span-1 space-y-6">
+      <!-- Drop-off Region -->
+      <div>
+        <InputLabel value="Select Drop-off Region *" />
+        <SelectInput
+          v-model="form.drop_off_region_id"
+          class="mt-1 block w-full"
+          :class="{ 'border-red-500': form.errors.drop_off_region_id }"
+          :options="filteredDropoffRegions"
+          placeholder=""
+        />
+        <InputError :message="form.errors.drop_off_region_id" />
+      </div>
+      
+      <!-- Drop-off Region Information Display -->
+      <div v-if="selectedDropoffRegionInfo" class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h3 class="font-semibold text-blue-800 mb-3 flex items-center">
+          <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          {{ selectedDropoffRegionInfo.name || 'Branch' }} Information
+        </h3>
+        <div class="space-y-2">
+          <p class="text-sm text-blue-700">
+            <strong class="text-blue-800">Address:</strong><br>
+            {{ selectedDropoffRegionInfo.warehouse_address || 'Address information not available' }}
+          </p>
+          <p class="text-sm text-blue-700" v-if="selectedDropoffRegionInfo.latitude && selectedDropoffRegionInfo.longitude">
+            <strong class="text-blue-800">Coordinates:</strong><br>
+            {{ selectedDropoffRegionInfo.latitude }}, {{ selectedDropoffRegionInfo.longitude }}
+          </p>
+          <p class="text-sm text-blue-700" v-else>
+            <strong class="text-blue-800">Coordinates:</strong><br>
+            <span class="text-orange-600">Coordinates not available - please contact administrator</span>
+          </p>
+          <div class="pt-2">
+            <p class="text-xs text-blue-600">
+              <strong>Note:</strong> This is the selected drop-off location for your packages.
+            </p>
+          </div>
+        </div>
+        <div class="mt-4">
+          <LeafletMap
+            v-if="selectedDropoffRegionInfo.latitude && selectedDropoffRegionInfo.longitude"
+            :latitude="selectedDropoffRegionInfo.latitude"
+            :longitude="selectedDropoffRegionInfo.longitude"
+            :region-name="selectedDropoffRegionInfo.name"
+            :zoom="15"
+            height="200px"
+          />
+          <div v-else class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 h-48 flex items-center justify-center">
+            <div class="text-center">
+              <svg class="w-8 h-8 mx-auto mb-2 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+              </svg>
+              <p class="text-yellow-700 font-medium">Map Unavailable</p>
+              <p class="text-yellow-600 text-sm">Location coordinates not configured</p>
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
 
-                <!-- Navigation -->
-                <div class="flex justify-between pt-6">
-                  <SecondaryButton @click="prevStep" class="px-6">
-                    Back
-                  </SecondaryButton>
-                  <PrimaryButton @click="nextStep" class="px-6">
-                    Continue to Package
-                  </PrimaryButton>
-                </div>
-              </div>
+  <!-- Navigation -->
+  <div class="flex justify-between pt-6">
+    <SecondaryButton @click="prevStep" class="px-6">
+      Back
+    </SecondaryButton>
+    <PrimaryButton @click="nextStep" class="px-6">
+      Continue to Package
+    </PrimaryButton>
+  </div>
+</div>
 
              <!-- Step 3: Package Information -->
 <div v-if="currentStep === 3" class="space-y-6">
@@ -2369,13 +2720,7 @@ watch(() => form.payment_type, (val) => {
         <div class="flex items-center justify-between">
           <h3 class="text-lg font-medium text-gray-900">Package {{ index + 1 }}</h3>
           <div class="flex space-x-2">
-            <button
-              @click="duplicatePackage(index)"
-              type="button"
-              class="text-green-600 hover:text-green-700 text-sm font-medium"
-            >
-              Duplicate
-            </button>
+           
             <button
               v-if="form.packages.length > 1"
               @click="removePackage(index)"
@@ -2403,12 +2748,12 @@ watch(() => form.payment_type, (val) => {
   <InputError :message="form.errors[`packages.${index}.item_name`]" />
 </div>
           <div>
-            <InputLabel value="Description (Optional)" />
+            <InputLabel value="Special Handling Instructions (Optional)" />
             <TextInput
               v-model="pkg.description"
               type="text"
               class="mt-1 block w-full"
-              placeholder="Brief description of the package"
+              placeholder="For fragile items, perishable goods, etc."
               @input="(e) => handleTextInput(e, 'description', index)"
             />
             <p class="text-xs text-gray-500 mt-1">Special instructions or handling requirements</p>
@@ -2419,42 +2764,42 @@ watch(() => form.payment_type, (val) => {
         <!-- Container Preset Selection with Images -->
         <div>
           <InputLabel value="Package Type *" />
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
-            <label
-              v-for="preset in containerPresets"
-              :key="preset.value"
-              :class="[
-                'border rounded-lg p-3 cursor-pointer transition-all duration-200 text-center',
-                pkg.preset === preset.value
-                  ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
-                  : 'border-gray-300 hover:border-gray-400'
-              ]"
-            >
-              <input
-                type="radio"
-                v-model="pkg.preset"
-                :value="preset.value"
-                @change="handlePresetChange(preset.value, index)"
-                class="sr-only"
-              />
-              <div class="flex flex-col items-center">
-                <div class="w-12 h-12 mb-2 flex items-center justify-center">
-                  <img
-                    v-if="preset.image"
-                    :src="preset.image"
-                    :alt="preset.label"
-                    class="max-w-full max-h-full object-contain"
-                  />
-                  <div v-else class="w-12 h-12 bg-gray-200 rounded flex items-center justify-center">
-                    <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                    </svg>
-                  </div>
-                </div>
-                <div class="text-xs font-medium text-gray-900">{{ preset.label.split(' (')[0] }}</div>
-                <div class="text-xs text-gray-500 mt-1">{{ preset.category }}</div>
-              </div>
-            </label>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
+  <label
+    v-for="preset in formattedPackageCategories"
+    :key="preset.value"
+    :class="[
+      'border rounded-lg p-3 cursor-pointer transition-all duration-200 text-center',
+      pkg.preset === preset.value // Compare with value (ID)
+        ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
+        : 'border-gray-300 hover:border-gray-400'
+    ]"
+  >
+    <input
+      type="radio"
+      v-model="pkg.preset"
+      :value="preset.value" 
+      @change="handlePresetChange(preset.value, index)"
+      class="sr-only"
+    />
+    <div class="flex flex-col items-center">
+      <div class="w-12 h-12 mb-2 flex items-center justify-center">
+        <img
+          v-if="preset.image"
+          :src="preset.image"
+          :alt="preset.label"
+          class="max-w-full max-h-full object-contain"
+        />
+        <div v-else class="w-12 h-12 bg-gray-200 rounded flex items-center justify-center">
+          <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+          </svg>
+        </div>
+      </div>
+      <div class="text-xs font-medium text-gray-900">{{ preset.label.split(' (')[0] }}</div>
+      <div class="text-xs text-gray-500 mt-1">{{ preset.category }}</div>
+    </div>
+  </label>
           </div>
           <InputError :message="form.errors[`packages.${index}.preset`]" />
           <p class="text-xs text-gray-500 mt-2">Select the container type that matches your item</p>
@@ -2654,7 +2999,6 @@ watch(() => form.payment_type, (val) => {
   </div>
 </div>
 
-
 <!-- ADD THE MULTIPLE PACKAGE CHECKLIST HERE -->
 <div v-if="pkg.quantity > 1 && pkg.photo_urls && pkg.photo_urls.length > 0" class="mt-2 bg-blue-50 border border-blue-200 rounded-lg p-2">
   <p class="text-xs text-blue-700">
@@ -2797,33 +3141,159 @@ watch(() => form.payment_type, (val) => {
           </div>
 
           <!-- Price Breakdown -->
-          <div class="bg-white rounded-lg p-4 border border-green-100">
-            <h4 class="font-semibold text-green-700 mb-3">Price Breakdown</h4>
-            <div class="space-y-2" v-if="form.priceBreakdown">
-              <div class="flex justify-between text-sm">
-                <span class="text-gray-600">Base Delivery Fee</span>
-                <span class="font-medium">₱{{ formatCurrency(form.priceBreakdown.base_fee) }}</span>
-              </div>
-              <div class="flex justify-between text-sm">
-                <span class="text-gray-600">Volume Charge</span>
-                <span class="font-medium">₱{{ formatCurrency(form.priceBreakdown.volume_fee) }}</span>
-              </div>
-              <div class="flex justify-between text-sm">
-                <span class="text-gray-600">Weight Charge</span>
-                <span class="font-medium">₱{{ formatCurrency(form.priceBreakdown.weight_fee) }}</span>
-              </div>
-              <div class="flex justify-between text-sm">
-                <span class="text-gray-600">Package Handling</span>
-                <span class="font-medium">₱{{ formatCurrency(form.priceBreakdown.package_fee) }}</span>
-              </div>
-              <div class="border-t border-green-200 pt-2 mt-2">
-                <div class="flex justify-between items-center">
-                  <span class="text-lg font-semibold text-green-800">Total Amount</span>
-                  <span class="text-xl font-bold text-green-800">₱{{ formatCurrency(form.total_price) }}</span>
-                </div>
-              </div>
-            </div>
+        <div class="bg-white rounded-lg p-4 border border-green-100">
+  <h4 class="font-semibold text-green-700 mb-3">Price Breakdown</h4>
+  <div class="space-y-3" v-if="form.priceBreakdown">
+    <!-- Base Fee -->
+    <div class="flex justify-between text-sm">
+      <div>
+        <span class="text-gray-600">Base Delivery Fee</span>
+        <p class="text-xs text-gray-500">
+          Standard delivery charge
+          <span class="block text-purple-600 font-semibold">
+            Rate: ₱{{ formatCurrency(priceMatrix.base_fee) }}
+          </span>
+        </p>
+      </div>
+      <div class="text-right">
+        <span class="font-medium">₱{{ formatCurrency(form.priceBreakdown.base_fee) }}</span>
+        <p class="text-xs text-gray-500">1 × ₱{{ formatCurrency(priceMatrix.base_fee) }}</p>
+      </div>
+    </div>
+    
+    <!-- Volume Fee -->
+    <div class="flex justify-between text-sm">
+      <div>
+        <span class="text-gray-600">Volume Charge</span>
+        <p class="text-xs text-gray-500">
+          Total volume × volume rate
+          <span class="block text-purple-600 font-semibold">
+            Rate: ₱{{ formatCurrency(priceMatrix.volume_rate) }} per m³
+          </span>
+          <span v-if="form.packages.length > 1" class="block text-green-600 font-semibold">
+            ({{ form.packages.length }} package types)
+          </span>
+        </p>
+      </div>
+      <div class="text-right">
+        <span class="font-medium">₱{{ formatCurrency(form.priceBreakdown.volume_fee) }}</span>
+        <p class="text-xs text-gray-500">
+          {{ formatCurrency(calculateTotalVolume()) }}m³ × ₱{{ formatCurrency(priceMatrix.volume_rate) }}
+        </p>
+      </div>
+    </div>
+    
+    <!-- Weight Fee -->
+    <div class="flex justify-between text-sm">
+      <div>
+        <span class="text-gray-600">Weight Charge</span>
+        <p class="text-xs text-gray-500">
+          Total weight × weight rate
+          <span class="block text-purple-600 font-semibold">
+            Rate: ₱{{ formatCurrency(priceMatrix.weight_rate) }} per kg
+          </span>
+          <span v-if="hasMultipleWeightRanges()" class="block text-orange-600 font-semibold">
+            (Different weight ranges)
+          </span>
+        </p>
+      </div>
+      <div class="text-right">
+        <span class="font-medium">₱{{ formatCurrency(form.priceBreakdown.weight_fee) }}</span>
+        <p class="text-xs text-gray-500">
+          {{ formatCurrency(calculateTotalWeight()) }}kg × ₱{{ formatCurrency(priceMatrix.weight_rate) }}
+        </p>
+      </div>
+    </div>
+    
+    <!-- Package Fee -->
+    <div class="flex justify-between text-sm">
+      <div>
+        <span class="text-gray-600">Package Handling Fee</span>
+        <p class="text-xs text-gray-500">
+          Packages × handling rate
+          <span class="block text-purple-600 font-semibold">
+            Rate: ₱{{ formatCurrency(priceMatrix.package_rate) }} per package
+          </span>
+          <span v-if="totalPackageQuantity > 1" class="block text-blue-600 font-semibold">
+            ({{ totalPackageQuantity }} individual packages)
+          </span>
+        </p>
+      </div>
+      <div class="text-right">
+        <span class="font-medium">₱{{ formatCurrency(form.priceBreakdown.package_fee) }}</span>
+        <p class="text-xs text-gray-500">
+          {{ totalPackageQuantity }} × ₱{{ formatCurrency(priceMatrix.package_rate) }}
+        </p>
+      </div>
+    </div>
+    
+    <!-- Detailed Package Breakdown -->
+    <div v-if="form.packages.length > 1" class="bg-gray-50 rounded-lg p-3 mt-2 border border-gray-200">
+      <h5 class="font-semibold text-gray-700 text-xs mb-2">Package Details:</h5>
+      <div class="space-y-2 text-xs">
+        <div v-for="(pkg, index) in form.packages" :key="index" class="flex justify-between items-center border-b border-gray-200 pb-2 last:border-0">
+          <div class="flex-1">
+            <span class="font-medium text-gray-700">{{ pkg.item_name || `Package ${index + 1}` }}</span>
+            <p class="text-gray-500">
+              {{ pkg.length }}×{{ pkg.height }}×{{ pkg.width }}cm • {{ pkg.weight }}kg
+            </p>
           </div>
+          <div class="text-right">
+            <span class="font-semibold text-blue-600">Qty: {{ pkg.quantity || 1 }}</span>
+            <p class="text-gray-500">
+              Vol: {{ formatCurrency(calculatePackageVolume(pkg)) }}m³
+            </p>
+          </div>
+        </div>
+        <div class="border-t border-gray-300 pt-2 mt-2 flex justify-between font-semibold text-gray-700">
+          <span>Total:</span>
+          <span>{{ totalPackageQuantity }} packages</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calculation Summary -->
+    <div class="bg-blue-50 rounded-lg p-3 border border-blue-200 mt-3">
+      <h5 class="font-semibold text-blue-700 text-xs mb-2">Calculation Summary:</h5>
+      <div class="grid grid-cols-2 gap-2 text-xs">
+        <div class="text-blue-600">
+          <span class="font-semibold">Total Volume:</span><br>
+          {{ formatCurrency(calculateTotalVolume()) }} m³
+        </div>
+        <div class="text-blue-600">
+          <span class="font-semibold">Total Weight:</span><br>
+          {{ formatCurrency(calculateTotalWeight()) }} kg
+        </div>
+        <div class="text-blue-600">
+          <span class="font-semibold">Total Packages:</span><br>
+          {{ totalPackageQuantity }} units
+        </div>
+        <div class="text-blue-600">
+          <span class="font-semibold">Package Types:</span><br>
+          {{ form.packages.length }} types
+        </div>
+      </div>
+    </div>
+    
+    <!-- Total Amount -->
+    <div class="border-t border-green-200 pt-3 mt-3">
+      <div class="flex justify-between items-center">
+        <div>
+          <span class="text-lg font-semibold text-green-800">Total Amount</span>
+          <p class="text-xs text-gray-600" v-if="totalPackageQuantity > 1">
+            For {{ totalPackageQuantity }} packages across {{ form.packages.length }} types
+          </p>
+        </div>
+        <div class="text-right">
+          <span class="text-xl font-bold text-green-800">₱{{ formatCurrency(form.total_price) }}</span>
+          <p class="text-xs text-gray-500">
+            Base + Volume + Weight + Handling
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
         </div>
 
        <!-- Enhanced "What Happens Next" Section -->
@@ -3007,12 +3477,7 @@ watch(() => form.payment_type, (val) => {
 
   <!-- Original Payment Form (shown when NOT in success state) -->
   <div v-else class="space-y-6">
- 
-
-    <!-- Your existing payment form content goes here -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <!-- Step 4: Payment Information -->
-
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Left Column - Information Sections (2/3 width) -->
         <div class="lg:col-span-2 space-y-6">
@@ -3069,37 +3534,204 @@ watch(() => form.payment_type, (val) => {
               </div>
             </div>
 
-            <!-- Price Breakdown -->
+            <!-- Enhanced Price Breakdown with Processing Fee -->
             <div class="bg-white rounded-lg p-4 border border-green-100">
               <h4 class="font-semibold text-green-700 mb-3">Price Breakdown</h4>
-              <div class="space-y-2">
-                <div v-if="form.priceBreakdown" class="space-y-2">
-                  <div class="flex justify-between text-sm">
+              <div class="space-y-3" v-if="form.priceBreakdown">
+                <!-- Base Fee -->
+                <div class="flex justify-between text-sm">
+                  <div>
                     <span class="text-gray-600">Base Delivery Fee</span>
+                    <p class="text-xs text-gray-500">
+                      Standard delivery charge
+                      <span class="block text-purple-600 font-semibold">
+                        Rate: ₱{{ formatCurrency(priceMatrix.base_fee) }}
+                      </span>
+                    </p>
+                  </div>
+                  <div class="text-right">
                     <span class="font-medium">₱{{ formatCurrency(form.priceBreakdown.base_fee) }}</span>
+                    <p class="text-xs text-gray-500">1 × ₱{{ formatCurrency(priceMatrix.base_fee) }}</p>
                   </div>
-                  <div class="flex justify-between text-sm">
+                </div>
+                
+                <!-- Volume Fee -->
+                <div class="flex justify-between text-sm">
+                  <div>
                     <span class="text-gray-600">Volume Charge</span>
+                    <p class="text-xs text-gray-500">
+                      Total volume × volume rate
+                      <span class="block text-purple-600 font-semibold">
+                        Rate: ₱{{ formatCurrency(priceMatrix.volume_rate) }} per m³
+                      </span>
+                    </p>
+                  </div>
+                  <div class="text-right">
                     <span class="font-medium">₱{{ formatCurrency(form.priceBreakdown.volume_fee) }}</span>
+                    <p class="text-xs text-gray-500">
+                      {{ formatCurrency(calculateTotalVolume()) }}m³ × ₱{{ formatCurrency(priceMatrix.volume_rate) }}
+                    </p>
                   </div>
-                  <div class="flex justify-between text-sm">
+                </div>
+                
+                <!-- Weight Fee -->
+                <div class="flex justify-between text-sm">
+                  <div>
                     <span class="text-gray-600">Weight Charge</span>
+                    <p class="text-xs text-gray-500">
+                      Total weight × weight rate
+                      <span class="block text-purple-600 font-semibold">
+                        Rate: ₱{{ formatCurrency(priceMatrix.weight_rate) }} per kg
+                      </span>
+                    </p>
+                  </div>
+                  <div class="text-right">
                     <span class="font-medium">₱{{ formatCurrency(form.priceBreakdown.weight_fee) }}</span>
+                    <p class="text-xs text-gray-500">
+                      {{ formatCurrency(calculateTotalWeight()) }}kg × ₱{{ formatCurrency(priceMatrix.weight_rate) }}
+                    </p>
                   </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-gray-600">Package Handling</span>
+                </div>
+                
+                <!-- Package Fee -->
+                <div class="flex justify-between text-sm">
+                  <div>
+                    <span class="text-gray-600">Package Handling Fee</span>
+                    <p class="text-xs text-gray-500">
+                      Packages × handling rate
+                      <span class="block text-purple-600 font-semibold">
+                        Rate: ₱{{ formatCurrency(priceMatrix.package_rate) }} per package
+                      </span>
+                    </p>
+                  </div>
+                  <div class="text-right">
                     <span class="font-medium">₱{{ formatCurrency(form.priceBreakdown.package_fee) }}</span>
-                  </div>
-                  <div class="border-t border-green-200 pt-2 mt-2">
-                    <div class="flex justify-between items-center">
-                      <span class="text-lg font-semibold text-green-800">Total Amount</span>
-                      <span class="text-xl font-bold text-green-800">₱{{ formatCurrency(form.total_price) }}</span>
-                    </div>
+                    <p class="text-xs text-gray-500">
+                      {{ totalPackageQuantity }} × ₱{{ formatCurrency(priceMatrix.package_rate) }}
+                    </p>
                   </div>
                 </div>
-                <div v-else class="text-center py-4 text-gray-500">
-                  <p>Complete package details to see price calculation</p>
-                </div>
+
+               <!-- In the price breakdown section -->
+<div class="border-t border-green-200 pt-3 mt-3">
+    <div class="flex justify-between text-sm mb-2">
+        <div>
+            <span class="text-gray-600">Processing Fee</span>
+            <p class="text-xs text-gray-500">
+                One-time fee to secure your request
+                <span class="block text-blue-600 font-semibold">
+                    Required for all delivery requests
+                </span>
+            </p>
+        </div>
+        <div class="text-right">
+            <span class="font-medium">-₱200.00</span>
+            <p class="text-xs text-gray-500">Deducted from total</p>
+        </div>
+    </div>
+    
+    <!-- Final Amount -->
+    <div class="flex justify-between items-center pt-3 border-t border-green-200">
+        <div>
+            <span class="text-lg font-semibold text-green-800">Final Amount Due</span>
+            <p class="text-xs text-gray-600">After processing fee deduction</p>
+        </div>
+        <div class="text-right">
+            <span class="text-xl font-bold text-green-800">₱{{ formatCurrency(form.total_price - 200) }}</span>
+            <p class="text-xs text-gray-500">
+                ₱{{ formatCurrency(form.total_price) }} - ₱200.00
+            </p>
+        </div>
+    </div>
+</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Downpayment Section -->
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <h3 class="font-semibold text-blue-800 flex items-center mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Processing Fee Payment Required
+            </h3>
+            
+            <div class="bg-white rounded-lg p-4 border border-blue-100 mb-4">
+              <div class="flex justify-between items-center mb-3">
+                <span class="text-lg font-semibold text-blue-800">Processing Fee</span>
+                <span class="text-lg font-bold text-blue-800">₱200.00</span>
+              </div>
+              <p class="text-sm text-blue-600">
+                This one-time fee secures your delivery request and will be deducted from your final payment. 
+                Required for all delivery requests to prevent spam. No admin verification needed.
+              </p>
+            </div>
+
+            <!-- Downpayment Method Selection -->
+            <div class="mb-4">
+              <InputLabel value="Payment Method for Processing Fee *" />
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                <label
+                  v-for="option in downpaymentOptions"
+                  :key="option.value"
+                  :class="[
+                    'border rounded-lg p-4 cursor-pointer transition-all duration-200',
+                    form.downpayment_method === option.value
+                      ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
+                      : 'border-gray-300 hover:border-gray-400'
+                  ]"
+                >
+                  <div class="flex items-center">
+                    <input
+                      type="radio"
+                      v-model="form.downpayment_method"
+                      :value="option.value"
+                      class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
+                    />
+                    <span class="ml-3 text-sm font-medium text-gray-900">{{ option.label }}</span>
+                  </div>
+                </label>
+              </div>
+              <InputError :message="form.errors.downpayment_method" />
+            </div>
+
+            <!-- Reference Number -->
+            <div class="mb-4">
+              <InputLabel value="Reference Number *" />
+              <TextInput
+                v-model="form.downpayment_reference"
+                type="text"
+                class="mt-1 block w-full"
+                :class="{ 'border-red-500': form.errors.downpayment_reference }"
+                placeholder="Enter transaction reference number"
+              />
+              <p class="text-xs text-gray-500 mt-1">Reference number from your GCash or Bank transaction</p>
+              <InputError :message="form.errors.downpayment_reference" />
+            </div>
+
+            <!-- Receipt Upload -->
+            <div>
+              <InputLabel value="Payment Receipt Screenshot *" />
+              <input
+                type="file"
+                @change="handleDownpaymentReceiptUpload"
+                accept="image/*"
+                class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mt-1"
+              />
+              <p class="text-xs text-gray-500 mt-1">Upload screenshot of your payment confirmation (Max 5MB)</p>
+              <InputError :message="form.errors.downpayment_receipt" />
+              
+              <!-- Preview uploaded receipt -->
+              <div v-if="form.downpayment_receipt_url" class="mt-3">
+                <img :src="form.downpayment_receipt_url" alt="Payment receipt" class="w-32 h-32 object-cover rounded-lg border border-gray-300" />
+                <button
+                  type="button"
+                  @click="removeDownpaymentReceipt"
+                  class="mt-2 text-red-600 hover:text-red-700 text-sm font-medium"
+                >
+                  Remove Receipt
+                </button>
               </div>
             </div>
           </div>
@@ -3294,7 +3926,7 @@ watch(() => form.payment_type, (val) => {
           </div>
         </div>
 
-        <!-- Right Column - Payment Selection (1/3 width) -->
+          <!-- Right Column - Payment Selection (1/3 width) -->
         <div class="lg:col-span-1">
           <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sticky top-6">
             <h3 class="text-lg font-semibold text-gray-900 mb-6">Select Payment Options</h3>
@@ -3409,7 +4041,7 @@ watch(() => form.payment_type, (val) => {
         </div>
       </div>
 
-      <!-- Navigation -->
+  <!-- Navigation -->
       <div class="flex justify-between pt-6">
         <SecondaryButton @click="prevStep" class="px-6">
           Back

@@ -4,6 +4,7 @@ import { usePage, router } from '@inertiajs/vue3';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import NavLink from '@/Components/NavLink.vue';
+import axios from 'axios';
 import homeImage1 from '@/assets/homeImage1.jpg';
 import truck2Image from '@/assets/truck2.jpg';
 import transportationImage from '@/assets/transportation.png';
@@ -12,8 +13,6 @@ import weightImage from '@/assets/weight.png';
 import calculatorImage from '@/assets/calculator.png';
 import homeImage2 from '@/assets/homeImage2.jpg';
 import homeImage3 from '@/assets/homeImage3.jpg';
-
-
 
 const homeImages = [homeImage1, homeImage2, homeImage3] 
 const currentHomeIndex = ref(0)
@@ -25,7 +24,6 @@ onMounted(() => {
     currentHomeIndex.value = (currentHomeIndex.value + 1) % homeImages.length
   }, 2000) // change image every 2 seconds
 })
-
 
 // Add your case study image imports
 import caseStudy1 from '@/assets/caseStudy1.jpg';
@@ -70,32 +68,32 @@ const caseStudies = ref([
   { 
     title: 'Big Item Loading', 
     image: caseStudy2,
-    description: 'There are times when we deal with items that are just too big or too heavy for ordinary transport. That’s where our specialized tools and trained team come in. We’ve handled oversized cargo enough to know how to load, secure, and move them safely — always with the same care as if they were our own.'
+    description: 'There are times when we deal with items that are just too big or too heavy for ordinary transport. That\'s where our specialized tools and trained team come in. We\'ve handled oversized cargo enough to know how to load, secure, and move them safely — always with the same care as if they were our own.'
   },
   { 
     title: 'Sack Delivery for Relief', 
     image: caseStudy3,
-    description: 'There are moments when our trucks carry more than just packages — they carry hope. During tough times, our team steps up for relief operations, bringing essential goods to communities that need them most. It’s our way of lending a hand and showing that we’re more than just a delivery service.'
+    description: 'There are moments when our trucks carry more than just packages — they carry hope. During tough times, our team steps up for relief operations, bringing essential goods to communities that need them most. It\'s our way of lending a hand and showing that we\'re more than just a delivery service.'
   },
   { 
     title: 'Night-Time Cargo Drop', 
     image: caseStudy4,
-    description: 'Day or night, our work never really stops. With 24/7 operations, we’re always ready to move — even after hours — making sure time-sensitive shipments reach their destination right when they’re needed most.'
+    description: 'Day or night, our work never really stops. With 24/7 operations, we\'re always ready to move — even after hours — making sure time-sensitive shipments reach their destination right when they\'re needed most.'
   },
   { 
     title: 'Drum Storage Area', 
     image: caseStudy5,
-    description: 'We’ve built storage spaces that can handle even the toughest materials — from heavy drums to large barrels. Everything’s kept safe and sound, following the right handling steps to make sure even hazardous materials are treated with care.'
+    description: 'We\'ve built storage spaces that can handle even the toughest materials — from heavy drums to large barrels. Everything\'s kept safe and sound, following the right handling steps to make sure even hazardous materials are treated with care.'
   },
   { 
     title: 'Island Cargo Transfer', 
     image: caseStudy6,
-    description: 'We also take pride in our inter-island cargo services — reaching even the most remote places through trusted sea and land routes. It’s how we keep connections strong, no matter how far the destination may be.'
+    description: 'We also take pride in our inter-island cargo services — reaching even the most remote places through trusted sea and land routes. It\'s how we keep connections strong, no matter how far the destination may be.'
   },
   { 
     title: 'Truck Dispatch Operations', 
     image: caseStudy7,
-    description: 'Our dispatch operations run like clockwork — every departure is tracked in real time, every route carefully planned. It’s all about keeping things smooth, fast, and right on schedule.'
+    description: 'Our dispatch operations run like clockwork — every departure is tracked in real time, every route carefully planned. It\'s all about keeping things smooth, fast, and right on schedule.'
   },
 ]);
 
@@ -222,6 +220,47 @@ const navigateToCompleteProfile = () => {
     showProfileModal.value = false;
     router.visit(route('profile.complete'));
 };
+
+// Branches/Locations functionality
+const branches = ref([]);
+const isLoadingBranches = ref(false);
+
+const fetchBranches = async () => {
+  isLoadingBranches.value = true;
+  try {
+    const response = await axios.get('/api/delivery/regions');
+    const regionsData = response.data.data || response.data;
+    
+    if (Array.isArray(regionsData)) {
+      branches.value = regionsData.map(region => ({
+        id: region.id,
+        name: region.name ? region.name.replace(/\b\w/g, char => char.toUpperCase()) : '',
+        address: region.warehouse_address ? region.warehouse_address.replace(/\b\w/g, char => char.toUpperCase()) : '',
+        latitude: region.latitude,
+        longitude: region.longitude,
+        is_active: region.is_active,
+        color_hex: region.color_hex
+      }));
+    }
+  } catch (error) {
+    console.error('Failed to fetch branches:', error);
+    branches.value = [];
+  } finally {
+    isLoadingBranches.value = false;
+  }
+};
+
+const viewBranchOnMap = (branch) => {
+  if (branch.latitude && branch.longitude) {
+    const url = `https://www.google.com/maps?q=${branch.latitude},${branch.longitude}`;
+    window.open(url, '_blank');
+  }
+};
+
+// Fetch branches when component mounts
+onMounted(() => {
+  fetchBranches();
+});
 </script>
 
 <template>
@@ -252,6 +291,8 @@ const navigateToCompleteProfile = () => {
       </div>
     </div>
 
+
+    
   <!-- Hero Section -->
 <div
   class="relative w-full bg-cover bg-center bg-no-repeat text-white py-48 px-6 md:px-12 lg:px-20 cursor-pointer"
@@ -286,7 +327,88 @@ const navigateToCompleteProfile = () => {
 </div>
 
 
+<!-- New Branches/Locations Section -->
+    <div class="w-full bg-white py-16 px-6 md:px-12 lg:px-20">
+      <div class="max-w-[90%] xl:max-w-[1280px] mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-12">
+          <h2 class="text-4xl md:text-5xl font-bold text-green-700 uppercase tracking-wide mb-4 drop-shadow-md">
+            Our Service Locations
+          </h2>
+          <p class="text-gray-600 text-lg max-w-2xl mx-auto">
+            We have multiple branches across the region to serve you better. 
+            Find the nearest location for your delivery needs.
+          </p>
+        </div>
 
+        <!-- Loading State -->
+        <div v-if="isLoadingBranches" class="flex justify-center items-center py-12">
+          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+        </div>
+
+        <!-- Branches Grid -->
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div 
+            v-for="branch in branches" 
+            :key="branch.id"
+            class="bg-gray-50 rounded-lg p-6 border border-gray-200 hover:border-green-300 transition-all duration-300 hover:shadow-lg"
+          >
+            <div class="flex items-start mb-4">
+              <div 
+                class="w-4 h-4 rounded-full mt-1 mr-3 flex-shrink-0"
+                :style="{ backgroundColor: branch.color_hex || '#10B981' }"
+              ></div>
+              <div>
+                <h3 class="text-xl font-semibold text-gray-900">{{ branch.name }}</h3>
+                <div class="flex items-center mt-1 text-sm text-gray-600">
+                  <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  </svg>
+                  {{ branch.address || 'Address not available' }}
+                </div>
+              </div>
+            </div>
+            
+            <!-- Status Badge -->
+            <div class="flex items-center justify-between mt-4">
+              <span 
+                :class="[
+                  'px-3 py-1 rounded-full text-xs font-medium',
+                  branch.is_active 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-gray-100 text-gray-800'
+                ]"
+              >
+                {{ branch.is_active ? 'Active' : 'Inactive' }}
+              </span>
+              
+              <!-- View on Map Link -->
+              <button 
+                v-if="branch.latitude && branch.longitude"
+                @click="viewBranchOnMap(branch)"
+                class="text-green-600 hover:text-green-700 text-sm font-medium flex items-center"
+              >
+                View Map
+                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div v-if="!isLoadingBranches && branches.length === 0" class="text-center py-12">
+          <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          <h3 class="text-lg font-medium text-gray-900 mb-2">No Branches Available</h3>
+          <p class="text-gray-600">Please check back later for service locations.</p>
+        </div>
+      </div>
+    </div>
 
     <!-- Goowell Case Section -->
     <div class="w-full bg-gradient-to-br from-gray-50 to-gray-100 py-16 px-6 md:px-12 lg:px-20" >
@@ -550,6 +672,8 @@ const navigateToCompleteProfile = () => {
         </div>
       </div>
     </div>
+
+    
 
    <!-- FAQ Section -->
 <div class="w-full py-12 px-6 md:px-12 lg:px-20">
