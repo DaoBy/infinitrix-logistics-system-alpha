@@ -543,25 +543,31 @@ public function updateApproved(Request $request, DeliveryRequest $delivery)
             $packageFee += $priceMatrix->package_rate;
         }
 
-        $totalPrice = $baseFee + $volumeFee + $weightFee + $packageFee;
+        $grossTotal = $baseFee + $volumeFee + $weightFee + $packageFee;
+        $processingFee = 200; // ₱200 processing fee
+        $netTotal = $grossTotal - $processingFee;
 
         $priceBreakdown = [
             'base_fee' => round($baseFee, 2),
             'volume_fee' => round($volumeFee, 2),
             'weight_fee' => round($weightFee, 2),
             'package_fee' => round($packageFee, 2),
-            'total_price' => round($totalPrice, 2),
+            'gross_total' => round($grossTotal, 2),
+            'processing_fee' => $processingFee,
+            'total_price' => round($netTotal, 2),
         ];
 
         \Log::info('Price Calculation Result', [
             'original_total' => $delivery->total_price,
-            'new_total' => $totalPrice,
+            'new_gross_total' => $grossTotal,
+            'new_net_total' => $netTotal,
+            'processing_fee' => $processingFee,
             'breakdown' => $priceBreakdown,
         ]);
 
-        // Update delivery request with adjusted pricing
+        // Update delivery request with adjusted pricing - REMOVE net_price
         $delivery->update([
-            'total_price' => $totalPrice,
+            'total_price' => $netTotal, // This is the net amount after processing fee
             'base_fee' => $baseFee,
             'volume_fee' => $volumeFee,
             'weight_fee' => $weightFee,
@@ -569,11 +575,12 @@ public function updateApproved(Request $request, DeliveryRequest $delivery)
             'price_breakdown' => $priceBreakdown,
             'adjusted_at' => now(),
             'adjusted_by' => auth()->id(),
+            // REMOVE 'net_price' => $netTotal, // This line was causing the error
         ]);
 
         \Log::info('Update Approved Request - Success', [
             'delivery_id' => $delivery->id,
-            'new_total_price' => $totalPrice,
+            'new_total_price' => $netTotal,
         ]);
 
         DB::commit();
@@ -595,6 +602,65 @@ public function updateApproved(Request $request, DeliveryRequest $delivery)
     }
 }
 
+/**
+ * Cancel an approved delivery request (soft delete)
+ */
+public function cancel(Request $request, DeliveryRequest $delivery)
+{
+    \Log::info('Cancel method called', [
+        'delivery_id' => $delivery->id,
+        'reason' => $request->cancellation_reason
+    ]);
+
+    // Gate::authorize('cancel-delivery-request', $delivery);
+    
+    if ($delivery->status !== 'approved') {
+        return back()->with('error', 'Only approved delivery requests can be cancelled');
+    }
+
+    $request->validate([
+        'cancellation_reason' => 'required|string|max:500',
+    ]);
+
+    DB::beginTransaction();
+    try {
+        // Update delivery request status to rejected instead of cancelled
+        $delivery->update([
+            'status' => 'rejected',
+            'rejection_reason' => $request->cancellation_reason, // Use existing rejection_reason field
+            'rejected_by' => auth()->id(), // Use existing rejected_by field
+            'rejected_at' => now(), // Use existing rejected_at field
+            // Remove the cancellation-specific fields since we're using rejection
+        ]);
+
+        // NO SOFT DELETE - Just update status to rejected
+        // $delivery->delete(); // Remove this line
+
+        // Update all packages status to rejected
+        $delivery->packages()->update(['status' => 'rejected']);
+
+        // Send notification to customer - use same denial type
+        if (class_exists(NotificationService::class) && $delivery->sender && $delivery->sender->user) {
+            NotificationService::send(
+                $delivery->sender->user,
+                'Delivery Request Cancelled ❌',
+                "Request #{$delivery->reference_number} has been cancelled. Reason: {$request->cancellation_reason}.",
+                'denial'
+            );
+        }
+
+        DB::commit();
+
+        return redirect()
+            ->route('deliveries.index')
+            ->with('success', 'Delivery request cancelled successfully!');
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error('Failed to cancel delivery request: ' . $e->getMessage());
+        
+        return back()->with('error', 'Failed to cancel delivery request: ' . $e->getMessage());
+    }
+}
 public function calculateApprovedPrice(Request $request)
 {
     try {
@@ -622,7 +688,10 @@ public function calculateApprovedPrice(Request $request)
             $packageFee += $priceMatrix->package_rate;
         }
 
-        $adjustedTotal = $baseFee + $volumeFee + $weightFee + $packageFee;
+        $grossTotal = $baseFee + $volumeFee + $weightFee + $packageFee;
+        $processingFee = 200; // ₱200 processing fee
+        $adjustedTotal = $grossTotal - $processingFee;
+
         $difference = $adjustedTotal - $validated['original_total'];
 
         $breakdown = [
@@ -630,6 +699,8 @@ public function calculateApprovedPrice(Request $request)
             'volume_fee' => round($volumeFee, 2),
             'weight_fee' => round($weightFee, 2),
             'package_fee' => round($packageFee, 2),
+            'gross_total' => round($grossTotal, 2),
+            'processing_fee' => $processingFee,
             'total_price' => round($adjustedTotal, 2),
         ];
 

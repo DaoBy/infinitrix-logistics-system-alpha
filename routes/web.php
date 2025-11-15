@@ -235,7 +235,7 @@ Route::middleware(['auth', 'role:admin,staff'])->group(function () {
     Route::get('/refunds/calculate/max-refund', [RefundController::class, 'calculateMaxRefund'])->name('refunds.calculate-max-refund');
 
     // Deliveries Management
- Route::prefix('deliveries')->group(function () {
+Route::prefix('deliveries')->group(function () {
     Route::get('/', [RequestApprovalController::class, 'index'])->name('deliveries.index');
     Route::get('/pending', [RequestApprovalController::class, 'pending'])->name('deliveries.pending');
     Route::get('/rejected', [RequestApprovalController::class, 'rejected'])->name('deliveries.rejected');
@@ -246,7 +246,7 @@ Route::middleware(['auth', 'role:admin,staff'])->group(function () {
     Route::put('/{delivery}/approved-update', [RequestApprovalController::class, 'updateApproved'])->name('deliveries.approved.update');
     Route::post('/{delivery}/approve', [RequestApprovalController::class, 'approve'])->name('deliveries.approve');
     Route::post('/{delivery}/reject', [RequestApprovalController::class, 'reject'])->name('deliveries.reject');
-    Route::post('/bulk-approve', [RequestApprovalController::class, 'bulkApprove'])->name('deliveries.bulk-approve');
+Route::delete('/deliveries/{delivery}/cancel', [RequestApprovalController::class, 'cancel'])->name('deliveries.cancel');    Route::post('/bulk-approve', [RequestApprovalController::class, 'bulkApprove'])->name('deliveries.bulk-approve');
     Route::post('/bulk-reject', [RequestApprovalController::class, 'bulkReject'])->name('deliveries.bulk-reject');
     Route::post('/calculate-price', [RequestApprovalController::class, 'calculatePrice'])->name('deliveries.calculate-price');
     Route::post('/calculate-approved-price', [RequestApprovalController::class, 'calculateApprovedPrice'])->name('deliveries.calculate-approved-price');
