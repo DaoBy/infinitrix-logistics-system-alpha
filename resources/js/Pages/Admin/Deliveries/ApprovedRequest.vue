@@ -140,13 +140,17 @@
                 {{ row.approved_at ? new Date(row.approved_at).toLocaleDateString() : 'N/A' }}
               </template>
 
-              <template #actions="{ row }">
-                <div class="flex space-x-2">
-                  <SecondaryButton @click="viewRequest(row.id)">
-                    View
-                  </SecondaryButton>
-                </div>
-              </template>
+             <template #actions="{ row }">
+  <div class="flex space-x-2">
+    <SecondaryButton @click="viewRequest(row.id)">
+      View
+    </SecondaryButton>
+    <!-- ADD EDIT BUTTON FOR APPROVED REQUESTS -->
+    <PrimaryButton @click="editApprovedRequest(row.id)" class="bg-blue-600 hover:bg-blue-700">
+      Edit Packages
+    </PrimaryButton>
+  </div>
+</template>
             </DataTable>
           </div>
         </div>
@@ -261,6 +265,10 @@ const columns = [
   { field: 'approved_by', header: 'Approved By', sortable: true },
   { field: 'actions', header: 'Actions', sortable: false },
 ];
+
+function editApprovedRequest(id) {
+  router.get(route('deliveries.approved.edit', id));
+}
 
 function getStatusClass(status) {
   switch (status) {

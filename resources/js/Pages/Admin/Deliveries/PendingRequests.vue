@@ -132,20 +132,25 @@
                 </span>
                 <span v-else>Only for Postpaid</span>
               </template>
-              <template #actions="{ row }">
-                <div class="flex space-x-2">
-                  <SecondaryButton @click="viewRequest(row.id)">
-                    View
-                  </SecondaryButton>
+        <template #actions="{ row }">
+  <div class="flex space-x-2">
+    <SecondaryButton @click="viewRequest(row.id)">
+      View
+    </SecondaryButton>
+    
+    <!-- ADD EDIT BUTTON -->
+    <PrimaryButton @click="editRequest(row.id)" class="bg-blue-600 hover:bg-blue-700">
+      Edit
+    </PrimaryButton>
                
-                  <PrimaryButton @click="openApproveModal(row)">
-                    Approve
-                  </PrimaryButton>
-                  <DangerButton @click="openRejectModal(row)">
-                    Reject
-                  </DangerButton>
-                </div>
-              </template>
+    <PrimaryButton @click="openApproveModal(row)">
+      Approve
+    </PrimaryButton>
+    <DangerButton @click="openRejectModal(row)">
+      Reject
+    </DangerButton>
+  </div>
+</template>
             </DataTable>
           </div>
         </div>

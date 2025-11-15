@@ -207,59 +207,137 @@
                   </div>
                 </div>
 
-                <!-- Second Row: Payment Information (spans Sender + Receiver width) -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                  <!-- Payment Information Card - spans 2 columns (same as Sender + Receiver) -->
-                  <div class="lg:col-span-2 bg-white shadow-sm rounded-lg border border-gray-200">
-                    <div class="p-4 border-b border-gray-200">
-                      <h3 class="text-lg font-medium text-gray-900">Payment Information</h3>
-                    </div>
-                    <div class="p-4">
-                      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <div>
-                          <label class="block text-sm font-medium text-gray-700">Total Amount</label>
-                          <p class="mt-1 text-lg font-semibold text-gray-900">₱{{ formatCurrency(delivery.total_price) }}</p>
-                        </div>
-                        <div>
-                          <label class="block text-sm font-medium text-gray-700">Payment Method</label>
-                          <p class="mt-1 text-sm text-gray-900 capitalize">{{ delivery.payment_method || 'N/A' }}</p>
-                        </div>
-                        <div>
-                          <label class="block text-sm font-medium text-gray-700">Payment Status</label>
-                          <div class="mt-1">
-                            <span
-                              class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold"
-                              :class="paymentStatusBadgeClass(delivery.payment_status)"
-                            >
-                              {{ paymentStatusBadgeText(delivery.payment_status) }}
-                            </span>
-                          </div>
-                        </div>
-                        <div>
-                          <label class="block text-sm font-medium text-gray-700">Payment Terms</label>
-                          <div class="mt-1">
-                            <span
-                              v-if="delivery.payment_terms"
-                              class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800"
-                            >
-                              {{ formatPaymentTerms(delivery.payment_terms) }}
-                            </span>
-                            <span
-                              v-else
-                              class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-700"
-                            >
-                              N/A
-                            </span>
-                          </div>
-                        </div>
-                        <div v-if="delivery.payment_due_date" class="md:col-span-2">
-                          <label class="block text-sm font-medium text-gray-700">Payment Due Date</label>
-                          <p class="mt-1 text-sm text-gray-900">{{ formatDate(delivery.payment_due_date) }}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+               <!-- Second Row: Payment Information (spans Sender + Receiver width) -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+  <!-- Payment Information Card - spans 2 columns (same as Sender + Receiver) -->
+  <div class="lg:col-span-2 bg-white shadow-sm rounded-lg border border-gray-200">
+    <div class="p-4 border-b border-gray-200">
+      <h3 class="text-lg font-medium text-gray-900">Payment Information</h3>
+    </div>
+    <div class="p-4">
+      <!-- Downpayment Summary Section -->
+      <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+        <h4 class="text-md font-semibold text-blue-800 mb-3">Processing Fee Summary</h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-blue-700">Processing Fee Status</label>
+            <div class="mt-1">
+              <span
+                class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold"
+                :class="delivery.processing_fee_paid ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'"
+              >
+                {{ delivery.processing_fee_paid ? 'Paid' : 'Unpaid' }}
+              </span>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-blue-700">Processing Fee Amount</label>
+            <p class="mt-1 text-lg font-semibold text-blue-900">₱{{ formatCurrency(delivery.processing_fee_amount || 200) }}</p>
+          </div>
+          <div v-if="delivery.downpayment">
+            <label class="block text-sm font-medium text-blue-700">Payment Method</label>
+            <p class="mt-1 text-sm text-blue-900 capitalize">{{ delivery.downpayment.method || 'N/A' }}</p>
+          </div>
+          <div v-if="delivery.downpayment">
+            <label class="block text-sm font-medium text-blue-700">Reference Number</label>
+            <p class="mt-1 text-sm text-blue-900 font-mono">{{ delivery.downpayment.reference_number || 'N/A' }}</p>
+          </div>
+        </div>
+        
+        <!-- Downpayment Details (if paid) -->
+        <div v-if="delivery.processing_fee_paid && delivery.downpayment" class="mt-4 pt-4 border-t border-blue-200">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-blue-700">Paid At</label>
+              <p class="mt-1 text-sm text-blue-900">{{ formatDateTime(delivery.downpayment.paid_at) }}</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-blue-700">Payment Status</label>
+              <div class="mt-1">
+                <span
+                  class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800"
+                >
+                  {{ delivery.downpayment.status || 'Paid' }}
+                </span>
+              </div>
+            </div>
+            <div v-if="delivery.downpayment.receipt_image" class="flex items-end">
+              <button
+                @click="openDownpaymentReceipt(delivery.downpayment.receipt_image_url || getDownpaymentReceiptUrl(delivery.downpayment.receipt_image))"
+                class="inline-flex items-center px-3 py-2 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+                View Receipt
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Note for unpaid processing fee -->
+        <div v-if="!delivery.processing_fee_paid" class="mt-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+          <div class="flex items-center">
+            <svg class="w-5 h-5 text-yellow-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <p class="text-sm text-yellow-700">
+              Processing fee of ₱200 is required before this request can be processed.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Original Payment Details -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Total Amount</label>
+          <p class="mt-1 text-lg font-semibold text-gray-900">₱{{ formatCurrency(delivery.total_price) }}</p>
+          <p v-if="delivery.processing_fee_paid" class="text-xs text-gray-500">
+            After ₱{{ formatCurrency(delivery.processing_fee_amount || 200) }} processing fee deduction
+          </p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Payment Method</label>
+          <p class="mt-1 text-sm text-gray-900 capitalize">{{ delivery.payment_method || 'N/A' }}</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Payment Status</label>
+          <div class="mt-1">
+            <span
+              class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold"
+              :class="paymentStatusBadgeClass(delivery.payment_status)"
+            >
+              {{ paymentStatusBadgeText(delivery.payment_status) }}
+            </span>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Payment Terms</label>
+          <div class="mt-1">
+            <span
+              v-if="delivery.payment_terms"
+              class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800"
+            >
+              {{ formatPaymentTerms(delivery.payment_terms) }}
+            </span>
+            <span
+              v-else
+              class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-700"
+            >
+              N/A
+            </span>
+          </div>
+        </div>
+        <div v-if="delivery.payment_due_date" class="md:col-span-2">
+          <label class="block text-sm font-medium text-gray-700">Payment Due Date</label>
+          <p class="mt-1 text-sm text-gray-900">{{ formatDate(delivery.payment_due_date) }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
                 <!-- Packages Section - Full Width matching Sender + Receiver -->
                 <div class="bg-white shadow-sm rounded-lg border border-gray-200">
@@ -533,6 +611,26 @@ const props = defineProps({
   success: String,
   error: String,
 });
+
+function getDownpaymentReceiptUrl(receiptPath) {
+  if (!receiptPath) return '';
+  // If it's already a full URL, return as is
+  if (receiptPath.startsWith('http')) return receiptPath;
+  // If it's a storage path, convert to URL
+  if (receiptPath.startsWith('downpayment-receipts/')) {
+    return `/storage/${receiptPath}`;
+  }
+  // Default case
+  return `/storage/${receiptPath}`;
+}
+
+function openDownpaymentReceipt(receiptUrl) {
+  if (receiptUrl) {
+    currentImage.value = receiptUrl;
+    showImageModal.value = true;
+  }
+}
+
 
 // --- Modal State ---
 const showRejectModal = ref(false);

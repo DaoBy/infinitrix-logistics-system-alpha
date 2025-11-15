@@ -13,10 +13,11 @@ use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
 
 class RequestDeliveryController extends Controller
 {
- public function create()
+public function create()
 {
     $user = auth()->user();
     $customer = $user->customer ?? null;
@@ -42,6 +43,23 @@ class RequestDeliveryController extends Controller
     
     $priceMatrix = PriceMatrix::first();
     
+    // Get package categories for the form
+    $packageCategories = \App\Models\PackageCategory::active()
+        ->ordered()
+        ->get()
+        ->map(function ($category) {
+            return [
+                'id' => $category->id,
+                'name' => $category->name,
+                'code' => $category->code,
+                'description' => $category->description,
+                'dimensions' => $category->dimensions,
+                'image_url' => $category->image_url,
+                'is_active' => $category->is_active,
+                'sort_order' => $category->sort_order
+            ];
+        });
+
     if ($customer) {
         $customer->completed_deliveries_count = \App\Models\DeliveryRequest::where('sender_id', $customer->id)
             ->where('status', 'completed')
@@ -52,8 +70,44 @@ class RequestDeliveryController extends Controller
         'regions' => $regions,
         'priceMatrix' => $priceMatrix,
         'authCustomer' => $customer,
+        'packageCategories' => $packageCategories, // Add this
     ]);
 }
+
+// Add this method to your RequestDeliveryController
+public function uploadDownpaymentReceipt(Request $request)
+{
+    $request->validate([
+        'receipt' => 'required|image|mimes:jpeg,png,jpg,gif|max:5120', // 5MB max
+    ]);
+
+    try {
+        $path = $request->file('receipt')->store('downpayment-receipts', 'public');
+        
+        \Log::debug('📄 Downpayment receipt uploaded:', [
+            'original_name' => $request->file('receipt')->getClientOriginalName(),
+            'stored_path' => $path,
+            'size' => $request->file('receipt')->getSize()
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'file_path' => $path,
+            'url' => Storage::url($path)
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('❌ Failed to upload downpayment receipt:', [
+            'error' => $e->getMessage(),
+            'file' => $request->file('receipt')->getClientOriginalName()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to upload receipt: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
 
    public function store(Request $request)
 {
@@ -125,7 +179,7 @@ class RequestDeliveryController extends Controller
         'drop_off_region_id' => (int) $request->input('drop_off_region_id')
     ]);
 
-    // Validate request - ADD PHOTO_PATH VALIDATION
+    // Validate request - INCLUDING DOWNPAYMENT FIELDS
     $validated = $request->validate([
         'receiver.first_name' => [
             'nullable',
@@ -166,8 +220,8 @@ class RequestDeliveryController extends Controller
         'packages.*.weight' => 'required|numeric|min:0.1',
         'packages.*.description' => 'nullable|string',
         'packages.*.value' => 'nullable|numeric|min:0',
-        'packages.*.photo_path' => 'nullable|array', // ADD THIS
-        'packages.*.photo_path.*' => 'nullable|string', // ADD THIS
+        'packages.*.photo_path' => 'nullable|array',
+        'packages.*.photo_path.*' => 'nullable|string',
         'packages.*.photos' => 'nullable|array',
         'packages.*.photos.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
         'payment_type' => ['required', Rule::in(['prepaid', 'postpaid'])],
@@ -176,6 +230,10 @@ class RequestDeliveryController extends Controller
             'nullable',
             Rule::in(['net_7', 'net_15', 'net_30', 'cnd']),
         ],
+        // DOWNPAYMENT VALIDATION
+        'downpayment_method' => 'required|in:gcash,bank',
+        'downpayment_reference' => 'required|string|max:255',
+        'downpayment_receipt' => 'required|string',
     ]);
 
     // Debug what's in the validated data vs original request
@@ -241,7 +299,11 @@ class RequestDeliveryController extends Controller
         $paymentTerms = $validated['payment_terms'] ?? null;
         $paymentDueDate = null;
 
-        // Create delivery request with locked-in pricing
+        // DEDUCT PROCESSING FEE FROM TOTAL PRICE
+        $processingFee = 200.00;
+        $finalTotalPrice = $priceData->total_price - $processingFee;
+
+        // Create delivery request with processing fee deducted from total
         $deliveryRequest = DeliveryRequest::create([
             'sender_id' => auth()->user()->customer->id,
             'receiver_id' => $receiver->id,
@@ -251,7 +313,9 @@ class RequestDeliveryController extends Controller
             'payment_method' => $paymentMethod,
             'payment_terms' => $paymentTerms,
             'payment_due_date' => $paymentDueDate,
-            'total_price' => $priceData->total_price,
+            'total_price' => $finalTotalPrice, // Use the deducted amount
+            'processing_fee_paid' => true, // Mark as paid
+            'processing_fee_amount' => $processingFee, // Store fee amount for reference
             'base_fee' => $priceData->breakdown->base_fee,
             'volume_fee' => $priceData->breakdown->volume_fee,
             'weight_fee' => $priceData->breakdown->weight_fee,
@@ -259,6 +323,19 @@ class RequestDeliveryController extends Controller
             'price_breakdown' => $priceData->breakdown,
             'status' => 'pending',
             'created_by' => auth()->id(),
+        ]);
+
+        // Create downpayment record (no verification needed)
+        $downpayment = \App\Models\Downpayment::create([
+            'delivery_request_id' => $deliveryRequest->id,
+            'amount' => $processingFee,
+            'method' => $validated['downpayment_method'],
+            'reference_number' => $validated['downpayment_reference'],
+            'receipt_image' => $this->storeDownpaymentReceipt($validated['downpayment_receipt']),
+            'paid_at' => now(),
+            'status' => 'paid', // Auto-verified, no admin approval
+            'submitted_by_type' => get_class(auth()->user()),
+            'submitted_by_id' => auth()->id(),
         ]);
 
         // DEBUG: Log before creating packages
@@ -334,15 +411,18 @@ class RequestDeliveryController extends Controller
             'id' => $deliveryRequest->id,
             'sender_id' => $deliveryRequest->sender_id,
             'receiver_id' => $deliveryRequest->receiver_id,
-            'total_price' => $deliveryRequest->total_price,
+            'original_calculated_price' => $priceData->total_price,
+            'final_total_price' => $deliveryRequest->total_price, // After deduction
+            'processing_fee_deducted' => $processingFee,
             'package_count' => $finalPackageCount,
             'payment_type' => $deliveryRequest->payment_type,
-            'payment_terms' => $deliveryRequest->payment_terms
+            'payment_terms' => $deliveryRequest->payment_terms,
+            'downpayment_id' => $downpayment->id
         ]);
     });
 
     // ✅ FIXED: Return JSON response to stay on the same page
-   return response()->json([
+    return response()->json([
         'success' => true,
         'message' => 'Delivery request created successfully!',
         'delivery_request_id' => $deliveryRequest->id,
@@ -352,7 +432,37 @@ class RequestDeliveryController extends Controller
         'X-Inertia' => 'false' // This tells Inertia not to handle this response
     ]);
 }
-// NEW: Separate endpoint for photo uploads
+
+// Add this helper method to store downpayment receipt
+private function storeDownpaymentReceipt($receiptData)
+{
+    // If it's a base64 image, decode and store it
+    if (preg_match('/^data:image\/(\w+);base64,/', $receiptData, $type)) {
+        $data = substr($receiptData, strpos($receiptData, ',') + 1);
+        $type = strtolower($type[1]); // jpg, png, gif
+        
+        if (!in_array($type, ['jpg', 'jpeg', 'png', 'gif'])) {
+            throw new \Exception('Invalid image type');
+        }
+        
+        $data = base64_decode($data);
+        if ($data === false) {
+            throw new \Exception('base64_decode failed');
+        }
+    } else {
+        // It's already a file path
+        return $receiptData;
+    }
+    
+    $fileName = 'downpayment-receipt-' . time() . '.' . $type;
+    $filePath = 'downpayment-receipts/' . $fileName;
+    
+    Storage::disk('public')->put($filePath, $data);
+    
+    return $filePath;
+}
+
+
 public function uploadPhotos(Request $request)
 {
     $request->validate([
@@ -384,6 +494,65 @@ public function uploadPhotos(Request $request)
         'photo_paths' => $uploadedPaths
     ]);
 }
+
+
+public function getPastReceivers()
+{
+    $customer = auth()->user()->customer;
+    
+    if (!$customer) {
+        return response()->json([]);
+    }
+
+    $pastReceivers = DeliveryRequest::where('sender_id', $customer->id)
+        ->with('receiver')
+        ->whereHas('receiver')
+        ->orderBy('created_at', 'desc')
+        ->limit(50)
+        ->get()
+        ->map(function ($deliveryRequest) {
+            $receiver = $deliveryRequest->receiver;
+            return [
+                'id' => $receiver->id,
+                'delivery_request_id' => $deliveryRequest->id,
+                'first_name' => $receiver->first_name,
+                'middle_name' => $receiver->middle_name,
+                'last_name' => $receiver->last_name,
+                'company_name' => $receiver->company_name,
+                'email' => $receiver->email,
+                'mobile' => $receiver->mobile,
+                'phone' => $receiver->phone,
+                'building_number' => $receiver->building_number,
+                'street' => $receiver->street,
+                'barangay' => $receiver->barangay,
+                'city' => $receiver->city,
+                'province' => $receiver->province,
+                'zip_code' => $receiver->zip_code,
+                'customer_category' => $receiver->customer_category,
+                'created_at' => $deliveryRequest->created_at->format('M d, Y'),
+                'display_name' => $this->getDisplayName($receiver)
+            ];
+        })
+        ->unique('email') 
+        ->values();
+
+    return response()->json($pastReceivers);
+}
+
+private function getDisplayName($receiver)
+{
+    if ($receiver->company_name) {
+        return $receiver->company_name . ' (Company)';
+    }
+    
+    $name = trim($receiver->first_name . ' ' . $receiver->last_name);
+    if ($receiver->customer_category === 'company') {
+        return $name . ' (Company)';
+    }
+    
+    return $name . ' (Individual)';
+}
+
 
     public function calculatePrice(Request $request)
 {
