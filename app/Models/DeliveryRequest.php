@@ -20,12 +20,12 @@ class DeliveryRequest extends Model
         'drop_off_region_id',
         'payment_type',
         'payment_method',
-        'payment_terms',           // <-- Add this
-        'payment_due_date',        // <-- Add this
-        'non_payment_reason',      // <-- Add this
+        'payment_terms',
+        'payment_due_date',
+        'non_payment_reason',
         'total_price',
-        'processing_fee_paid',     // <-- Add this
-        'processing_fee_amount',   // <-- Add this
+        'processing_fee_paid',
+        'processing_fee_amount',
         'base_fee',
         'volume_fee',
         'weight_fee',
@@ -41,12 +41,16 @@ class DeliveryRequest extends Model
         'payment_status',
         'payment_verified',
         'reference_number',
+        'cancellation_reason',
+        'cancelled_by',
+        'cancelled_at',
+        // REMOVE 'net_price' from this array
     ];
 
     protected $casts = [
         'total_price' => 'decimal:2',
-        'net_price' => 'decimal:2',               // <-- Add this
-        'processing_fee_amount' => 'decimal:2',   // <-- Add this
+        // REMOVE THIS LINE: 'net_price' => 'decimal:2',
+        'processing_fee_amount' => 'decimal:2',
         'base_fee' => 'decimal:2',
         'volume_fee' => 'decimal:2',
         'weight_fee' => 'decimal:2',
@@ -55,8 +59,9 @@ class DeliveryRequest extends Model
         'approved_at' => 'datetime',
         'rejected_at' => 'datetime',
         'payment_verified' => 'boolean',
-        'payment_due_date' => 'date', // <-- Add this
-        'processing_fee_paid' => 'boolean', // <-- Add this
+        'payment_due_date' => 'date',
+        'processing_fee_paid' => 'boolean',
+        'cancelled_at' => 'datetime',
     ];
 
     protected static function boot()
@@ -77,18 +82,23 @@ class DeliveryRequest extends Model
                 $deliveryRequest->processing_fee_paid = false;
             }
             
-            // Calculate net price if not set
-            if ($deliveryRequest->net_price === null && $deliveryRequest->total_price !== null) {
-                $deliveryRequest->net_price = $deliveryRequest->total_price - $deliveryRequest->processing_fee_amount;
-            }
+            // REMOVE net_price calculation - this column doesn't exist
+            // if ($deliveryRequest->net_price === null && $deliveryRequest->total_price !== null) {
+            //     $deliveryRequest->net_price = $deliveryRequest->total_price - $deliveryRequest->processing_fee_amount;
+            // }
         });
 
         static::updating(function ($deliveryRequest) {
-            // Recalculate net price if total price changes
-            if ($deliveryRequest->isDirty('total_price') || $deliveryRequest->isDirty('processing_fee_amount')) {
-                $deliveryRequest->net_price = $deliveryRequest->total_price - $deliveryRequest->processing_fee_amount;
-            }
+            // REMOVE net_price recalculation - this column doesn't exist
+            // if ($deliveryRequest->isDirty('total_price') || $deliveryRequest->isDirty('processing_fee_amount')) {
+            //     $deliveryRequest->net_price = $deliveryRequest->total_price - $deliveryRequest->processing_fee_amount;
+            // }
         });
+    }
+
+    public function cancelledBy()
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 
     // Relationships
@@ -168,18 +178,17 @@ class DeliveryRequest extends Model
     }
 
     // Accessors
-    public function getNetPriceAttribute($value)
-    {
-        // If net_price is not set, calculate it
-        if ($value === null && $this->total_price !== null) {
-            return $this->total_price - ($this->processing_fee_amount ?? 200.00);
-        }
-        return $value;
-    }
 
     public function getProcessingFeeAttribute()
     {
         return $this->processing_fee_amount ?? 200.00;
+    }
+
+    // REPLACE net_price accessor with a computed property
+    public function getNetPriceAttribute()
+    {
+        // Calculate net price on the fly instead of storing in database
+        return $this->total_price - $this->processing_fee_amount;
     }
 
     public function getFormattedNetPriceAttribute()
@@ -253,7 +262,7 @@ class DeliveryRequest extends Model
             'payment_verified' => true,
         ]);
 
-        // Update all packages to 'preparing' (use only allowed status)
+        // Update all packages to 'preparing'
         $this->packages()->update(['status' => 'preparing']);
     }
 
@@ -386,7 +395,8 @@ class DeliveryRequest extends Model
         }
 
         $this->total_price = $total;
-        $this->net_price = $total - $this->processing_fee_amount;
+        // REMOVE net_price assignment since column doesn't exist
+        // $this->net_price = $total - $this->processing_fee_amount;
         $this->save();
     }
 
@@ -427,10 +437,10 @@ class DeliveryRequest extends Model
         return $this->hasManyThrough(
             \App\Models\PackageStatusHistory::class,
             \App\Models\Package::class,
-            'delivery_request_id', // Foreign key on Package table...
-            'package_id',          // Foreign key on PackageStatusHistory table...
-            'id',                  // Local key on DeliveryRequest table...
-            'id'                   // Local key on Package table...
+            'delivery_request_id',
+            'package_id',
+            'id',
+            'id'
         );
     }
 
@@ -458,12 +468,11 @@ class DeliveryRequest extends Model
         return $this->processing_fee_paid && $this->status === 'pending';
     }
 
-
-/**
- * Get the original calculated price (before processing fee deduction)
- */
-public function getOriginalCalculatedPriceAttribute(): float
-{
-    return $this->total_price + $this->processing_fee_amount;
-}
+    /**
+     * Get the original calculated price (before processing fee deduction)
+     */
+    public function getOriginalCalculatedPriceAttribute(): float
+    {
+        return $this->total_price + $this->processing_fee_amount;
+    }
 }

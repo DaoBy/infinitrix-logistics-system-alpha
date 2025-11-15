@@ -177,49 +177,63 @@
             </div>
           </div>
 
-          <!-- Price Comparison -->
-          <div v-if="priceComparison" class="bg-green-50 border border-green-200 rounded-lg p-4 mt-6">
-            <h4 class="text-md font-semibold text-green-800 mb-3">Price Adjustment</h4>
-            <div class="grid grid-cols-3 gap-4 text-sm">
-              <div>
-                <p class="text-green-600">Original Total</p>
-                <p class="font-semibold text-green-800">₱{{ delivery.total_price }}</p>
-              </div>
-              <div>
-                <p class="text-green-600">Adjusted Total</p>
-                <p class="font-semibold text-green-800">₱{{ priceComparison.adjusted_total }}</p>
-              </div>
-              <div>
-                <p class="text-green-600">Difference</p>
-                <p :class="priceComparison.difference >= 0 ? 'text-red-600' : 'text-blue-600'" class="font-semibold">
-                  {{ priceComparison.difference >= 0 ? '+' : '' }}₱{{ formatPriceDifference(priceComparison.difference) }}
-                </p>
-              </div>
-            </div>
-            
-            <!-- Detailed Breakdown -->
-            <div class="mt-4 pt-4 border-t border-green-200">
-              <h5 class="font-medium text-green-800 text-sm mb-2">Detailed Breakdown</h5>
-              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                <div>
-                  <p class="text-green-600">Base Fee</p>
-                  <p class="font-semibold text-green-800">₱{{ priceComparison.breakdown.base_fee }}</p>
-                </div>
-                <div>
-                  <p class="text-green-600">Volume Fee</p>
-                  <p class="font-semibold text-green-800">₱{{ priceComparison.breakdown.volume_fee }}</p>
-                </div>
-                <div>
-                  <p class="text-green-600">Weight Fee</p>
-                  <p class="font-semibold text-green-800">₱{{ priceComparison.breakdown.weight_fee }}</p>
-                </div>
-                <div>
-                  <p class="text-green-600">Package Fee</p>
-                  <p class="font-semibold text-green-800">₱{{ priceComparison.breakdown.package_fee }}</p>
-                </div>
-              </div>
-            </div>
-          </div>
+        <!-- Price Comparison -->
+<div v-if="priceComparison" class="bg-green-50 border border-green-200 rounded-lg p-4 mt-6">
+  <h4 class="text-md font-semibold text-green-800 mb-3">Price Adjustment</h4>
+  
+  <!-- Processing Fee Info -->
+  <div class="bg-blue-50 border border-blue-200 rounded p-3 mb-4">
+    <p class="text-sm text-blue-700">
+      <strong>Note:</strong> All prices shown are net amounts after ₱200 processing fee deduction
+    </p>
+  </div>
+  
+  <div class="grid grid-cols-3 gap-4 text-sm">
+    <div>
+      <p class="text-green-600">Original Total (Net)</p>
+      <p class="font-semibold text-green-800">₱{{ priceComparison.original_total }}</p>
+      <p class="text-xs text-gray-500">Gross: ₱{{ (parseFloat(priceComparison.original_total) + 200).toFixed(2) }}</p>
+    </div>
+    <div>
+      <p class="text-green-600">Adjusted Total (Net)</p>
+      <p class="font-semibold text-green-800">₱{{ priceComparison.adjusted_total.toFixed(2) }}</p>
+      <p class="text-xs text-gray-500">Gross: ₱{{ (parseFloat(priceComparison.adjusted_total) + 200).toFixed(2) }}</p>
+    </div>
+    <div>
+      <p class="text-green-600">Net Difference</p>
+      <p :class="priceComparison.difference >= 0 ? 'text-red-600' : 'text-blue-600'" class="font-semibold">
+        {{ priceComparison.difference >= 0 ? '+' : '' }}₱{{ formatPriceDifference(priceComparison.difference) }}
+      </p>
+    </div>
+  </div>
+  
+  <!-- Detailed Breakdown -->
+  <div class="mt-4 pt-4 border-t border-green-200">
+    <h5 class="font-medium text-green-800 text-sm mb-2">Detailed Breakdown (Gross Amounts)</h5>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+      <div>
+        <p class="text-green-600">Base Fee</p>
+        <p class="font-semibold text-green-800">₱{{ priceComparison.breakdown.base_fee }}</p>
+      </div>
+      <div>
+        <p class="text-green-600">Volume Fee</p>
+        <p class="font-semibold text-green-800">₱{{ priceComparison.breakdown.volume_fee }}</p>
+      </div>
+      <div>
+        <p class="text-green-600">Weight Fee</p>
+        <p class="font-semibold text-green-800">₱{{ priceComparison.breakdown.weight_fee }}</p>
+      </div>
+      <div>
+        <p class="text-green-600">Package Fee</p>
+        <p class="font-semibold text-green-800">₱{{ priceComparison.breakdown.package_fee }}</p>
+      </div>
+    </div>
+    <div class="mt-2 text-xs text-gray-600">
+      <p>Processing Fee: -₱200.00</p>
+      <p class="font-semibold">Net Total: ₱{{ priceComparison.adjusted_total.toFixed(2) }}</p>
+    </div>
+  </div>
+</div>
 
           <!-- Loading State -->
           <div v-if="isCalculating" class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-6">
@@ -328,17 +342,33 @@ const calculatePriceComparison = async () => {
         })),
         original_total: props.delivery.total_price,
         delivery_id: props.delivery.id,
+        // Add processing fee information
+        processing_fee: 200, // ₱200 processing fee
       }),
     });
 
     if (response.ok) {
       const data = await response.json();
       if (data.success) {
-        // Fix floating point precision issues
         const comparison = data.comparison;
-        comparison.difference = parseFloat(comparison.difference.toFixed(2));
-        comparison.adjusted_total = parseFloat(comparison.adjusted_total.toFixed(2));
-        priceComparison.value = comparison;
+        
+        // Apply processing fee to both totals for display
+        const originalTotalWithFee = parseFloat(props.delivery.total_price) + 200;
+        const adjustedTotalWithFee = parseFloat(comparison.adjusted_total) + 200;
+        
+        // The actual difference should be between the net amounts (after fee)
+        const actualDifference = comparison.adjusted_total - props.delivery.total_price;
+        
+        priceComparison.value = {
+          original_total: props.delivery.total_price, // This is net after fee
+          adjusted_total: comparison.adjusted_total, // This should also be net after fee
+          difference: actualDifference,
+          breakdown: comparison.breakdown,
+          // Add these for display clarity
+          original_gross: originalTotalWithFee,
+          adjusted_gross: adjustedTotalWithFee,
+          processing_fee: 200
+        };
       } else {
         console.error('Price calculation failed:', data.error);
       }
