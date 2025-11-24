@@ -50,6 +50,56 @@ use App\Http\Controllers\PaymentController;
 // PUBLIC ROUTES
 // =============================================================================
 
+// Debug PDF route
+Route::get('/debug-pdf/{waybill}', function($waybillId) {
+    try {
+        $waybill = \App\Models\Waybill::find($waybillId);
+        if (!$waybill) {
+            return response()->json(['error' => 'Waybill not found'], 404);
+        }
+
+        // Test 1: Check if PDF exists
+        $exists = \Storage::disk('public')->exists($waybill->file_path);
+        $fullPath = \Storage::disk('public')->path($waybill->file_path);
+        $fileExists = file_exists($fullPath);
+
+        // Test 2: Get file info
+        $fileInfo = [
+            'exists_in_storage' => $exists,
+            'exists_on_disk' => $fileExists,
+            'file_size' => $fileExists ? filesize($fullPath) : 0,
+            'file_path' => $waybill->file_path,
+            'full_path' => $fullPath,
+            'web_url' => \Storage::disk('public')->url($waybill->file_path),
+        ];
+
+        // Test 3: Regenerate if needed
+        if (!$exists) {
+            app(\App\Http\Controllers\WaybillController::class)->generatePdf($waybill);
+            $fileInfo['regenerated'] = true;
+            $fileInfo['new_file_size'] = \Storage::disk('public')->size($waybill->file_path);
+        }
+
+        // Test 4: Try to serve the file
+        if ($fileExists) {
+            $headers = [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="' . $waybill->waybill_number . '.pdf"',
+            ];
+            
+            return response()->file($fullPath, $headers);
+        }
+
+        return response()->json($fileInfo);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ], 500);
+    }
+});
+
 // Temporary test route - REMOVE THIS IN PRODUCTION
 Route::get('/test-delivery-email', function () {
     try {
