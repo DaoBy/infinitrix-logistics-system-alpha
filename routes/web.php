@@ -49,7 +49,42 @@ use App\Http\Controllers\PaymentController;
 // =============================================================================
 // PUBLIC ROUTES
 // =============================================================================
+// Test PDF generation route
+Route::get('/test-pdf-generation', function() {
+    try {
+        $waybill = \App\Models\Waybill::first();
+        if (!$waybill) {
+            return response()->json(['error' => 'No waybill found'], 404);
+        }
 
+        // Use reflection to call protected method
+        $controller = app(\App\Http\Controllers\WaybillController::class);
+        $reflection = new ReflectionClass($controller);
+        $method = $reflection->getMethod('generatePdf');
+        $method->setAccessible(true);
+        $method->invoke($controller, $waybill);
+
+        // Check if file was created
+        $filePath = storage_path('app/public/' . $waybill->file_path);
+        
+        return response()->json([
+            'success' => true,
+            'waybill_id' => $waybill->id,
+            'file_path' => $waybill->file_path,
+            'file_exists' => file_exists($filePath),
+            'file_size' => file_exists($filePath) ? filesize($filePath) : 0,
+            'file_info' => file_exists($filePath) ? shell_exec("file " . escapeshellarg($filePath)) : 'File not found',
+            'web_url' => url('/storage/' . $waybill->file_path)
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ], 500);
+    }
+});
 // Debug PDF route
 Route::get('/debug-pdf/{waybill}', function($waybillId) {
     try {
