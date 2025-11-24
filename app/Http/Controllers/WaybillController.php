@@ -575,6 +575,148 @@ public function previewByDelivery(DeliveryRequest $deliveryRequest)
     
    protected function generatePdf(Waybill $waybill, $final = false)
 {
-    return $this->generatePdfWithTcpdf($waybill, $final);
+    \Log::info('Starting PDF generation for waybill: ' . $waybill->id);
+    
+    try {
+        $waybill->load([
+            'deliveryRequest.sender',
+            'deliveryRequest.receiver', 
+            'deliveryRequest.packages',
+            'deliveryRequest.pickUpRegion',
+            'deliveryRequest.dropOffRegion'
+        ]);
+
+        if (!$waybill->deliveryRequest) {
+            throw new \Exception("Delivery request not found for waybill #{$waybill->id}");
+        }
+
+        // Use a very simple approach - create HTML and let DomPDF try again with different settings
+        $html = $this->generateWaybillHtml($waybill, $final);
+        
+        // Try DomPDF with different settings
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html);
+        
+        // Set explicit options
+        $pdf->setPaper('A4', 'portrait');
+        $pdf->setOptions([
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled' => false, // Keep disabled to avoid issues
+            'defaultFont' => 'helvetica',
+        ]);
+        
+        $output = $pdf->output();
+        
+        $filePath = 'waybills/' . $waybill->waybill_number . ($final ? '_final' : '_initial') . '.pdf';
+        
+        // Save to public storage
+        \Illuminate\Support\Facades\Storage::disk('public')->put($filePath, $output);
+        
+        // Update waybill
+        $waybill->file_path = $filePath;
+        $waybill->save();
+        
+        \Log::info('PDF saved successfully: ' . $filePath);
+        return true;
+        
+    } catch (\Exception $e) {
+        \Log::error('PDF Generation Error: ' . $e->getMessage());
+        throw $e;
+    }
+}
+
+// Add this helper method to generate simple HTML
+protected function generateWaybillHtml(Waybill $waybill, $final = false)
+{
+    $deliveryRequest = $waybill->deliveryRequest;
+    
+    $html = '
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Waybill - ' . $waybill->waybill_number . '</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; font-size: 12px; line-height: 1.4; }
+            .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+            .header h1 { margin: 0; font-size: 20px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+            th, td { border: 1px solid #000; padding: 6px; text-align: left; }
+            th { background: #f0f0f0; font-weight: bold; }
+            .section { margin-bottom: 15px; }
+            .label { font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>INFINITRIX EXPRESS CARGO</h1>
+            <p>DELIVERY RECEIPT / WAYBILL</p>
+        </div>
+        
+        <div class="section">
+            <table>
+                <tr><th colspan="2">Waybill Information</th></tr>
+                <tr>
+                    <td><span class="label">Waybill No:</span> ' . $waybill->waybill_number . '</td>
+                    <td><span class="label">Date:</span> ' . $waybill->created_at->format('M d, Y') . '</td>
+                </tr>
+                <tr>
+                    <td><span class="label">Reference No:</span> ' . ($deliveryRequest->reference_number ?? 'N/A') . '</td>
+                    <td><span class="label">Delivery Type:</span> Branch to Branch</td>
+                </tr>
+            </table>
+        </div>';
+        
+    if ($deliveryRequest->sender) {
+        $html .= '
+        <div class="section">
+            <table>
+                <tr><th colspan="2">Shipper Information</th></tr>
+                <tr>
+                    <td colspan="2">
+                        <span class="label">Name:</span> ' . ($deliveryRequest->sender->name ?? $deliveryRequest->sender->company_name ?? 'N/A') . '<br>
+                        <span class="label">Address:</span> ' . ($deliveryRequest->sender->address ?? 'N/A') . '<br>
+                        <span class="label">Mobile:</span> ' . ($deliveryRequest->sender->mobile ?? 'N/A') . '
+                    </td>
+                </tr>
+            </table>
+        </div>';
+    }
+    
+    if ($deliveryRequest->packages && $deliveryRequest->packages->count() > 0) {
+        $html .= '
+        <div class="section">
+            <table>
+                <tr><th colspan="4">Package Information</th></tr>
+                <tr>
+                    <th>Item Code</th>
+                    <th>Description</th>
+                    <th>Weight (kg)</th>
+                    <th>Dimensions (cm)</th>
+                </tr>';
+        
+        foreach ($deliveryRequest->packages as $package) {
+            $html .= '
+                <tr>
+                    <td>' . ($package->item_code ?? 'N/A') . '</td>
+                    <td>' . ($package->item_name ?? 'Unspecified Item') . '</td>
+                    <td>' . ($package->weight ?? 'N/A') . '</td>
+                    <td>' . $package->length . 'x' . $package->width . 'x' . $package->height . '</td>
+                </tr>';
+        }
+        
+        $html .= '
+            </table>
+        </div>';
+    }
+    
+    $html .= '
+        <div style="margin-top: 30px; text-align: center; font-size: 10px;">
+            <p>Thank you for choosing Infinitrix Express!</p>
+            <p>Generated on: ' . now()->format('Y-m-d H:i:s') . '</p>
+        </div>
+    </body>
+    </html>';
+    
+    return $html;
 }
 }
