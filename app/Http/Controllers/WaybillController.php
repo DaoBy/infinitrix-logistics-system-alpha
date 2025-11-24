@@ -357,41 +357,30 @@ public function previewByDelivery(DeliveryRequest $deliveryRequest)
         abort(404, 'Waybill not found for this delivery');
     }
     
-    // Use your existing preview logic with public disk
-    if (!Storage::disk('public')->exists($waybill->file_path)) {
-        $this->generatePdf($waybill);
-    }
-
-    $fullPath = Storage::disk('public')->path($waybill->file_path);
-    return response()->file($fullPath);
+    // Use the same preview logic
+    return $this->preview($waybill);
 }
 
    public function preview(Waybill $waybill)
 {
     $user = auth()->user();
     
-    // Allow admin/staff
+    // Authorization logic
     if ($user->hasRole('admin') || $user->hasRole('staff')) {
-        // Admin/staff can preview any waybill - no additional checks needed
-    } 
-    // Allow customer if they own the delivery request
-    else if ($user->hasRole('customer')) {
-        // Check if the customer owns this delivery request
+        // Admin/staff can preview any waybill
+    } else if ($user->hasRole('customer')) {
         if (!$waybill->deliveryRequest || $waybill->deliveryRequest->sender_id !== $user->customer->id) {
             abort(403, 'Unauthorized');
         }
-        
-        // Only allow preview for completed deliveries
         if ($waybill->deliveryRequest->status !== 'completed') {
             abort(403, 'Waybill not available for this delivery status');
         }
-    } 
-    else {
+    } else {
         abort(403, 'Unauthorized');
     }
 
     try {
-        // FIX: Use public disk
+        // Check if PDF exists in PUBLIC storage, if not generate it
         if (!Storage::disk('public')->exists($waybill->file_path)) {
             \Log::info('PDF not found in public storage, generating: ' . $waybill->file_path);
             $this->generatePdf($waybill);
@@ -404,12 +393,12 @@ public function previewByDelivery(DeliveryRequest $deliveryRequest)
             abort(404, 'PDF file not found');
         }
 
-        \Log::info('Serving PDF from public storage: ' . $fullPath);
+        \Log::info('Serving PDF: ' . $fullPath);
         return response()->file($fullPath);
         
     } catch (\Exception $e) {
         \Log::error('PDF Preview Error: ' . $e->getMessage());
-        abort(500, 'Failed to generate PDF: ' . $e->getMessage());
+        abort(500, 'Failed to load PDF: ' . $e->getMessage());
     }
 }
 
@@ -578,63 +567,84 @@ public function previewByDelivery(DeliveryRequest $deliveryRequest)
     \Log::info('Starting PDF generation for waybill: ' . $waybill->id);
     
     try {
-        // Ensure TCPDF is loaded
-        if (!class_exists('TCPDF')) {
-            require_once base_path('vendor/tecnickcom/tcpdf/tcpdf.php');
-        }
-
         $waybill->load([
             'deliveryRequest.sender',
             'deliveryRequest.receiver', 
-            'deliveryRequest.packages',
-            'deliveryRequest.pickUpRegion',
-            'deliveryRequest.dropOffRegion'
+            'deliveryRequest.packages'
         ]);
 
         if (!$waybill->deliveryRequest) {
             throw new \Exception("Delivery request not found for waybill #{$waybill->id}");
         }
 
-        // Use TCPDF
-        $pdf = new \TCPDF('P', 'mm', 'A4', true, 'UTF-8', false);
-        
-        // Set document information
-        $pdf->SetCreator('Infinitrix Express');
-        $pdf->SetAuthor('Infinitrix Express');
-        $pdf->SetTitle('Waybill - ' . $waybill->waybill_number);
-        
-        // Add a page
-        $pdf->AddPage();
-        
-        // Header
-        $pdf->SetFont('helvetica', 'B', 16);
-        $pdf->Cell(0, 10, 'INFINITRIX EXPRESS CARGO', 0, 1, 'C');
-        $pdf->SetFont('helvetica', 'B', 14);
-        $pdf->Cell(0, 10, 'WAYBILL', 0, 1, 'C');
-        $pdf->Ln(10);
-        
-        // Basic info
-        $pdf->SetFont('helvetica', '', 12);
-        $pdf->Cell(0, 8, 'Waybill No: ' . $waybill->waybill_number, 0, 1);
-        $pdf->Cell(0, 8, 'Date: ' . $waybill->created_at->format('M d, Y'), 0, 1);
-        $pdf->Cell(0, 8, 'Reference: ' . ($waybill->deliveryRequest->reference_number ?? 'N/A'), 0, 1);
-        $pdf->Ln(5);
-        
-        // Sender info
-        if ($waybill->deliveryRequest->sender) {
-            $pdf->SetFont('helvetica', 'B', 12);
-            $pdf->Cell(0, 8, 'SENDER:', 0, 1);
-            $pdf->SetFont('helvetica', '', 12);
-            $sender = $waybill->deliveryRequest->sender;
-            $pdf->Cell(0, 8, 'Name: ' . ($sender->name ?? $sender->company_name ?? 'N/A'), 0, 1);
-            $pdf->Cell(0, 8, 'Address: ' . ($sender->address ?? 'N/A'), 0, 1);
-            $pdf->Ln(5);
+        // Simple HTML content
+        $html = '
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                .header { text-align: center; margin-bottom: 30px; }
+                .header h1 { margin: 0; color: #333; }
+                .info { margin: 10px 0; }
+                table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+                th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+                th { background: #f0f0f0; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>INFINITRIX EXPRESS CARGO</h1>
+                <h2>DELIVERY RECEIPT / WAYBILL</h2>
+            </div>
+            
+            <div class="info"><strong>Waybill No:</strong> ' . $waybill->waybill_number . '</div>
+            <div class="info"><strong>Date:</strong> ' . $waybill->created_at->format('M d, Y') . '</div>
+            <div class="info"><strong>Reference No:</strong> ' . ($waybill->deliveryRequest->reference_number ?? 'N/A') . '</div>
+            <div class="info"><strong>Delivery Type:</strong> Branch to Branch</div>
+            
+            <div style="margin-top: 20px;">
+                <strong>SHIPPER</strong><br>
+                <strong>Name:</strong> ' . ($waybill->deliveryRequest->sender->name ?? $waybill->deliveryRequest->sender->company_name ?? 'N/A') . '<br>
+                <strong>Address:</strong> ' . ($waybill->deliveryRequest->sender->address ?? 'N/A') . '<br>
+                <strong>Mobile:</strong> ' . ($waybill->deliveryRequest->sender->mobile ?? 'N/A') . '
+            </div>';
+            
+        if ($waybill->deliveryRequest->packages && $waybill->deliveryRequest->packages->count() > 0) {
+            $html .= '
+            <table>
+                <tr><th colspan="4">Package Information</th></tr>
+                <tr>
+                    <th>Item Code</th>
+                    <th>Description</th>
+                    <th>Weight (kg)</th>
+                    <th>Dimensions (cm)</th>
+                </tr>';
+            
+            foreach ($waybill->deliveryRequest->packages as $package) {
+                $html .= '
+                <tr>
+                    <td>' . ($package->item_code ?? 'N/A') . '</td>
+                    <td>' . ($package->item_name ?? 'Unspecified Item') . '</td>
+                    <td>' . ($package->weight ?? 'N/A') . '</td>
+                    <td>' . $package->length . 'x' . $package->width . 'x' . $package->height . '</td>
+                </tr>';
+            }
+            
+            $html .= '</table>';
         }
         
-        // Footer
-        $pdf->SetFont('helvetica', 'I', 10);
-        $pdf->Cell(0, 8, 'Thank you for choosing Infinitrix Express!', 0, 1, 'C');
-        $pdf->Cell(0, 8, 'Generated: ' . now()->format('Y-m-d H:i:s'), 0, 1, 'C');
+        $html .= '
+            <div style="margin-top: 30px; text-align: center; font-style: italic;">
+                Thank you for choosing Infinitrix Express!<br>
+                Generated on: ' . now()->format('Y-m-d H:i:s') . '
+            </div>
+        </body>
+        </html>';
+
+        // Use mPDF
+        $mpdf = new \Mpdf\Mpdf();
+        $mpdf->WriteHTML($html);
         
         $filePath = 'waybills/' . $waybill->waybill_number . '.pdf';
         $fullPath = storage_path('app/public/' . $filePath);
@@ -644,13 +654,13 @@ public function previewByDelivery(DeliveryRequest $deliveryRequest)
             mkdir(dirname($fullPath), 0755, true);
         }
         
-        $pdf->Output($fullPath, 'F');
+        $mpdf->Output($fullPath, 'F');
         
         // Update waybill
         $waybill->file_path = $filePath;
         $waybill->save();
         
-        \Log::info('PDF saved successfully: ' . $filePath);
+        \Log::info('mPDF saved successfully: ' . $filePath);
         return true;
         
     } catch (\Exception $e) {
