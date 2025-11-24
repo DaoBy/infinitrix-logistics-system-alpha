@@ -578,6 +578,11 @@ public function previewByDelivery(DeliveryRequest $deliveryRequest)
     \Log::info('Starting PDF generation for waybill: ' . $waybill->id);
     
     try {
+        // Ensure TCPDF is loaded
+        if (!class_exists('TCPDF')) {
+            require_once base_path('vendor/tecnickcom/tcpdf/tcpdf.php');
+        }
+
         $waybill->load([
             'deliveryRequest.sender',
             'deliveryRequest.receiver', 
@@ -590,7 +595,7 @@ public function previewByDelivery(DeliveryRequest $deliveryRequest)
             throw new \Exception("Delivery request not found for waybill #{$waybill->id}");
         }
 
-        // Use full namespace for TCPDF
+        // Use TCPDF
         $pdf = new \TCPDF('P', 'mm', 'A4', true, 'UTF-8', false);
         
         // Set document information
@@ -605,101 +610,33 @@ public function previewByDelivery(DeliveryRequest $deliveryRequest)
         $pdf->SetFont('helvetica', 'B', 16);
         $pdf->Cell(0, 10, 'INFINITRIX EXPRESS CARGO', 0, 1, 'C');
         $pdf->SetFont('helvetica', 'B', 14);
-        $pdf->Cell(0, 10, 'DELIVERY RECEIPT / WAYBILL', 0, 1, 'C');
+        $pdf->Cell(0, 10, 'WAYBILL', 0, 1, 'C');
         $pdf->Ln(10);
         
-        // Waybill Information
-        $pdf->SetFont('helvetica', 'B', 12);
-        $pdf->Cell(0, 10, 'Waybill Information', 0, 1);
-        $pdf->SetFont('helvetica', '', 10);
-        $pdf->Cell(95, 6, 'Waybill No: ' . $waybill->waybill_number, 0, 0);
-        $pdf->Cell(95, 6, 'Date: ' . $waybill->created_at->format('M d, Y'), 0, 1);
-        $pdf->Cell(95, 6, 'Reference No: ' . ($waybill->deliveryRequest->reference_number ?? 'N/A'), 0, 1);
-        $pdf->Cell(95, 6, 'Delivery Type: Branch to Branch', 0, 1);
+        // Basic info
+        $pdf->SetFont('helvetica', '', 12);
+        $pdf->Cell(0, 8, 'Waybill No: ' . $waybill->waybill_number, 0, 1);
+        $pdf->Cell(0, 8, 'Date: ' . $waybill->created_at->format('M d, Y'), 0, 1);
+        $pdf->Cell(0, 8, 'Reference: ' . ($waybill->deliveryRequest->reference_number ?? 'N/A'), 0, 1);
         $pdf->Ln(5);
         
-        // Shipper Information
+        // Sender info
         if ($waybill->deliveryRequest->sender) {
             $pdf->SetFont('helvetica', 'B', 12);
-            $pdf->Cell(0, 10, 'SHIPPER', 0, 1);
-            $pdf->SetFont('helvetica', '', 10);
+            $pdf->Cell(0, 8, 'SENDER:', 0, 1);
+            $pdf->SetFont('helvetica', '', 12);
             $sender = $waybill->deliveryRequest->sender;
-            $pdf->Cell(0, 6, 'Name: ' . ($sender->name ?? $sender->company_name ?? 'N/A'), 0, 1);
-            $pdf->Cell(0, 6, 'Address: ' . ($sender->address ?? 'N/A'), 0, 1);
-            $pdf->Cell(0, 6, 'Mobile: ' . ($sender->mobile ?? 'N/A'), 0, 1);
+            $pdf->Cell(0, 8, 'Name: ' . ($sender->name ?? $sender->company_name ?? 'N/A'), 0, 1);
+            $pdf->Cell(0, 8, 'Address: ' . ($sender->address ?? 'N/A'), 0, 1);
             $pdf->Ln(5);
         }
-        
-        // Consignee Information
-        if ($waybill->deliveryRequest->receiver) {
-            $pdf->SetFont('helvetica', 'B', 12);
-            $pdf->Cell(0, 10, 'CONSIGNEE', 0, 1);
-            $pdf->SetFont('helvetica', '', 10);
-            $receiver = $waybill->deliveryRequest->receiver;
-            $pdf->Cell(0, 6, 'Name: ' . ($receiver->name ?? $receiver->company_name ?? 'N/A'), 0, 1);
-            $pdf->Cell(0, 6, 'Address: ' . ($receiver->address ?? 'N/A'), 0, 1);
-            $pdf->Cell(0, 6, 'Mobile: ' . ($receiver->mobile ?? 'N/A'), 0, 1);
-            $pdf->Ln(5);
-        }
-        
-        // Package Information
-        if ($waybill->deliveryRequest->packages && $waybill->deliveryRequest->packages->count() > 0) {
-            $pdf->SetFont('helvetica', 'B', 12);
-            $pdf->Cell(0, 10, 'Package Information', 0, 1);
-            
-            // Table header
-            $pdf->SetFont('helvetica', 'B', 10);
-            $pdf->Cell(40, 6, 'Item Code', 1, 0, 'C');
-            $pdf->Cell(70, 6, 'Description', 1, 0, 'C');
-            $pdf->Cell(40, 6, 'Weight (kg)', 1, 0, 'C');
-            $pdf->Cell(40, 6, 'Dimensions (cm)', 1, 1, 'C');
-            
-            // Table rows
-            $pdf->SetFont('helvetica', '', 9);
-            foreach ($waybill->deliveryRequest->packages as $package) {
-                $pdf->Cell(40, 6, $package->item_code ?? 'N/A', 1, 0);
-                $pdf->Cell(70, 6, $package->item_name ?? 'Unspecified Item', 1, 0);
-                $pdf->Cell(40, 6, $package->weight ?? 'N/A', 1, 0);
-                $pdf->Cell(40, 6, $package->length . 'x' . $package->width . 'x' . $package->height, 1, 1);
-            }
-            $pdf->Ln(5);
-        }
-        
-        // Payment Information
-        $pdf->SetFont('helvetica', 'B', 12);
-        $pdf->Cell(0, 10, 'Payment Information', 0, 1);
-        $pdf->SetFont('helvetica', '', 10);
-        
-        $paymentType = $waybill->deliveryRequest->payment_type ?? 'N/A';
-        $paymentMethod = $waybill->deliveryRequest->payment_method ?? 'N/A';
-        $totalPrice = $waybill->deliveryRequest->total_price ?? 0;
-        
-        $pdf->Cell(0, 6, 'Payment Type: ' . strtoupper($paymentType), 0, 1);
-        $pdf->Cell(0, 6, 'Payment Method: ' . strtoupper($paymentMethod), 0, 1);
-        $pdf->Cell(0, 6, 'Total Amount: P' . number_format($totalPrice, 2), 0, 1);
-        
-        // Payment status
-        $isPaid = false;
-        if ($waybill->deliveryRequest) {
-            if ($waybill->deliveryRequest->payment_type === 'prepaid' && 
-                $waybill->deliveryRequest->payment_method === 'cash') {
-                $isPaid = true;
-            } else {
-                $isPaid = $waybill->deliveryRequest->payment_status === 'paid' && 
-                         $waybill->deliveryRequest->payment_verified;
-            }
-        }
-        
-        $statusText = $isPaid ? 'PAID' : ($paymentType === 'postpaid' ? 'TO BE COLLECTED' : 'PENDING PAYMENT');
-        $pdf->Cell(0, 6, 'Status: ' . $statusText, 0, 1);
-        $pdf->Ln(10);
         
         // Footer
-        $pdf->SetFont('helvetica', 'I', 8);
-        $pdf->Cell(0, 6, 'Thank you for choosing Infinitrix Express!', 0, 1, 'C');
-        $pdf->Cell(0, 6, 'Generated on: ' . now()->format('Y-m-d H:i:s'), 0, 1, 'C');
+        $pdf->SetFont('helvetica', 'I', 10);
+        $pdf->Cell(0, 8, 'Thank you for choosing Infinitrix Express!', 0, 1, 'C');
+        $pdf->Cell(0, 8, 'Generated: ' . now()->format('Y-m-d H:i:s'), 0, 1, 'C');
         
-        $filePath = 'waybills/' . $waybill->waybill_number . ($final ? '_final' : '_initial') . '.pdf';
+        $filePath = 'waybills/' . $waybill->waybill_number . '.pdf';
         $fullPath = storage_path('app/public/' . $filePath);
         
         // Ensure directory exists
@@ -709,7 +646,7 @@ public function previewByDelivery(DeliveryRequest $deliveryRequest)
         
         $pdf->Output($fullPath, 'F');
         
-        // Update waybill with new file path
+        // Update waybill
         $waybill->file_path = $filePath;
         $waybill->save();
         
@@ -718,7 +655,6 @@ public function previewByDelivery(DeliveryRequest $deliveryRequest)
         
     } catch (\Exception $e) {
         \Log::error('PDF Generation Error: ' . $e->getMessage());
-        \Log::error('Stack trace: ' . $e->getTraceAsString());
         throw $e;
     }
 }
