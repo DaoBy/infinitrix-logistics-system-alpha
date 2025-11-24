@@ -15,12 +15,12 @@ class DatabaseSeeder extends Seeder
         // Seed everything in ALL environments (including production)
         $this->call([
             RegionSeeder::class,
-            PriceMatrixSeeder::class,
-            EmployeeSeeder::class,
-            TruckSeeder::class,
-            CustomerSeeder::class,
-            RegionTravelDurationSeeder::class,
-            PackageCategorySeeder::class,
+           // PriceMatrixSeeder::class,
+         //   EmployeeSeeder::class,
+           // TruckSeeder::class,
+          //  CustomerSeeder::class,
+           // RegionTravelDurationSeeder::class,
+           // PackageCategorySeeder::class,
         ]);
         
         $this->command->info('✅ Database seeded successfully!');
