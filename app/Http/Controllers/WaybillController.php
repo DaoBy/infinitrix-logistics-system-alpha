@@ -19,9 +19,6 @@ use Illuminate\Support\Facades\DB;
 
 class WaybillController extends Controller
 {
-
-    use TCPDF;
-
 // Add this method to your WaybillController class
 protected function generatePdfWithTcpdf(Waybill $waybill, $final = false)
 {
