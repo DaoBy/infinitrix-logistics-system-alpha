@@ -361,7 +361,7 @@ public function previewByDelivery(DeliveryRequest $deliveryRequest)
     return $this->preview($waybill);
 }
 
-   public function preview(Waybill $waybill)
+  public function preview(Waybill $waybill)
 {
     $user = auth()->user();
     
@@ -570,7 +570,9 @@ public function previewByDelivery(DeliveryRequest $deliveryRequest)
         $waybill->load([
             'deliveryRequest.sender',
             'deliveryRequest.receiver', 
-            'deliveryRequest.packages'
+            'deliveryRequest.packages',
+            'deliveryRequest.pickUpRegion',
+            'deliveryRequest.dropOffRegion'
         ]);
 
         if (!$waybill->deliveryRequest) {
@@ -578,75 +580,21 @@ public function previewByDelivery(DeliveryRequest $deliveryRequest)
         }
 
         // Simple HTML content
-        $html = '
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                .header { text-align: center; margin-bottom: 30px; }
-                .header h1 { margin: 0; color: #333; }
-                .info { margin: 10px 0; }
-                table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-                th, td { border: 1px solid #000; padding: 8px; text-align: left; }
-                th { background: #f0f0f0; }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <h1>INFINITRIX EXPRESS CARGO</h1>
-                <h2>DELIVERY RECEIPT / WAYBILL</h2>
-            </div>
-            
-            <div class="info"><strong>Waybill No:</strong> ' . $waybill->waybill_number . '</div>
-            <div class="info"><strong>Date:</strong> ' . $waybill->created_at->format('M d, Y') . '</div>
-            <div class="info"><strong>Reference No:</strong> ' . ($waybill->deliveryRequest->reference_number ?? 'N/A') . '</div>
-            <div class="info"><strong>Delivery Type:</strong> Branch to Branch</div>
-            
-            <div style="margin-top: 20px;">
-                <strong>SHIPPER</strong><br>
-                <strong>Name:</strong> ' . ($waybill->deliveryRequest->sender->name ?? $waybill->deliveryRequest->sender->company_name ?? 'N/A') . '<br>
-                <strong>Address:</strong> ' . ($waybill->deliveryRequest->sender->address ?? 'N/A') . '<br>
-                <strong>Mobile:</strong> ' . ($waybill->deliveryRequest->sender->mobile ?? 'N/A') . '
-            </div>';
-            
-        if ($waybill->deliveryRequest->packages && $waybill->deliveryRequest->packages->count() > 0) {
-            $html .= '
-            <table>
-                <tr><th colspan="4">Package Information</th></tr>
-                <tr>
-                    <th>Item Code</th>
-                    <th>Description</th>
-                    <th>Weight (kg)</th>
-                    <th>Dimensions (cm)</th>
-                </tr>';
-            
-            foreach ($waybill->deliveryRequest->packages as $package) {
-                $html .= '
-                <tr>
-                    <td>' . ($package->item_code ?? 'N/A') . '</td>
-                    <td>' . ($package->item_name ?? 'Unspecified Item') . '</td>
-                    <td>' . ($package->weight ?? 'N/A') . '</td>
-                    <td>' . $package->length . 'x' . $package->width . 'x' . $package->height . '</td>
-                </tr>';
-            }
-            
-            $html .= '</table>';
-        }
-        
-        $html .= '
-            <div style="margin-top: 30px; text-align: center; font-style: italic;">
-                Thank you for choosing Infinitrix Express!<br>
-                Generated on: ' . now()->format('Y-m-d H:i:s') . '
-            </div>
-        </body>
-        </html>';
+        $html = view('waybill', [
+            'waybill' => $waybill,
+            'order' => $waybill->deliveryRequest->deliveryOrder ?? null,
+            'paymentType' => $waybill->deliveryRequest->payment_type ?? 'prepaid',
+            'isPaid' => true,
+            'paymentMethod' => $waybill->deliveryRequest->payment_method ?? 'cash',
+            'paymentTerms' => $waybill->deliveryRequest->payment_terms ?? null,
+            'paymentDueDate' => $waybill->deliveryRequest->payment_due_date ?? null,
+        ])->render();
 
         // Use mPDF
         $mpdf = new \Mpdf\Mpdf();
         $mpdf->WriteHTML($html);
         
-        $filePath = 'waybills/' . $waybill->waybill_number . '.pdf';
+        $filePath = 'waybills/' . $waybill->waybill_number . ($final ? '_final' : '_initial') . '.pdf';
         $fullPath = storage_path('app/public/' . $filePath);
         
         // Ensure directory exists
