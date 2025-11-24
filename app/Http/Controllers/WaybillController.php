@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-
 use App\Models\Waybill;
 use App\Models\DeliveryRequest;
 use App\Models\Truck;
@@ -19,10 +18,6 @@ use Illuminate\Support\Facades\DB;
 
 class WaybillController extends Controller
 {
-// Add this method to your WaybillController class
-
-
-
   public function index()
 {
     // Delivery requests with waybills
@@ -159,49 +154,44 @@ public function previewByDelivery(DeliveryRequest $deliveryRequest)
         abort(404, 'Waybill not found for this delivery');
     }
     
-    // Use the same preview logic
-    return $this->preview($waybill);
+    // Use your existing preview logic
+    if (!Storage::exists($waybill->file_path)) {
+        $this->generatePdf($waybill);
+    }
+
+    return response()->file(Storage::path($waybill->file_path));
 }
 
-  public function preview(Waybill $waybill)
+   public function preview(Waybill $waybill)
 {
     $user = auth()->user();
     
-    // Authorization logic
+    // Allow admin/staff
     if ($user->hasRole('admin') || $user->hasRole('staff')) {
-        // Admin/staff can preview any waybill
-    } else if ($user->hasRole('customer')) {
+        // Admin/staff can preview any waybill - no additional checks needed
+    } 
+    // Allow customer if they own the delivery request
+    else if ($user->hasRole('customer')) {
+        // Check if the customer owns this delivery request
         if (!$waybill->deliveryRequest || $waybill->deliveryRequest->sender_id !== $user->customer->id) {
             abort(403, 'Unauthorized');
         }
+        
+        // Only allow preview for completed deliveries
         if ($waybill->deliveryRequest->status !== 'completed') {
             abort(403, 'Waybill not available for this delivery status');
         }
-    } else {
+    } 
+    else {
         abort(403, 'Unauthorized');
     }
 
-    try {
-        // Check if PDF exists in PUBLIC storage, if not generate it
-        if (!Storage::disk('public')->exists($waybill->file_path)) {
-            \Log::info('PDF not found in public storage, generating: ' . $waybill->file_path);
-            $this->generatePdf($waybill);
-        }
-
-        $fullPath = Storage::disk('public')->path($waybill->file_path);
-        
-        if (!file_exists($fullPath)) {
-            \Log::error('PDF file not found at: ' . $fullPath);
-            abort(404, 'PDF file not found');
-        }
-
-        \Log::info('Serving PDF: ' . $fullPath);
-        return response()->file($fullPath);
-        
-    } catch (\Exception $e) {
-        \Log::error('PDF Preview Error: ' . $e->getMessage());
-        abort(500, 'Failed to load PDF: ' . $e->getMessage());
+    // Your existing PDF generation logic
+    if (!Storage::exists($waybill->file_path)) {
+        $this->generatePdf($waybill);
     }
+
+    return response()->file(Storage::path($waybill->file_path));
 }
 
     public function show(Waybill $waybill)
@@ -366,57 +356,104 @@ public function previewByDelivery(DeliveryRequest $deliveryRequest)
     
    protected function generatePdf(Waybill $waybill, $final = false)
 {
-    \Log::info('Starting PDF generation for waybill: ' . $waybill->id);
-    
-    try {
-        $waybill->load([
-            'deliveryRequest.sender',
-            'deliveryRequest.receiver', 
-            'deliveryRequest.packages',
-            'deliveryRequest.pickUpRegion',
-            'deliveryRequest.dropOffRegion'
-        ]);
+    $waybill->load([
+        'deliveryRequest' => function ($q) {
+            $q->select([
+                'id', 'sender_id', 'receiver_id', 'pick_up_region_id', 'drop_off_region_id', 
+                'payment_type', 'payment_status', 'payment_method', 'payment_terms', 
+                'payment_due_date', 'total_price', 'reference_number', 'created_at',
+                'payment_verified' // ✅ ADD payment_verified field
+            ])
+            ->with([
+                'sender:id,user_id,first_name,middle_name,last_name,company_name,email,mobile,phone,building_number,street,barangay,city,province,zip_code,customer_category,frequency_type,payment_terms,credit_limit,notes,created_at,updated_at,archived_at,name,address',
+                'receiver:id,user_id,first_name,middle_name,last_name,company_name,email,mobile,phone,building_number,street,barangay,city,province,zip_code,customer_category,frequency_type,payment_terms,credit_limit,notes,created_at,updated_at,archived_at,name,address',
+                'packages:id,delivery_request_id,item_code,item_name,weight,length,width,height',
+                'deliveryOrder' => function ($q2) {
+                    $q2->with([
+                        'driver:id,name',
+                        'truck:id,license_plate,make,model',
+                        'driverTruckAssignment' => function ($q3) {
+                            $q3->with([
+                                'truck:id,license_plate,make,model',
+                                'driver:id,name'
+                            ]);
+                        }
+                    ]);
+                },
+                'pickUpRegion:id,name,address,warehouse_address',
+                'dropOffRegion:id,name,address,warehouse_address',
+            ]);
+        },
+        'generator:id,name'
+    ]);
 
-        if (!$waybill->deliveryRequest) {
-            throw new \Exception("Delivery request not found for waybill #{$waybill->id}");
-        }
-
-        // Simple HTML content
-        $html = view('waybill', [
-            'waybill' => $waybill,
-            'order' => $waybill->deliveryRequest->deliveryOrder ?? null,
-            'paymentType' => $waybill->deliveryRequest->payment_type ?? 'prepaid',
-            'isPaid' => true,
-            'paymentMethod' => $waybill->deliveryRequest->payment_method ?? 'cash',
-            'paymentTerms' => $waybill->deliveryRequest->payment_terms ?? null,
-            'paymentDueDate' => $waybill->deliveryRequest->payment_due_date ?? null,
-        ])->render();
-
-        // Use mPDF
-        $mpdf = new \Mpdf\Mpdf();
-        $mpdf->WriteHTML($html);
-        
-        $filePath = 'waybills/' . $waybill->waybill_number . ($final ? '_final' : '_initial') . '.pdf';
-        $fullPath = storage_path('app/public/' . $filePath);
-        
-        // Ensure directory exists
-        if (!file_exists(dirname($fullPath))) {
-            mkdir(dirname($fullPath), 0755, true);
-        }
-        
-        $mpdf->Output($fullPath, 'F');
-        
-        // Update waybill
-        $waybill->file_path = $filePath;
-        $waybill->save();
-        
-        \Log::info('mPDF saved successfully: ' . $filePath);
-        return true;
-        
-    } catch (\Exception $e) {
-        \Log::error('PDF Generation Error: ' . $e->getMessage());
-        throw $e;
+    // Check if deliveryRequest exists
+    if (!$waybill->deliveryRequest) {
+        throw new \Exception("Delivery request not found for waybill #{$waybill->id}");
     }
-}
 
+    $order = $waybill->deliveryRequest->deliveryOrder;
+
+    // ✅ DEBUG: Check both truck sources
+    \Log::info('Waybill PDF Generation Debug - Enhanced', [
+        'waybill_id' => $waybill->id,
+        'has_delivery_request' => !is_null($waybill->deliveryRequest),
+        'has_delivery_order' => !is_null($order),
+        'direct_truck_plate' => $order && $order->truck ? $order->truck->license_plate : 'NO DIRECT TRUCK',
+        'assignment_truck_plate' => $order && $order->driverTruckAssignment && $order->driverTruckAssignment->truck ? $order->driverTruckAssignment->truck->license_plate : 'NO ASSIGNMENT TRUCK',
+        'has_driver_truck_assignment' => $order ? !is_null($order->driverTruckAssignment) : false,
+        'assignment_id' => $order && $order->driverTruckAssignment ? $order->driverTruckAssignment->id : null,
+    ]);
+
+    // ✅ FIXED: Enhanced payment status logic
+    $isPaid = false;
+    if ($waybill->deliveryRequest) {
+        // For prepaid cash, automatically consider it paid (cash doesn't need verification)
+        if ($waybill->deliveryRequest->payment_type === 'prepaid' && 
+            $waybill->deliveryRequest->payment_method === 'cash') {
+            $isPaid = true;
+            
+            // Log cash payment auto-verification
+            \Log::info('Cash prepaid payment auto-verified for PDF', [
+                'waybill_id' => $waybill->id,
+                'delivery_request_id' => $waybill->deliveryRequest->id,
+                'payment_status' => $waybill->deliveryRequest->payment_status,
+                'payment_verified' => $waybill->deliveryRequest->payment_verified
+            ]);
+        } else {
+            // For other payment methods, use standard verification logic
+            $isPaid = $waybill->deliveryRequest->payment_status === 'paid' && 
+                     $waybill->deliveryRequest->payment_verified;
+            
+            // Log other payment method verification
+            \Log::info('Non-cash payment verification check for PDF', [
+                'waybill_id' => $waybill->id,
+                'payment_type' => $waybill->deliveryRequest->payment_type,
+                'payment_method' => $waybill->deliveryRequest->payment_method,
+                'payment_status' => $waybill->deliveryRequest->payment_status,
+                'payment_verified' => $waybill->deliveryRequest->payment_verified,
+                'is_paid_result' => $isPaid
+            ]);
+        }
+    }
+
+    $view = $final ? 'waybill_complete' : 'waybill';
+
+    $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($view, [
+        'order' => $order,
+        'waybill' => $waybill,
+        'paymentType' => $waybill->deliveryRequest->payment_type,
+        'isPaid' => $isPaid,
+        'paymentMethod' => $waybill->deliveryRequest->payment_method,
+        'paymentTerms' => $waybill->deliveryRequest->payment_terms ?? null,
+        'paymentDueDate' => $waybill->deliveryRequest->payment_due_date ?? null,
+    ]);
+
+    $filePath = 'waybills/' . $waybill->waybill_number . ($final ? '_final' : '_initial') . '.pdf';
+
+    \Illuminate\Support\Facades\Storage::put($filePath, $pdf->output());
+
+    $waybill->file_path = $filePath;
+    $waybill->save();
+}
 }
