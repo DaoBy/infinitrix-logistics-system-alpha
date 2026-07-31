@@ -4,7 +4,7 @@
 >
 > A comprehensive, multi-role logistics platform designed to manage the lifecycle of cargo delivery from customer booking to final release. Built to simulate the operational workflow of a real-world courier company (Infinitrix Express Cargo).
 
-**[View Live Demo (Local Environment)](Not Deployed)** | **[Download User Manual](docs/User%20Manual.pdf)**
+**[Download User Manual](docs/User%20Manual.pdf)**
 
 ---
 
@@ -46,11 +46,11 @@ This project utilizes a modern industry-standard stack:
 
 | Customer Booking Flow | Staff Dashboard | Delivery Completion |
 | :---: | :---: | :---: |
-| ![Booking Form](docs/screenshots/01-customer-booking.png) | ![Staff Pending](docs/screenshots/02-staff-pending.png) | ![Completion](docs/screenshots/03-staff-completion.png) |
+| ![Booking Form](docs/screenshots/image20.png) | ![Staff Pending](docs/screenshots/image28.png) | ![Completion](docs/screenshots/image49.png) |
 
 | Driver-Truck Assignment | Admin Reports | Package Monitoring |
 | :---: | :---: | :---: |
-| ![Assignments](docs/screenshots/04-driver-truck-assign.png) | ![Reports](docs/screenshots/05-admin-reports.png) | ![Monitoring](docs/screenshots/06-staff-monitoring.png) |
+| ![Assignments](docs/screenshots/image27.png) | ![Reports](docs/screenshots/image61.png) | ![Monitoring](docs/screenshots/image11.png) |
 
 ## 👤 User Roles & Modules
 
