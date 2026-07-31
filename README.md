@@ -1,107 +1,121 @@
 # Infinitrix Logistics Management System
 
-> **Capstone Project | Technical Lead | BS Computer Science - STI College Fairview**
->
-> A comprehensive, multi-role logistics platform designed to manage the lifecycle of cargo delivery from customer booking to final release. Built to simulate the operational workflow of a real-world courier company (Infinitrix Express Cargo).
+BS Computer Science Capstone Project | STI College Fairview  
+Technical Lead: Blaise Gabriel Mariano
+
+A multi-role logistics platform built for Infinitrix Express Cargo, covering the full delivery lifecycle—from customer booking and operational approval to driver dispatch, tracking, and financial settlement.
+
+**[User Manual](docs/User_Manual.pdf)** | **[Flowchart & ERD](docs/Flowchart _ERD.pdf)**
 
 ---
 
-## 📚 Project Documentation
-| Document | Description |
-| :--- | :--- |
-| [📄 User Manual](docs/User_Manual.pdf) | Comprehensive guide covering system usage for Customers, Staff, Drivers, Collectors, and Admins. |
-| [📊 Flowchart & ERD](docs/Flowchart_ERD.pdf) | System architecture flowcharts and the complete Entity-Relationship Diagram. |
+## Overview
+
+This system was developed as a capstone project to simulate the operational workflow of a real-world courier company. It is not a basic CRUD application—it is a workflow engine with distinct portals for customers, operations staff, drivers, collectors, and administrators.
+
+The system manages the full delivery process:
+- Customer booking with photo verification and dynamic pricing
+- Staff approval and waybill generation
+- Cargo assignment and truck manifest creation
+- Driver status and location updates
+- Payment collection and verification
+- Refund handling and reporting
 
 ---
 
-## 🚀 Project Overview
+## Key Features
 
-Infinitrix is not a simple CRUD app; it is a workflow-driven logistics engine. As the **Technical Lead** for a team of four, I directed the system architecture, database schema design, and implemented the core backend logic along with a substantial portion of the Vue.js frontend.
+- **Separate portals** for Customers, Staff, Drivers, Collectors, and Admin, each with role-specific views and permissions.
+- **Booking engine** with real-time pricing, dimension/weight input, and mandatory photo uploads (minimum 6 images per package).
+- **Postpaid support** with configurable payment terms (CND, Net 7, Net 15, Net 30), available only to customers with at least 3 completed deliveries.
+- **Waybill and sticker generation** with batch printing and PDF output.
+- **Driver-truck assignment** with tracking for volume/weight capacity, driver cooldowns, and backhaul eligibility.
+- **Manifest creation and finalization** before dispatch.
+- **Payment workflows** for both prepaid and postpaid transactions, including cash, GCash, and bank transfer.
+- **Admin utilities** including database backup and restore, data archiving, and customer profile audit logs.
 
-The system manages the entire lifecycle of a delivery:
-1.  **Customer Booking** (Parcel details, dimension calculations, photo uploads).
-2.  **Operational Management** (Staff approval, waybill generation, sticker printing).
-3.  **Logistics Assignment** (Driver-Truck set creation, cargo assignment, manifest generation).
-4.  **Last-Mile Delivery** (Driver live status updates, location tracking).
-5.  **Finance & Admin** (Prepaid/Postpaid payment verification, refunds, and reporting).
+---
 
-## ✨ Key Features
+## Tech Stack
 
-- **Multi-Portal Architecture:** Separate dedicated interfaces for **Customers**, **Staff**, **Drivers**, **Collectors**, and **Admins**.
-- **Advanced Booking Engine:** Dynamic pricing based on real-time dimension/weight input, mandatory minimum 6-photo verification for parcels, and postpaid eligibility checks (3-delivery minimum).
-- **Operational Tools:** Includes automated Waybill generation, sticker printing with batch actions, and manifest finalization.
-- **Cargo & Fleet Management:** A dedicated "Driver-Truck Sets" module that tracks driver cooldowns, volume/weight capacity, and backhaul eligibility.
-- **Financial Workflows:** Supports both Prepaid and Postpaid (CND, Net 7, Net 15, Net 30) terms with distinct cash and online payment verification queues.
-- **System Utilities:** Full database backup/restore capabilities, data archiving for old manifests/waybills, and customer profile audit logs.
+**Frontend:** Vue.js 3, Pinia, Tailwind CSS  
+**Backend:** PHP 8, Laravel 10 (REST API)  
+**Database:** MySQL  
+**Architecture:** SPA with JWT authentication  
+**Tools:** Git, Composer, NPM
 
-## 🛠️ Technology Stack
+---
 
-This project utilizes a modern industry-standard stack:
+## Screenshots
 
-| Layer | Technology |
-| :--- | :--- |
-| **Frontend** | Vue.js 3, Pinia (State Management), Tailwind CSS |
-| **Backend** | PHP 8.x, Laravel 10.x (REST API) |
-| **Database** | MySQL / MariaDB |
-| **Architecture** | SPA (Single Page Application) with JWT Authentication |
-| **Dev Tools** | Git, Composer, NPM, Docker (Optional) |
-
-## 📸 System Screenshots
-
-*Click to view full-size.*
-
-| Customer Booking Flow | Staff Dashboard | Delivery Completion |
+| Customer Booking | Staff Pending Requests | Delivery Completion |
 | :---: | :---: | :---: |
-| ![Booking Form](docs/screenshots/image20.png) | ![Staff Pending](docs/screenshots/image28.png) | ![Completion](docs/screenshots/image49.png) |
+| [![Booking](docs/screenshots/image20.png)](docs/screenshots/image20.png) | [![Pending](docs/screenshots/image28.png)](docs/screenshots/image28.png) | [![Completion](docs/screenshots/image49.png)](docs/screenshots/image49.png) |
 
 | Driver-Truck Assignment | Admin Reports | Package Monitoring |
 | :---: | :---: | :---: |
-| ![Assignments](docs/screenshots/image27.png) | ![Reports](docs/screenshots/image61.png) | ![Monitoring](docs/screenshots/image11.png) |
+| [![Assignment](docs/screenshots/image27.png)](docs/screenshots/image27.png) | [![Reports](docs/screenshots/image61.png)](docs/screenshots/image61.png) | [![Monitoring](docs/screenshots/image11.png)](docs/screenshots/image11.png) |
 
-## 👤 User Roles & Modules
+---
 
-The system is segmented into distinct portals to separate concerns:
+## User Roles
 
-1.  **Customer Portal:**
-    - Schedule deliveries, track packages, view delivery history.
-    - Manage profile and saved receiver information.
-2.  **Staff Portal (Operations):**
-    - Approve/Reject requests; Manage Waybills & Stickers; Create Driver-Truck assignments; Generate Manifests; Release packages.
-3.  **Driver Portal (Mobile-Friendly):**
-    - View assigned deliveries; Update package status (Delivered/Damaged/Lost); Update GPS location via map or dropdown.
-4.  **Collector Portal (Finance):**
-    - Handle Pending Collections; Submit verification requests; Track personal collection performance.
-5.  **Admin Portal (System & Finance):**
-    - Payment verification; Refund/Adjustments; Employee & Customer management; Warehouse/Region assignment; System utilities (Backups, Font preferences, Archiving).
+**Customer**  
+Request deliveries, track packages, view order history, and manage saved receiver details.
 
-## 🏗️ System Architecture
+**Staff (Operations)**  
+Approve or reject delivery requests, generate waybills and stickers, create driver-truck assignments, generate manifests, and release packages.
 
-The application follows a modern **Client-Server** architecture:
+**Driver**  
+View assigned deliveries, update package status (Delivered / Damaged / Lost), and update current location.
 
-- **Frontend (Vue SPA):** Communicates with the Laravel Backend via strict RESTful APIs.
-- **Backend (Laravel):** Handles business logic, database interactions, and file storage (parcel images, payment receipts).
-- **Database (MySQL):** Relational schema designed to handle complex joins for pricing calculations, route assignments, and financial ledger tracking.
+**Collector (Finance)**  
+Manage pending and postpaid collections, submit verification requests, and track collection performance.
 
-**Key Technical Decisions & Challenges:**
-- **Dynamic Pricing Logic:** Implemented a configurable `Price Matrix` (Base Fee + Volume + Weight + Package fees) that updates total cost instantly on the frontend via Vue.js reactivity, rather than hard-coded values.
-- **Complex State Management:** Handled the multi-step booking process (Sender -> Receiver -> Package -> Payment) using Pinia to manage state across components without data loss.
-- **Role-Based Access Control (RBAC):** Built a robust middleware system in Laravel that dynamically renders the correct Vue.js dashboard and sidebar based on the logged-in user's role (Admin, Staff, Driver, etc.).
-- **File Handling & Validation:** Built a strict validation system for parcel photo uploads (minimum 6 images, specific perspective requirements) using Laravel's validation rules and securing storage on the server.
+**Admin**  
+Verify payments, manage refunds and adjustments, handle employee and customer records, configure warehouse regions, and access system utilities.
 
-## 🗄️ Database Overview
+---
 
-The database schema is normalized to support the complex relationships of logistics. (A detailed ERD is available in the `docs/` folder).
+## Architecture
 
-- **Users & Roles:** A unified `users` table with a `role` column (Admin/Staff/Driver/Collector/Customer) and related profile tables to handle polymorphic data.
-- **Deliveries:** A central `deliveries` table linking `sender_id` and `receiver_id` (which can be users or guest addresses).
-- **Driver-Truck Sets:** A pivot table managing the `drivers` and `trucks` tables, tracking assignment history, capacity usage, and cooldown periods.
-- **Financials:** Separate tables for `payments` (prepaid) and `collections` (postpaid) to maintain clear audit trails and handle verification workflows.
+The frontend is a Vue.js SPA that communicates with a Laravel backend through RESTful APIs. The backend handles business logic, file storage, and database operations. The database is normalized to support complex joins for pricing, route assignments, and financial tracking.
 
-## 🚀 Installation Guide (Local Development)
+**Technical decisions worth noting:**
+- Pricing is calculated using a configurable matrix (base fee + volume + weight + package fee), not hardcoded logic.
+- The booking process is split into multiple steps, with state managed via Pinia to prevent data loss across components.
+- Role-based access is enforced through Laravel middleware, and the Vue frontend dynamically renders the correct dashboard per role.
+- All parcel photos and payment receipts are stored using Laravel's filesystem with basic validation for file type and size.
 
-*Prerequisites: PHP 8.1+, Composer, Node.js, MySQL.*
+---
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/DaoBy/infinitrix-logistics-system-alpha.git
-    cd infinitrix-logistics-system-alpha
+## Database Overview
+
+- **Users and Roles:** A single users table with a role column, extended by profile tables for each role type.
+- **Deliveries:** Central deliveries table linking sender and receiver information.
+- **Driver-Truck Sets:** Pivot table tracking assignment history, capacity usage, and cooldown periods.
+- **Financials:** Separate tables for prepaid payments and postpaid collections to maintain a clear audit trail.
+
+Refer to the ERD file in the `docs/` folder for the full schema.
+
+---
+
+## Installation
+
+Requirements: PHP 8.1+, Composer, Node.js, MySQL
+
+```bash
+git clone https://github.com/DaoBy/infinitrix-logistics-system-alpha.git
+cd infinitrix-logistics-system-alpha
+
+composer install
+npm install
+npm run dev
+
+cp .env.example .env
+php artisan key:generate
+
+# Configure your database credentials in .env
+
+php artisan migrate --seed
+php artisan serve
