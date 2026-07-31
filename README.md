@@ -4,7 +4,13 @@
 >
 > A comprehensive, multi-role logistics platform designed to manage the lifecycle of cargo delivery from customer booking to final release. Built to simulate the operational workflow of a real-world courier company (Infinitrix Express Cargo).
 
-**[Download User Manual](docs/User%20Manual.pdf)**
+---
+
+## 📚 Project Documentation
+| Document | Description |
+| :--- | :--- |
+| [📄 User Manual](docs/User_Manual.pdf) | Comprehensive guide covering system usage for Customers, Staff, Drivers, Collectors, and Admins. |
+| [📊 Flowchart & ERD](docs/Flowchart_ERD.pdf) | System architecture flowcharts and the complete Entity-Relationship Diagram. |
 
 ---
 
@@ -76,13 +82,15 @@ The application follows a modern **Client-Server** architecture:
 - **Backend (Laravel):** Handles business logic, database interactions, and file storage (parcel images, payment receipts).
 - **Database (MySQL):** Relational schema designed to handle complex joins for pricing calculations, route assignments, and financial ledger tracking.
 
-**Technical Decisions:**
-- **Pricing Logic:** Implemented via a configurable `Price Matrix` (Base Fee + Volume + Weight + Package fees) rather than hard-coded values, allowing admins to adjust rates dynamically.
-- **File Handling:** Uses Laravel's native filesystem to segregate package photos, receipts, and generated PDFs (Waybills/Stickers).
+**Key Technical Decisions & Challenges:**
+- **Dynamic Pricing Logic:** Implemented a configurable `Price Matrix` (Base Fee + Volume + Weight + Package fees) that updates total cost instantly on the frontend via Vue.js reactivity, rather than hard-coded values.
+- **Complex State Management:** Handled the multi-step booking process (Sender -> Receiver -> Package -> Payment) using Pinia to manage state across components without data loss.
+- **Role-Based Access Control (RBAC):** Built a robust middleware system in Laravel that dynamically renders the correct Vue.js dashboard and sidebar based on the logged-in user's role (Admin, Staff, Driver, etc.).
+- **File Handling & Validation:** Built a strict validation system for parcel photo uploads (minimum 6 images, specific perspective requirements) using Laravel's validation rules and securing storage on the server.
 
 ## 🗄️ Database Overview
 
-The database schema is normalized to support the complex relationships of logistics.
+The database schema is normalized to support the complex relationships of logistics. (A detailed ERD is available in the `docs/` folder).
 
 - **Users & Roles:** A unified `users` table with a `role` column (Admin/Staff/Driver/Collector/Customer) and related profile tables to handle polymorphic data.
 - **Deliveries:** A central `deliveries` table linking `sender_id` and `receiver_id` (which can be users or guest addresses).
